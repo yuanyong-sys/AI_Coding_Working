@@ -38,6 +38,7 @@ def test_simulated_telemetry_is_visible_in_situation_snapshot(tmp_path):
                         "flight_state": "flying",
                         "source_time": "2026-09-02T06:32:08Z",
                         "source_type": "simulated",
+                        "sortie_id": "GSH-SORTIE-001",
                     }
                 ]
             },
@@ -51,10 +52,20 @@ def test_simulated_telemetry_is_visible_in_situation_snapshot(tmp_path):
 
     assert snapshot_response.status_code == 200
     snapshot = snapshot_response.json()
+    assert snapshot.pop("cursor") == 1
+    metrics = snapshot.pop("metrics")
     platform_received_time = datetime.fromisoformat(
         snapshot["drones"][0].pop("platform_received_time")
     )
+    data_status = snapshot["drones"][0].pop("data_status")
     assert before_ingest <= platform_received_time <= after_snapshot
+    assert data_status == "current"
+    assert metrics["flight_sorties"] == 1
+    assert metrics["online_rate"] == 100.0
+    assert metrics["in_flight_count"] == 1
+    assert metrics["source_composition"] == {"real": 0, "simulated": 1}
+    assert metrics["observation_window_seconds"] == 30
+    assert 0 <= metrics["telemetry_delay_seconds"] < 1
     assert snapshot == {
         "drones": [
             {
@@ -96,6 +107,7 @@ def test_late_and_duplicate_telemetry_preserves_ordered_track_and_latest_state(
         "flight_state": "flying",
         "source_time": "2026-09-02T06:32:18Z",
         "source_type": "simulated",
+        "sortie_id": "GSH-SORTIE-003",
     }
     older_event = {
         "event_id": "track-001",
@@ -108,6 +120,7 @@ def test_late_and_duplicate_telemetry_preserves_ordered_track_and_latest_state(
         "flight_state": "flying",
         "source_time": "2026-09-02T06:32:08Z",
         "source_type": "simulated",
+        "sortie_id": "GSH-SORTIE-003",
     }
 
     with TestClient(
@@ -157,6 +170,7 @@ def test_batch_reports_invalid_coordinates_and_source_time_without_losing_valid_
         "flight_state": "flying",
         "source_time": "2026-09-02T06:32:08Z",
         "source_type": "simulated",
+        "sortie_id": "GSH-SORTIE-004",
     }
     invalid_coordinate = {
         **valid_event,

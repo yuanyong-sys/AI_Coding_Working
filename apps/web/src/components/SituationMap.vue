@@ -3,14 +3,21 @@ import maplibregl, { Map, Marker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { FeatureCollection, LineString } from "geojson";
+import type { FeatureCollection, LineString, Polygon } from "geojson";
 
 import type { DroneSnapshot } from "@/situation";
+import type { SpatialRuleVersion } from "@/spatial-rules";
+import type { PlannedRoutePoint } from "@/preflight";
 
-const props = defineProps<{ drones: DroneSnapshot[] }>();
+const props = defineProps<{
+  drones: DroneSnapshot[];
+  spatialRules: SpatialRuleVersion[];
+  validationPosition?: PlannedRoutePoint;
+}>();
 const mapContainer = ref<HTMLElement>();
 const markers: Marker[] = [];
 let map: Map | undefined;
+let preflightMarker: Marker | undefined;
 const protocol = new Protocol();
 const flightStateLabels: Record<string, string> = {
   pending: "待飞",
@@ -108,9 +115,97 @@ function renderMarkers() {
   }
 }
 
+function spatialRulesGeoJson(): FeatureCollection<Polygon> {
+  return {
+    type: "FeatureCollection",
+    features: props.spatialRules.map((rule) => ({
+      type: "Feature",
+      properties: {
+        rule_id: rule.rule_id,
+        rule_type: rule.rule_type,
+        name: rule.name,
+      },
+      geometry: rule.geometry,
+    })),
+  };
+}
+
+function renderSpatialRules() {
+  if (!map) return;
+  const source = map.getSource("spatial-rules") as
+    maplibregl.GeoJSONSource | undefined;
+  if (source) {
+    source.setData(spatialRulesGeoJson());
+    return;
+  }
+  map.addSource("spatial-rules", {
+    type: "geojson",
+    data: spatialRulesGeoJson(),
+  });
+  map.addLayer({
+    id: "spatial-rules-fill",
+    type: "fill",
+    source: "spatial-rules",
+    paint: {
+      "fill-color": [
+        "match",
+        ["get", "rule_type"],
+        "no_fly_zone",
+        "#ff5967",
+        "#55e2d5",
+      ],
+      "fill-opacity": 0.2,
+    },
+  });
+  map.addLayer({
+    id: "spatial-rules-outline",
+    type: "line",
+    source: "spatial-rules",
+    paint: {
+      "line-color": [
+        "match",
+        ["get", "rule_type"],
+        "no_fly_zone",
+        "#ff5967",
+        "#55e2d5",
+      ],
+      "line-width": 2,
+      "line-dasharray": [2, 1],
+    },
+  });
+}
+
+function renderPreflightPosition() {
+  preflightMarker?.remove();
+  preflightMarker = undefined;
+  if (!map || !props.validationPosition) return;
+  const element = document.createElement("div");
+  element.className = "preflight-result-marker";
+  element.dataset.testid = "preflight-result-position";
+  element.dataset.position = `${props.validationPosition.longitude},${props.validationPosition.latitude}`;
+  element.setAttribute("role", "img");
+  element.setAttribute("aria-label", "航前规则校验命中位置");
+  element.textContent = "×";
+  preflightMarker = new maplibregl.Marker({ element, anchor: "center" })
+    .setLngLat([
+      props.validationPosition.longitude,
+      props.validationPosition.latitude,
+    ])
+    .addTo(map);
+  map.flyTo({
+    center: [
+      props.validationPosition.longitude,
+      props.validationPosition.latitude,
+    ],
+    zoom: Math.max(map.getZoom(), 14),
+  });
+}
+
 function renderSituation() {
+  renderSpatialRules();
   renderTracks();
   renderMarkers();
+  renderPreflightPosition();
 }
 
 onMounted(() => {
@@ -149,9 +244,12 @@ onMounted(() => {
 });
 
 watch(() => props.drones, renderSituation, { deep: true });
+watch(() => props.spatialRules, renderSpatialRules, { deep: true });
+watch(() => props.validationPosition, renderPreflightPosition, { deep: true });
 
 onBeforeUnmount(() => {
   for (const marker of markers.splice(0)) marker.remove();
+  preflightMarker?.remove();
   map?.remove();
   maplibregl.removeProtocol("pmtiles");
 });
@@ -164,11 +262,26 @@ onBeforeUnmount(() => {
     data-testid="situation-map"
     data-center="106.6282,26.6467"
     :data-track-points="trackPointCount"
+    :data-spatial-rule-count="spatialRules.length"
     aria-label="贵阳市观山湖区低空运行地图"
   >
     <div class="map-coordinate" aria-hidden="true">
       观山湖区 · 106.6282°E / 26.6467°N
     </div>
     <div class="track-summary">航迹 · {{ trackPointCount }} 个遥测点</div>
+    <div v-if="spatialRules.length" class="spatial-rule-map-labels">
+      <article
+        v-for="rule in spatialRules"
+        :key="`${rule.rule_id}-${rule.version}`"
+        :data-rule-type="rule.rule_type"
+      >
+        <strong>
+          {{ rule.rule_type === "no_fly_zone" ? "禁飞区" : "电子围栏" }} ·
+          {{ rule.name }}
+        </strong>
+        <span>版本 v{{ rule.version }} · {{ rule.coordinate_reference }}</span>
+        <span>来源 · {{ rule.source }}</span>
+      </article>
+    </div>
   </section>
 </template>

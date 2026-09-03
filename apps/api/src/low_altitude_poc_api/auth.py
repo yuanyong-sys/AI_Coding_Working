@@ -6,12 +6,13 @@ import logging
 import os
 import secrets
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
-from sqlalchemy import Engine, Integer, String, select
+from sqlalchemy import Engine, Integer, String, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 SESSION_COOKIE = "low_altitude_session"
@@ -72,6 +73,7 @@ class AuditEvent(AuthBase):
     action: Mapped[str] = mapped_column(String)
     outcome: Mapped[str] = mapped_column(String)
     created_at: Mapped[str] = mapped_column(String)
+    subject: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class LoginRequest(BaseModel):
@@ -92,10 +94,17 @@ class AuditEventResponse(BaseModel):
     action: str
     outcome: str
     created_at: datetime
+    subject: str | None
 
 
 class AuditEventList(BaseModel):
     events: list[AuditEventResponse]
+
+
+@dataclass(frozen=True)
+class AuthService:
+    require_user: Callable[..., AuthenticatedUser]
+    record_audit: Callable[..., None]
 
 
 def password_hash(password: str, salt: bytes | None = None) -> str:
@@ -126,8 +135,15 @@ def public_user(account: UserAccount) -> AuthenticatedUser:
 
 def configure_auth(
     app: FastAPI, engine: Engine, demo_password: str | None
-) -> Callable[..., AuthenticatedUser]:
+) -> AuthService:
     AuthBase.metadata.create_all(engine)
+    with engine.begin() as connection:
+        audit_columns = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(audit_events)"))
+        }
+        if "subject" not in audit_columns:
+            connection.execute(text("ALTER TABLE audit_events ADD COLUMN subject TEXT"))
     configured_password = demo_password or os.getenv("LOW_ALTITUDE_DEMO_PASSWORD")
     if configured_password is None:
         configured_password = secrets.token_urlsafe(15)
@@ -152,17 +168,27 @@ def configure_auth(
                 account.role = role.value
         database.commit()
 
-    def record_audit(actor: str, action: str, outcome: str) -> None:
-        with Session(engine) as database:
-            database.add(
-                AuditEvent(
-                    actor=actor,
-                    action=action,
-                    outcome=outcome,
-                    created_at=datetime.now(UTC).isoformat(),
-                )
-            )
-            database.commit()
+    def record_audit(
+        actor: str,
+        action: str,
+        outcome: str,
+        *,
+        subject: str | None = None,
+        database: Session | None = None,
+    ) -> None:
+        event = AuditEvent(
+            actor=actor,
+            action=action,
+            outcome=outcome,
+            created_at=datetime.now(UTC).isoformat(),
+            subject=subject,
+        )
+        if database is not None:
+            database.add(event)
+            return
+        with Session(engine) as own_database:
+            own_database.add(event)
+            own_database.commit()
 
     def require_user(
         session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
@@ -257,9 +283,10 @@ def configure_auth(
                         action=event.action,
                         outcome=event.outcome,
                         created_at=datetime.fromisoformat(event.created_at),
+                        subject=event.subject,
                     )
                     for event in events
                 ]
             )
 
-    return require_user
+    return AuthService(require_user=require_user, record_audit=record_audit)

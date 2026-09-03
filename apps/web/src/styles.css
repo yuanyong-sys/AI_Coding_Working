@@ -28,7 +28,9 @@ body {
   overflow: hidden;
 }
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -212,13 +214,16 @@ input {
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.capability-nav span {
+.capability-nav button {
   padding: 0.35rem 0.65rem;
+  border: 0;
+  background: transparent;
   color: #a9c5c2;
+  cursor: pointer;
   font-size: 0.68rem;
   letter-spacing: 0.06em;
 }
-.capability-nav span:first-child {
+.capability-nav button[aria-current="page"] {
   background: rgba(85, 226, 213, 0.12);
   color: var(--cyan);
 }
@@ -329,6 +334,16 @@ h2 {
 .metric--accent strong {
   color: var(--cyan);
 }
+.metric--compact {
+  align-items: center;
+  padding: 0.7rem 0;
+}
+.metric--compact strong {
+  font:
+    0.78rem "SFMono-Regular",
+    monospace;
+  color: #c5d9d7;
+}
 
 .source-card {
   margin-top: 1.5rem;
@@ -355,6 +370,22 @@ h2 {
   margin-top: 0.25rem;
   font-family: "SFMono-Regular", monospace;
   font-size: 0.78rem;
+}
+.freshness-state {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 0.65rem;
+}
+.freshness-state[data-status="delayed"] {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.freshness-state[data-status="offline"] {
+  border-color: #ff8993;
+  color: #ff8993;
 }
 .source-card dl {
   margin: 1rem 0 0;
@@ -420,6 +451,46 @@ h2 {
   font:
     0.68rem "SFMono-Regular",
     monospace;
+}
+.spatial-rule-map-labels {
+  position: absolute;
+  z-index: 3;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+.spatial-rule-map-labels article {
+  padding: 0.55rem 0.7rem;
+  border-left: 0.2rem solid #ff5967;
+  background: rgba(5, 14, 15, 0.9);
+}
+.spatial-rule-map-labels article[data-rule-type="geofence"] {
+  border-color: var(--cyan);
+}
+.spatial-rule-map-labels strong,
+.spatial-rule-map-labels span {
+  display: block;
+  font-size: 0.68rem;
+}
+.preflight-result-marker {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid #ff5967;
+  border-radius: 50%;
+  background: rgba(40, 4, 9, 0.8);
+  color: #ff8790;
+  box-shadow: 0 0 1.2rem rgba(255, 89, 103, 0.75);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.spatial-rule-map-labels span {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-family: "SFMono-Regular", monospace;
 }
 .map-legend {
   position: absolute;
@@ -501,6 +572,102 @@ h2 {
   border: 1px solid var(--line-strong);
   border-left: 0.2rem solid var(--cyan);
   background: rgba(85, 226, 213, 0.045);
+}
+.spatial-editor {
+  overflow-y: auto;
+}
+.spatial-editor label {
+  display: block;
+  margin-top: 0.8rem;
+}
+.spatial-editor label > span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+.spatial-editor input,
+.spatial-editor select,
+.spatial-editor textarea {
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--line);
+  outline: none;
+  background: #071416;
+  color: var(--text);
+  font-size: 0.68rem;
+}
+.spatial-editor textarea {
+  resize: vertical;
+  font-family: "SFMono-Regular", monospace;
+}
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.editor-status {
+  margin-top: 0.8rem;
+  color: var(--cyan);
+  font-size: 0.7rem;
+}
+.editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.editor-actions button {
+  padding: 0.65rem;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.68rem;
+}
+.editor-actions .publish-button {
+  border-color: var(--cyan);
+  background: rgba(85, 226, 213, 0.12);
+  color: var(--cyan);
+}
+.route-point-title {
+  margin-top: 0.9rem;
+  color: var(--cyan);
+  font:
+    0.65rem "SFMono-Regular",
+    monospace;
+}
+.preflight-button {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.7rem;
+  border: 1px solid var(--cyan);
+  background: rgba(85, 226, 213, 0.12);
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.preflight-result {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border-left: 0.2rem solid var(--amber);
+  background: rgba(247, 185, 85, 0.06);
+}
+.preflight-result strong {
+  color: var(--amber);
+}
+.preflight-result p,
+.preflight-result small {
+  display: block;
+  margin-top: 0.55rem;
+  color: #a9c5c2;
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+.preflight-result small {
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
 }
 .signal-item time {
   color: var(--cyan);

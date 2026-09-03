@@ -32,6 +32,7 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
             flight_state: "flying",
             source_time: "2026-09-02T06:32:08Z",
             source_type: "simulated",
+            sortie_id: "GSH-E2E-SORTIE-001",
           },
         ],
       },
@@ -82,6 +83,7 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
             flight_state: "flying",
             source_time: "2026-09-02T06:32:18Z",
             source_type: "simulated",
+            sortie_id: "GSH-E2E-SORTIE-001",
           },
         ],
       },
@@ -121,4 +123,83 @@ test("按角色能力显示功能入口并可退出登录", async ({ page }) => 
   await expect(
     page.getByRole("heading", { name: "进入低空智慧调度平台" }),
   ).toBeVisible();
+});
+
+test("空间管理员发布空间规则并在地图查看生效版本", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("账号").fill("spatial-admin");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "空间规则", exact: true }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "空间规则草稿" }),
+  ).toBeVisible();
+  await page.getByLabel("规则名称").fill("观山湖测试禁飞区");
+  await page.getByLabel("最低高度（米）").fill("60");
+  await page.getByLabel("最高高度（米）").fill("180");
+  await page.getByLabel("生效时间").fill("2026-09-03T00:00");
+  await page.getByLabel("失效时间").fill("2027-09-30T00:00");
+  await page.getByRole("button", { name: "保存草稿" }).click();
+  await expect(page.getByText("草稿已保存")).toBeVisible();
+  await page.getByRole("button", { name: "发布版本" }).click();
+
+  await expect(page.getByText("已发布 v1")).toBeVisible();
+  await expect(page.getByTestId("situation-map")).toHaveAttribute(
+    "data-spatial-rule-count",
+    "1",
+  );
+  await expect(page.getByText("禁飞区 · 观山湖测试禁飞区")).toBeVisible();
+  await expect(page.getByText("版本 v1 · WGS84")).toBeVisible();
+});
+
+test("用户提交计划航线并在地图定位航前规则校验结果", async ({
+  page,
+  request,
+}) => {
+  await request.post("http://127.0.0.1:8000/api/auth/login", {
+    data: { username: "spatial-admin", password: "local-e2e-password" },
+  });
+  await request.post("http://127.0.0.1:8000/api/spatial-rules/drafts", {
+    data: {
+      rule_id: "E2E-NFZ-PREFLIGHT",
+      name: "航前测试禁飞区",
+      rule_type: "no_fly_zone",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [106.61, 26.63],
+            [106.64, 26.63],
+            [106.64, 26.66],
+            [106.61, 26.66],
+            [106.61, 26.63],
+          ],
+        ],
+      },
+      min_altitude_m: 60,
+      max_altitude_m: 180,
+      valid_from: "2026-09-03T00:00:00Z",
+      valid_to: "2027-09-30T00:00:00Z",
+      source: "Playwright",
+    },
+  });
+  await request.post(
+    "http://127.0.0.1:8000/api/spatial-rules/drafts/E2E-NFZ-PREFLIGHT/publish",
+  );
+
+  await page.goto("/");
+  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "航前规则校验" }).click();
+  await page.getByRole("button", { name: "校验计划航线" }).click();
+
+  await expect(page.getByText("进入禁飞区", { exact: true })).toBeVisible();
+  await expect(page.getByText("命中版本 E2E-NFZ-PREFLIGHT v1")).toBeVisible();
+  await expect(page.getByTestId("preflight-result-position")).toHaveAttribute(
+    "data-position",
+    "106.61,26.645",
+  );
+  await expect(page.getByText("规则判断，不代表审批或飞行许可")).toBeVisible();
 });

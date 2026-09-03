@@ -10,7 +10,8 @@
       "speed_mps": 10.2,
       "flight_state": "flying",
       "source_time": "2026-09-02T06:30:00Z",
-      "source_type": "simulated"
+      "source_type": "simulated",
+      "sortie_id": "GSH-STANDARD-SORTIE-01"
     },
     {
       "event_id": "normal-flight-002",
@@ -22,7 +23,8 @@
       "speed_mps": 11.1,
       "flight_state": "flying",
       "source_time": "2026-09-02T06:30:10Z",
-      "source_type": "simulated"
+      "source_type": "simulated",
+      "sortie_id": "GSH-STANDARD-SORTIE-01"
     },
     {
       "event_id": "normal-flight-003",
@@ -34,7 +36,8 @@
       "speed_mps": 11.8,
       "flight_state": "flying",
       "source_time": "2026-09-02T06:30:20Z",
-      "source_type": "simulated"
+      "source_type": "simulated",
+      "sortie_id": "GSH-STANDARD-SORTIE-01"
     },
     {
       "event_id": "normal-flight-004",
@@ -46,7 +49,8 @@
       "speed_mps": 12.4,
       "flight_state": "flying",
       "source_time": "2026-09-02T06:30:30Z",
-      "source_type": "simulated"
+      "source_type": "simulated",
+      "sortie_id": "GSH-STANDARD-SORTIE-01"
     },
     {
       "event_id": "normal-flight-005",
@@ -58,7 +62,8 @@
       "speed_mps": 13.0,
       "flight_state": "flying",
       "source_time": "2026-09-02T06:30:40Z",
-      "source_type": "simulated"
+      "source_type": "simulated",
+      "sortie_id": "GSH-STANDARD-SORTIE-01"
     },
     {
       "event_id": "normal-flight-006",
@@ -70,7 +75,8 @@
       "speed_mps": 12.7,
       "flight_state": "flying",
       "source_time": "2026-09-02T06:30:50Z",
-      "source_type": "simulated"
+      "source_type": "simulated",
+      "sortie_id": "GSH-STANDARD-SORTIE-01"
     }
   ]
 }

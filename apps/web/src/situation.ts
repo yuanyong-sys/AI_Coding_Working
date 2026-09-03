@@ -9,6 +9,7 @@ export interface DroneSnapshot {
   source_time: string;
   platform_received_time: string;
   source_type: "simulated" | "real";
+  data_status: "current" | "delayed" | "offline";
   track: TrackPoint[];
 }
 
@@ -22,6 +23,38 @@ export interface TrackPoint {
 
 export interface SituationSnapshot {
   drones: DroneSnapshot[];
+  metrics: SituationMetrics;
+  cursor: number;
+}
+
+export interface SituationMetrics {
+  flight_sorties: number;
+  online_rate: number;
+  in_flight_count: number;
+  telemetry_delay_seconds: number;
+  source_composition: { real: number; simulated: number };
+  observation_window_seconds: number;
+}
+
+export interface SituationStreamMessage {
+  type: "telemetry" | "snapshot_required";
+  cursor: number;
+}
+
+export function connectSituationEvents(
+  after: number,
+  onMessage: (message: SituationStreamMessage) => void,
+  onDisconnect: () => void,
+): WebSocket {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(
+    `${protocol}//${window.location.host}/api/situation/events?after=${after}`,
+  );
+  socket.addEventListener("message", (event) => {
+    onMessage(JSON.parse(event.data as string) as SituationStreamMessage);
+  });
+  socket.addEventListener("close", onDisconnect);
+  return socket;
 }
 
 export async function fetchSituationSnapshot(): Promise<SituationSnapshot> {

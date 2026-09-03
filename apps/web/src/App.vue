@@ -1,13 +1,27 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 
 import { fetchSession, login, logout, type AuthenticatedUser } from "@/auth";
 import SituationMap from "@/components/SituationMap.vue";
 import {
+  connectSituationEvents,
   fetchSituationSnapshot,
   formatSourceTime,
   type DroneSnapshot,
+  type SituationMetrics,
 } from "@/situation";
+import {
+  fetchActiveSpatialRules,
+  publishSpatialRule,
+  saveSpatialRuleDraft,
+  type SpatialRuleDraft,
+  type SpatialRuleVersion,
+} from "@/spatial-rules";
+import {
+  validatePlannedRoute,
+  type PlannedRoutePoint,
+  type PreflightResult,
+} from "@/preflight";
 
 const drones = ref<DroneSnapshot[]>([]);
 const loading = ref(true);
@@ -18,33 +32,221 @@ const username = ref("situation-viewer");
 const password = ref("");
 const loginError = ref("");
 const loginPending = ref(false);
-const selectedDrone = computed(() => drones.value[0]);
+const activeView = ref("运行态势");
+const spatialRules = ref<SpatialRuleVersion[]>([]);
+const spatialRuleStatus = ref("");
+const spatialRuleError = ref("");
+const preflightResult = ref<PreflightResult | null>(null);
+const preflightError = ref("");
+let preflightRequestSequence = 0;
+const plannedRoute = reactive<PlannedRoutePoint[]>([
+  {
+    longitude: 106.6,
+    latitude: 26.645,
+    altitude_m: 100,
+    time: "2026-09-03T01:00:00Z",
+  },
+  {
+    longitude: 106.65,
+    latitude: 26.645,
+    altitude_m: 100,
+    time: "2026-09-03T01:01:00Z",
+  },
+]);
+const spatialDraft = reactive<SpatialRuleDraft>({
+  rule_id: "GSH-NFZ-001",
+  name: "观山湖核心禁飞区",
+  rule_type: "no_fly_zone",
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      [
+        [106.61, 26.63],
+        [106.64, 26.63],
+        [106.64, 26.66],
+        [106.61, 26.66],
+        [106.61, 26.63],
+      ],
+    ],
+  },
+  min_altitude_m: 60,
+  max_altitude_m: 180,
+  valid_from: "2026-09-03T00:00:00Z",
+  valid_to: "2027-09-30T00:00:00Z",
+  source: "观山湖低空运行 POC 配置",
+  coordinate_reference: "WGS84",
+});
+const geometryText = ref(JSON.stringify(spatialDraft.geometry, null, 2));
+const cursor = ref(0);
+const snapshotMetrics = ref<SituationMetrics | null>(null);
+const clockNow = ref(Date.now());
+const displayedDrones = computed(() =>
+  drones.value.map((drone) => {
+    const delaySeconds = Math.max(
+      0,
+      (clockNow.value - new Date(drone.platform_received_time).getTime()) /
+        1000,
+    );
+    return {
+      ...drone,
+      data_status:
+        delaySeconds > 30
+          ? ("offline" as const)
+          : delaySeconds > 10
+            ? ("delayed" as const)
+            : ("current" as const),
+    };
+  }),
+);
+const displayedMetrics = computed(() => {
+  const onlineDrones = displayedDrones.value.filter(
+    (drone) => drone.data_status !== "offline",
+  );
+  return {
+    flight_sorties:
+      snapshotMetrics.value?.flight_sorties ?? displayedDrones.value.length,
+    online_rate: displayedDrones.value.length
+      ? (onlineDrones.length / displayedDrones.value.length) * 100
+      : 0,
+    in_flight_count: onlineDrones.filter(
+      (drone) => drone.flight_state === "flying",
+    ).length,
+    telemetry_delay_seconds: displayedDrones.value.length
+      ? Math.max(
+          ...displayedDrones.value.map(
+            (drone) =>
+              (clockNow.value -
+                new Date(drone.platform_received_time).getTime()) /
+              1000,
+          ),
+        )
+      : 0,
+    source_composition: snapshotMetrics.value?.source_composition ?? {
+      real: 0,
+      simulated: 0,
+    },
+    observation_window_seconds:
+      snapshotMetrics.value?.observation_window_seconds ?? 30,
+  };
+});
+const selectedDrone = computed(() => displayedDrones.value[0]);
 const navigation = computed(() => {
   const capabilities = new Set(user.value?.capabilities ?? []);
   return [
     { label: "运行态势", visible: capabilities.has("situation:read") },
+    { label: "航前规则校验", visible: capabilities.has("situation:read") },
     { label: "数据智能", visible: capabilities.has("query:read") },
     { label: "AI异常线索研判", visible: capabilities.has("clue:review") },
     { label: "空间规则", visible: capabilities.has("spatial:manage") },
   ].filter((item) => item.visible);
 });
-let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let freshnessTimer: ReturnType<typeof setInterval> | undefined;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let spatialRulesTimer: ReturnType<typeof setInterval> | undefined;
+let situationSocket: WebSocket | undefined;
+let situationRefreshQueue = Promise.resolve();
 
-async function refreshSituation() {
+async function refreshSituation(): Promise<boolean> {
   try {
-    drones.value = (await fetchSituationSnapshot()).drones;
+    const snapshot = await fetchSituationSnapshot();
+    drones.value = snapshot.drones;
+    snapshotMetrics.value = snapshot.metrics;
+    cursor.value = snapshot.cursor;
     error.value = "";
+    return true;
   } catch (reason) {
     error.value =
       reason instanceof Error ? reason.message : "态势快照暂时不可用";
+    return false;
   } finally {
     loading.value = false;
   }
 }
 
-function startSituationRefresh() {
-  void refreshSituation();
-  refreshTimer = setInterval(refreshSituation, 500);
+async function refreshSpatialRules() {
+  try {
+    spatialRules.value = await fetchActiveSpatialRules();
+  } catch (reason) {
+    spatialRuleError.value =
+      reason instanceof Error ? reason.message : "空间规则读取失败";
+  }
+}
+
+function connectSituationStream() {
+  situationSocket = connectSituationEvents(
+    cursor.value,
+    () => {
+      situationRefreshQueue = situationRefreshQueue.then(async () => {
+        if (!(await refreshSituation())) situationSocket?.close();
+      });
+    },
+    () => {
+      if (!user.value) return;
+      reconnectTimer = setTimeout(connectSituationStream, 500);
+    },
+  );
+}
+
+async function startSituationRefresh() {
+  await refreshSituation();
+  await refreshSpatialRules();
+  connectSituationStream();
+  freshnessTimer = setInterval(() => {
+    clockNow.value = Date.now();
+  }, 1000);
+  spatialRulesTimer = setInterval(refreshSpatialRules, 5000);
+}
+
+function toApiTime(value: string): string {
+  return value.length === 16 ? new Date(value).toISOString() : value;
+}
+
+async function saveDraft() {
+  spatialRuleError.value = "";
+  spatialRuleStatus.value = "";
+  try {
+    spatialDraft.geometry = JSON.parse(
+      geometryText.value,
+    ) as SpatialRuleDraft["geometry"];
+    await saveSpatialRuleDraft({
+      ...spatialDraft,
+      valid_from: toApiTime(spatialDraft.valid_from),
+      valid_to: toApiTime(spatialDraft.valid_to),
+    });
+    spatialRuleStatus.value = "草稿已保存";
+  } catch (reason) {
+    spatialRuleError.value =
+      reason instanceof Error ? reason.message : "空间规则草稿保存失败";
+  }
+}
+
+async function publishDraft() {
+  spatialRuleError.value = "";
+  try {
+    const published = await publishSpatialRule(spatialDraft.rule_id);
+    spatialRuleStatus.value = `已发布 v${published.version}`;
+    await refreshSpatialRules();
+  } catch (reason) {
+    spatialRuleError.value =
+      reason instanceof Error ? reason.message : "空间规则发布失败";
+  }
+}
+
+async function runPreflightValidation() {
+  const requestSequence = ++preflightRequestSequence;
+  preflightError.value = "";
+  preflightResult.value = null;
+  try {
+    const result = await validatePlannedRoute(plannedRoute);
+    if (requestSequence === preflightRequestSequence) {
+      preflightResult.value = result;
+    }
+  } catch (reason) {
+    if (requestSequence === preflightRequestSequence) {
+      preflightError.value =
+        reason instanceof Error ? reason.message : "计划航线校验失败";
+    }
+  }
 }
 
 async function submitLogin() {
@@ -53,7 +255,7 @@ async function submitLogin() {
   try {
     user.value = await login(username.value, password.value);
     password.value = "";
-    startSituationRefresh();
+    await startSituationRefresh();
   } catch (reason) {
     loginError.value = reason instanceof Error ? reason.message : "登录失败";
   } finally {
@@ -63,20 +265,28 @@ async function submitLogin() {
 
 async function signOut() {
   await logout();
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = undefined;
   user.value = null;
+  situationSocket?.close();
+  if (freshnessTimer) clearInterval(freshnessTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (spatialRulesTimer) clearInterval(spatialRulesTimer);
+  freshnessTimer = undefined;
+  reconnectTimer = undefined;
+  spatialRulesTimer = undefined;
   drones.value = [];
 }
 
 onMounted(async () => {
   user.value = await fetchSession();
   authReady.value = true;
-  if (user.value) startSituationRefresh();
+  if (user.value) await startSituationRefresh();
 });
 
 onBeforeUnmount(() => {
-  if (refreshTimer) clearInterval(refreshTimer);
+  situationSocket?.close();
+  if (freshnessTimer) clearInterval(freshnessTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (spatialRulesTimer) clearInterval(spatialRulesTimer);
 });
 </script>
 
@@ -154,31 +364,71 @@ onBeforeUnmount(() => {
     </header>
 
     <nav class="capability-nav" aria-label="能力导航">
-      <span v-for="item in navigation" :key="item.label">{{ item.label }}</span>
+      <button
+        v-for="item in navigation"
+        :key="item.label"
+        type="button"
+        :aria-current="activeView === item.label ? 'page' : undefined"
+        @click="activeView = item.label"
+      >
+        {{ item.label }}
+      </button>
     </nav>
 
     <aside class="overview-rail" aria-label="运行摘要">
       <p class="section-code">01 / CURRENT PICTURE</p>
       <h2>当前图景</h2>
       <div class="metric">
-        <span>已接入无人机</span>
-        <strong>{{ drones.length.toString().padStart(2, "0") }}</strong>
+        <span>飞行架次</span>
+        <strong>{{ displayedMetrics.flight_sorties }}</strong>
       </div>
       <div class="metric metric--accent">
         <span>当前在飞</span>
-        <strong>{{
-          drones
-            .filter((drone) => drone.flight_state === "flying")
-            .length.toString()
-            .padStart(2, "0")
-        }}</strong>
+        <strong>{{ displayedMetrics.in_flight_count }}</strong>
+      </div>
+      <div class="metric metric--compact">
+        <span
+          >在线率（近
+          {{ displayedMetrics.observation_window_seconds }} 秒）</span
+        >
+        <strong>{{ displayedMetrics.online_rate.toFixed(1) }}%</strong>
+      </div>
+      <div class="metric metric--compact">
+        <span>遥测延迟</span>
+        <strong
+          >{{ displayedMetrics.telemetry_delay_seconds.toFixed(1) }} 秒</strong
+        >
+      </div>
+      <div class="metric metric--compact">
+        <span>来源构成</span>
+        <strong>
+          真实 {{ displayedMetrics.source_composition.real }} / 模拟
+          {{ displayedMetrics.source_composition.simulated }}
+        </strong>
       </div>
       <div v-if="selectedDrone" class="source-card">
-        <span class="source-badge">模拟数据</span>
+        <span class="source-badge">
+          {{
+            selectedDrone.source_type === "simulated" ? "模拟数据" : "真实数据"
+          }}
+        </span>
         <p>来源时间</p>
         <time :datetime="selectedDrone.source_time">
           {{ formatSourceTime(selectedDrone.source_time) }}
         </time>
+        <p>平台接收时间 · 最后有效</p>
+        <time :datetime="selectedDrone.platform_received_time">
+          {{ formatSourceTime(selectedDrone.platform_received_time) }}
+        </time>
+        <span class="freshness-state" :data-status="selectedDrone.data_status">
+          {{
+            selectedDrone.data_status === "offline"
+              ? "离线"
+              : selectedDrone.data_status === "delayed"
+                ? "数据延迟"
+                : "数据正常"
+          }}
+        </span>
         <dl>
           <div>
             <dt>高度</dt>
@@ -202,14 +452,132 @@ onBeforeUnmount(() => {
     </aside>
 
     <section class="map-stage">
-      <SituationMap :drones="drones" />
+      <SituationMap
+        :drones="displayedDrones"
+        :spatial-rules="spatialRules"
+        :validation-position="preflightResult?.violations[0]?.position"
+      />
       <div class="map-legend" aria-label="地图图例">
         <span><i class="legend-dot"></i> 已接入无人机</span>
         <span><i class="legend-ring"></i> 模拟来源</span>
       </div>
     </section>
 
-    <aside class="signal-rail" aria-label="实时信号">
+    <aside
+      v-if="activeView === '空间规则'"
+      class="signal-rail spatial-editor"
+      aria-label="空间规则编辑"
+    >
+      <p class="section-code">SPATIAL / DRAFT</p>
+      <h2>空间规则草稿</h2>
+      <label><span>规则名称</span><input v-model="spatialDraft.name" /></label>
+      <label>
+        <span>类型</span>
+        <select v-model="spatialDraft.rule_type">
+          <option value="no_fly_zone">禁飞区</option>
+          <option value="geofence">电子围栏</option>
+        </select>
+      </label>
+      <div class="field-pair">
+        <label>
+          <span>最低高度（米）</span>
+          <input v-model.number="spatialDraft.min_altitude_m" type="number" />
+        </label>
+        <label>
+          <span>最高高度（米）</span>
+          <input v-model.number="spatialDraft.max_altitude_m" type="number" />
+        </label>
+      </div>
+      <label>
+        <span>生效时间</span>
+        <input v-model="spatialDraft.valid_from" type="datetime-local" />
+      </label>
+      <label>
+        <span>失效时间</span>
+        <input v-model="spatialDraft.valid_to" type="datetime-local" />
+      </label>
+      <label>
+        <span>水平范围（WGS-84 GeoJSON）</span>
+        <textarea v-model="geometryText" rows="5"></textarea>
+      </label>
+      <label><span>来源</span><input v-model="spatialDraft.source" /></label>
+      <p v-if="spatialRuleError" class="error-state" role="alert">
+        {{ spatialRuleError }}
+      </p>
+      <p v-if="spatialRuleStatus" class="editor-status" role="status">
+        {{ spatialRuleStatus }}
+      </p>
+      <div class="editor-actions">
+        <button type="button" @click="saveDraft">保存草稿</button>
+        <button type="button" class="publish-button" @click="publishDraft">
+          发布版本
+        </button>
+      </div>
+    </aside>
+    <aside
+      v-else-if="activeView === '航前规则校验'"
+      class="signal-rail spatial-editor"
+      aria-label="航前规则校验"
+    >
+      <p class="section-code">PREFLIGHT / WGS-84</p>
+      <h2>计划航线航前规则校验</h2>
+      <template v-for="(point, index) in plannedRoute" :key="index">
+        <p class="route-point-title">航点 {{ index + 1 }}</p>
+        <div class="field-pair">
+          <label>
+            <span>经度</span>
+            <input
+              v-model.number="point.longitude"
+              type="number"
+              step="0.001"
+            />
+          </label>
+          <label>
+            <span>纬度</span>
+            <input v-model.number="point.latitude" type="number" step="0.001" />
+          </label>
+          <label>
+            <span>高度（米）</span>
+            <input v-model.number="point.altitude_m" type="number" />
+          </label>
+          <label>
+            <span>时间</span>
+            <input v-model="point.time" />
+          </label>
+        </div>
+      </template>
+      <button
+        class="preflight-button"
+        type="button"
+        @click="runPreflightValidation"
+      >
+        校验计划航线
+      </button>
+      <p v-if="preflightError" class="error-state" role="alert">
+        {{ preflightError }}
+      </p>
+      <article v-if="preflightResult" class="preflight-result">
+        <strong>
+          {{
+            preflightResult.result === "passed"
+              ? "通过"
+              : preflightResult.result === "entered_no_fly_zone"
+                ? "进入禁飞区"
+                : "超出电子围栏"
+          }}
+        </strong>
+        <template v-if="preflightResult.violations[0]">
+          <p>
+            命中版本 {{ preflightResult.violations[0].rule_id }} v{{
+              preflightResult.violations[0].rule_version
+            }}
+          </p>
+          <p>{{ preflightResult.violations[0].reason }}</p>
+        </template>
+        <small>规则判断，不代表审批或飞行许可</small>
+      </article>
+    </aside>
+    <aside v-else class="signal-rail" aria-label="实时信号">
       <p class="section-code">SIGNAL / LIVE</p>
       <h2>实时信号</h2>
       <article v-if="selectedDrone" class="signal-item">
