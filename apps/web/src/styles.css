@@ -226,6 +226,19 @@ h2 {
     0.68rem "SFMono-Regular",
     monospace;
 }
+.track-summary {
+  position: absolute;
+  z-index: 3;
+  right: 1rem;
+  top: 1rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(5, 14, 15, 0.86);
+  border-right: 2px solid var(--cyan);
+  color: #b8d4d0;
+  font:
+    0.68rem "SFMono-Regular",
+    monospace;
+}
 .map-legend {
   position: absolute;
   z-index: 3;
@@ -290,6 +303,12 @@ h2 {
   font:
     0.65rem "SFMono-Regular",
     monospace;
+}
+.drone-marker strong em {
+  margin-left: 0.4rem;
+  color: var(--cyan);
+  font-size: 0.58rem;
+  font-style: normal;
 }
 .drone-marker--simulated {
   color: var(--amber);

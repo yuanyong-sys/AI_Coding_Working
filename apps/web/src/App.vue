@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import SituationMap from "@/components/SituationMap.vue";
 import {
@@ -12,16 +12,27 @@ const drones = ref<DroneSnapshot[]>([]);
 const loading = ref(true);
 const error = ref("");
 const selectedDrone = computed(() => drones.value[0]);
+let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
-onMounted(async () => {
+async function refreshSituation() {
   try {
     drones.value = (await fetchSituationSnapshot()).drones;
+    error.value = "";
   } catch (reason) {
     error.value =
       reason instanceof Error ? reason.message : "态势快照暂时不可用";
   } finally {
     loading.value = false;
   }
+}
+
+onMounted(async () => {
+  await refreshSituation();
+  refreshTimer = setInterval(refreshSituation, 500);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) clearInterval(refreshTimer);
 });
 </script>
 

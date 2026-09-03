@@ -6,6 +6,7 @@
     "dev": "concurrently --kill-others --names API,WEB --prefix-colors cyan,green \"uv run --directory apps/api uvicorn --app-dir src low_altitude_poc_api.app:create_app --factory --host 127.0.0.1 --port 8000\" \"pnpm --filter @low-altitude/web dev\"",
     "format:check": "pnpm --filter @low-altitude/web format:check && uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache ruff format --check",
     "lint": "pnpm typecheck && uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache ruff check",
+    "simulate": "python3 tools/run_simulator.py",
     "test": "uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache pytest",
     "test:e2e": "pnpm --filter @low-altitude/web test:e2e",
     "typecheck": "pnpm --filter @low-altitude/web typecheck"

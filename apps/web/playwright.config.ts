@@ -1,4 +1,8 @@
 import { defineConfig } from "@playwright/test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const testDatabaseUrl = `sqlite:///${join(tmpdir(), `low-altitude-e2e-${process.pid}.db`)}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -13,6 +17,7 @@ export default defineConfig({
       command:
         "uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache uvicorn --app-dir src low_altitude_poc_api.app:create_app --factory --host 127.0.0.1 --port 8000",
       cwd: "../..",
+      env: { LOW_ALTITUDE_DATABASE_URL: testDatabaseUrl },
       url: "http://127.0.0.1:8000/docs",
       reuseExistingServer: false,
     },

@@ -1,0 +1,76 @@
+{
+  "events": [
+    {
+      "event_id": "normal-flight-001",
+      "drone_id": "UAV-GSH-DEMO-01",
+      "longitude": 106.602,
+      "latitude": 26.626,
+      "altitude_m": 72,
+      "heading_deg": 45,
+      "speed_mps": 10.2,
+      "flight_state": "flying",
+      "source_time": "2026-09-02T06:30:00Z",
+      "source_type": "simulated"
+    },
+    {
+      "event_id": "normal-flight-002",
+      "drone_id": "UAV-GSH-DEMO-01",
+      "longitude": 106.611,
+      "latitude": 26.632,
+      "altitude_m": 78,
+      "heading_deg": 48,
+      "speed_mps": 11.1,
+      "flight_state": "flying",
+      "source_time": "2026-09-02T06:30:10Z",
+      "source_type": "simulated"
+    },
+    {
+      "event_id": "normal-flight-003",
+      "drone_id": "UAV-GSH-DEMO-01",
+      "longitude": 106.62,
+      "latitude": 26.639,
+      "altitude_m": 83,
+      "heading_deg": 51,
+      "speed_mps": 11.8,
+      "flight_state": "flying",
+      "source_time": "2026-09-02T06:30:20Z",
+      "source_type": "simulated"
+    },
+    {
+      "event_id": "normal-flight-004",
+      "drone_id": "UAV-GSH-DEMO-01",
+      "longitude": 106.6282,
+      "latitude": 26.6467,
+      "altitude_m": 86,
+      "heading_deg": 54,
+      "speed_mps": 12.4,
+      "flight_state": "flying",
+      "source_time": "2026-09-02T06:30:30Z",
+      "source_type": "simulated"
+    },
+    {
+      "event_id": "normal-flight-005",
+      "drone_id": "UAV-GSH-DEMO-01",
+      "longitude": 106.637,
+      "latitude": 26.653,
+      "altitude_m": 92,
+      "heading_deg": 58,
+      "speed_mps": 13.0,
+      "flight_state": "flying",
+      "source_time": "2026-09-02T06:30:40Z",
+      "source_type": "simulated"
+    },
+    {
+      "event_id": "normal-flight-006",
+      "drone_id": "UAV-GSH-DEMO-01",
+      "longitude": 106.646,
+      "latitude": 26.659,
+      "altitude_m": 96,
+      "heading_deg": 61,
+      "speed_mps": 12.7,
+      "flight_state": "flying",
+      "source_time": "2026-09-02T06:30:50Z",
+      "source_type": "simulated"
+    }
+  ]
+}

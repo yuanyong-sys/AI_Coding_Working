@@ -22,15 +22,15 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
       data: {
         events: [
           {
-            event_id: "e2e-map-telemetry-001",
-            drone_id: "UAV-GSH-01",
+            event_id: "e2e-track-001",
+            drone_id: "UAV-GSH-TRACK-01",
             longitude: 106.6282,
             latitude: 26.6467,
             altitude_m: 86,
             heading_deg: 125,
             speed_mps: 12.4,
             flight_state: "flying",
-            source_time: "2026-09-03T06:32:08Z",
+            source_time: "2026-09-02T06:32:08Z",
             source_type: "simulated",
           },
         ],
@@ -49,9 +49,47 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
     "106.6282,26.6467",
   );
   await expect(page.locator(".maplibregl-canvas")).toBeVisible();
-  await expect(page.getByTestId("drone-marker-UAV-GSH-01")).toBeVisible();
+  const droneMarker = page.getByTestId("drone-marker-UAV-GSH-TRACK-01");
+  await expect(droneMarker).toBeVisible();
+  await expect(droneMarker).toHaveAttribute(
+    "data-position",
+    "106.6282,26.6467",
+  );
+  await expect(droneMarker).toContainText("飞行中");
+
+  const moveResponse = await request.post(
+    "http://127.0.0.1:8000/api/telemetry/batches",
+    {
+      data: {
+        events: [
+          {
+            event_id: "e2e-track-002",
+            drone_id: "UAV-GSH-TRACK-01",
+            longitude: 106.6382,
+            latitude: 26.6567,
+            altitude_m: 96,
+            heading_deg: 140,
+            speed_mps: 13.4,
+            flight_state: "flying",
+            source_time: "2026-09-02T06:32:18Z",
+            source_type: "simulated",
+          },
+        ],
+      },
+    },
+  );
+  expect(moveResponse.status()).toBe(202);
+  await expect(droneMarker).toHaveAttribute(
+    "data-position",
+    "106.6382,26.6567",
+  );
+  await expect(page.getByTestId("situation-map")).toHaveAttribute(
+    "data-track-points",
+    "2",
+  );
+  await expect(page.getByText("航迹 · 2 个遥测点")).toBeVisible();
   await expect(page.getByText("模拟数据", { exact: true })).toBeVisible();
-  await expect(page.getByText("2026-09-03 14:32:08")).toBeVisible();
+  await expect(page.getByText("2026-09-02 14:32:18")).toBeVisible();
 
   expect(localPmtilesRequests).toContain("/maps/guanshanhu.pmtiles");
   expect(externalRequests).toEqual([]);

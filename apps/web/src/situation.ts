@@ -9,6 +9,15 @@ export interface DroneSnapshot {
   source_time: string;
   platform_received_time: string;
   source_type: "simulated" | "real";
+  track: TrackPoint[];
+}
+
+export interface TrackPoint {
+  event_id: string;
+  longitude: number;
+  latitude: number;
+  altitude_m: number;
+  source_time: string;
 }
 
 export interface SituationSnapshot {
