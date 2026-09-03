@@ -17,7 +17,10 @@ export default defineConfig({
       command:
         "uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache uvicorn --app-dir src low_altitude_poc_api.app:create_app --factory --host 127.0.0.1 --port 8000",
       cwd: "../..",
-      env: { LOW_ALTITUDE_DATABASE_URL: testDatabaseUrl },
+      env: {
+        LOW_ALTITUDE_DATABASE_URL: testDatabaseUrl,
+        LOW_ALTITUDE_DEMO_PASSWORD: "local-e2e-password",
+      },
       url: "http://127.0.0.1:8000/docs",
       reuseExistingServer: false,
     },

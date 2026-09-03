@@ -4,12 +4,25 @@ from fastapi.testclient import TestClient
 
 from low_altitude_poc_api.app import create_app
 
+TEST_PASSWORD = "local-test-password"
+
+
+def login(client: TestClient) -> None:
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "situation-viewer", "password": TEST_PASSWORD},
+    )
+    assert response.status_code == 200
+
 
 def test_simulated_telemetry_is_visible_in_situation_snapshot(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'situation.db'}"
     before_ingest = datetime.now(UTC)
 
-    with TestClient(create_app(database_url=database_url)) as client:
+    with TestClient(
+        create_app(database_url=database_url, demo_password=TEST_PASSWORD)
+    ) as client:
+        login(client)
         ingest_response = client.post(
             "/api/telemetry/batches",
             json={
@@ -97,7 +110,10 @@ def test_late_and_duplicate_telemetry_preserves_ordered_track_and_latest_state(
         "source_type": "simulated",
     }
 
-    with TestClient(create_app(database_url=database_url)) as client:
+    with TestClient(
+        create_app(database_url=database_url, demo_password=TEST_PASSWORD)
+    ) as client:
+        login(client)
         for event in (newer_event, older_event, older_event):
             response = client.post("/api/telemetry/batches", json={"events": [event]})
             assert response.status_code == 202
@@ -153,7 +169,10 @@ def test_batch_reports_invalid_coordinates_and_source_time_without_losing_valid_
         "source_time": "2099-01-01T00:00:00Z",
     }
 
-    with TestClient(create_app(database_url=database_url)) as client:
+    with TestClient(
+        create_app(database_url=database_url, demo_password=TEST_PASSWORD)
+    ) as client:
+        login(client)
         response = client.post(
             "/api/telemetry/batches",
             json={"events": [valid_event, invalid_coordinate, invalid_time]},

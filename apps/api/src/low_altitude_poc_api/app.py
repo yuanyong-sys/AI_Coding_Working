@@ -2,10 +2,12 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import FastAPI, status
+from fastapi import Depends, FastAPI, status
 from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 from sqlalchemy import Float, String, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+
+from low_altitude_poc_api.auth import AuthenticatedUser, configure_auth
 
 
 class Base(DeclarativeBase):
@@ -122,7 +124,9 @@ class SituationSnapshot(BaseModel):
     drones: list[DroneSnapshot]
 
 
-def create_app(database_url: str | None = None) -> FastAPI:
+def create_app(
+    database_url: str | None = None, demo_password: str | None = None
+) -> FastAPI:
     database_url = database_url or os.getenv(
         "LOW_ALTITUDE_DATABASE_URL", "sqlite:///./low_altitude_poc.db"
     )
@@ -130,6 +134,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     Base.metadata.create_all(engine)
 
     app = FastAPI(title="无人机低空智慧调度平台 POC")
+    require_user = configure_auth(app, engine, demo_password)
 
     @app.post(
         "/api/telemetry/batches",
@@ -182,7 +187,9 @@ def create_app(database_url: str | None = None) -> FastAPI:
         return IngestResult(accepted=accepted, rejected=len(errors), errors=errors)
 
     @app.get("/api/situation/snapshot", response_model=SituationSnapshot)
-    def get_situation_snapshot() -> SituationSnapshot:
+    def get_situation_snapshot(
+        _user: AuthenticatedUser = Depends(require_user),  # noqa: B008
+    ) -> SituationSnapshot:
         with Session(engine) as session:
             states = session.scalars(
                 select(LatestDroneState).order_by(LatestDroneState.drone_id)

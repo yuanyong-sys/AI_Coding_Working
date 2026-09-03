@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
+import { fetchSession, login, logout, type AuthenticatedUser } from "@/auth";
 import SituationMap from "@/components/SituationMap.vue";
 import {
   fetchSituationSnapshot,
@@ -11,7 +12,22 @@ import {
 const drones = ref<DroneSnapshot[]>([]);
 const loading = ref(true);
 const error = ref("");
+const user = ref<AuthenticatedUser | null>(null);
+const authReady = ref(false);
+const username = ref("situation-viewer");
+const password = ref("");
+const loginError = ref("");
+const loginPending = ref(false);
 const selectedDrone = computed(() => drones.value[0]);
+const navigation = computed(() => {
+  const capabilities = new Set(user.value?.capabilities ?? []);
+  return [
+    { label: "运行态势", visible: capabilities.has("situation:read") },
+    { label: "数据智能", visible: capabilities.has("query:read") },
+    { label: "AI异常线索研判", visible: capabilities.has("clue:review") },
+    { label: "空间规则", visible: capabilities.has("spatial:manage") },
+  ].filter((item) => item.visible);
+});
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 async function refreshSituation() {
@@ -26,9 +42,37 @@ async function refreshSituation() {
   }
 }
 
-onMounted(async () => {
-  await refreshSituation();
+function startSituationRefresh() {
+  void refreshSituation();
   refreshTimer = setInterval(refreshSituation, 500);
+}
+
+async function submitLogin() {
+  loginPending.value = true;
+  loginError.value = "";
+  try {
+    user.value = await login(username.value, password.value);
+    password.value = "";
+    startSituationRefresh();
+  } catch (reason) {
+    loginError.value = reason instanceof Error ? reason.message : "登录失败";
+  } finally {
+    loginPending.value = false;
+  }
+}
+
+async function signOut() {
+  await logout();
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = undefined;
+  user.value = null;
+  drones.value = [];
+}
+
+onMounted(async () => {
+  user.value = await fetchSession();
+  authReady.value = true;
+  if (user.value) startSituationRefresh();
 });
 
 onBeforeUnmount(() => {
@@ -37,7 +81,57 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="command-shell">
+  <main v-if="!authReady" class="auth-loading" aria-live="polite">
+    正在校验本地身份…
+  </main>
+  <main v-else-if="!user" class="login-shell">
+    <section class="login-intro">
+      <span class="brand-index">LOW ALTITUDE / GSH-01</span>
+      <p class="login-kicker">PRIVATE · OFFLINE CAPABLE</p>
+      <h1>让每一次飞行<br />清晰可见</h1>
+      <p>观山湖区低空运行态势与智能分析验证环境</p>
+      <dl>
+        <div>
+          <dt>部署模式</dt>
+          <dd>本地受控</dd>
+        </div>
+        <div>
+          <dt>地图能力</dt>
+          <dd>MapLibre / PMTiles</dd>
+        </div>
+        <div>
+          <dt>身份体系</dt>
+          <dd>三角色最小权限</dd>
+        </div>
+      </dl>
+    </section>
+    <form class="login-panel" @submit.prevent="submitLogin">
+      <span class="section-code">IDENTITY / LOCAL</span>
+      <h2>进入低空智慧调度平台</h2>
+      <p>请使用本地演示账号完成身份校验。</p>
+      <label>
+        <span>账号</span>
+        <input v-model="username" name="username" autocomplete="username" />
+      </label>
+      <label>
+        <span>密码</span>
+        <input
+          v-model="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+        />
+      </label>
+      <p v-if="loginError" class="login-error" role="alert">
+        {{ loginError }}
+      </p>
+      <button type="submit" :disabled="loginPending">
+        {{ loginPending ? "校验中…" : "登录" }}
+      </button>
+      <small>会话仅保存在 HttpOnly 本地 Cookie 中</small>
+    </form>
+  </main>
+  <main v-else class="command-shell">
     <header class="command-header">
       <div class="brand-block">
         <span class="brand-index">LOW ALTITUDE / GSH-01</span>
@@ -48,11 +142,20 @@ onBeforeUnmount(() => {
         本地态势链路
         <strong>{{ error ? "异常" : "正常" }}</strong>
       </div>
-      <div class="header-place">
-        <span>贵阳市</span>
-        <strong>观山湖区</strong>
+      <div class="identity-block">
+        <div class="header-place">
+          <span>{{ user.role_label }}</span>
+          <strong>{{ user.username }}</strong>
+        </div>
+        <button class="logout-button" type="button" @click="signOut">
+          退出登录
+        </button>
       </div>
     </header>
+
+    <nav class="capability-nav" aria-label="能力导航">
+      <span v-for="item in navigation" :key="item.label">{{ item.label }}</span>
+    </nav>
 
     <aside class="overview-rail" aria-label="运行摘要">
       <p class="section-code">01 / CURRENT PICTURE</p>

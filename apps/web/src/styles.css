@@ -32,6 +32,134 @@ input {
   font: inherit;
 }
 
+.auth-loading,
+.login-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(85, 226, 213, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(85, 226, 213, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 20% 40%, #12383a 0, transparent 38%), var(--ink);
+  background-size:
+    3rem 3rem,
+    3rem 3rem,
+    auto,
+    auto;
+}
+.auth-loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+.login-shell {
+  display: grid;
+  grid-template-columns: minmax(24rem, 1.25fr) minmax(24rem, 0.75fr);
+  align-items: center;
+  gap: clamp(4rem, 10vw, 12rem);
+  padding: clamp(3rem, 8vw, 8rem);
+}
+.login-intro {
+  max-width: 46rem;
+}
+.login-kicker {
+  margin: 5rem 0 1rem;
+  color: var(--cyan);
+  font:
+    0.72rem "SFMono-Regular",
+    monospace;
+  letter-spacing: 0.18em;
+}
+.login-intro h1 {
+  font-size: clamp(3.2rem, 6vw, 6.5rem);
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+}
+.login-intro > p:last-of-type {
+  margin-top: 1.8rem;
+  color: #9db8b5;
+  font-size: 1rem;
+}
+.login-intro dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 5rem 0 0;
+  border-top: 1px solid var(--line-strong);
+}
+.login-intro dl div {
+  padding: 1rem 1rem 0 0;
+}
+.login-intro dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.login-intro dd {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+}
+.login-panel {
+  padding: clamp(2rem, 4vw, 4rem);
+  border: 1px solid var(--line-strong);
+  border-top: 0.22rem solid var(--cyan);
+  background: rgba(8, 24, 26, 0.92);
+  box-shadow: 0 2rem 8rem rgba(0, 0, 0, 0.35);
+}
+.login-panel h2 {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.5rem;
+}
+.login-panel > p {
+  margin-bottom: 2rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.login-panel label {
+  display: block;
+  margin-top: 1rem;
+}
+.login-panel label span {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: #a9c5c2;
+  font-size: 0.72rem;
+}
+.login-panel input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line-strong);
+  outline: none;
+  background: #071416;
+  color: var(--text);
+}
+.login-panel input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 0.18rem rgba(85, 226, 213, 0.12);
+}
+.login-panel button {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.9rem;
+  border: 0;
+  background: var(--cyan);
+  color: #05201f;
+  cursor: pointer;
+  font-weight: 700;
+}
+.login-panel button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.login-panel small {
+  display: block;
+  margin-top: 1rem;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.64rem;
+}
+.login-panel .login-error {
+  margin: 1rem 0 0;
+  color: #ff8993;
+}
+
 .command-shell {
   width: 100vw;
   height: 100vh;
@@ -53,6 +181,46 @@ input {
   padding: 0 1.5rem;
   border-bottom: 1px solid var(--line-strong);
   background: rgba(6, 16, 18, 0.94);
+}
+.identity-block {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.logout-button {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.68rem;
+}
+.logout-button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.capability-nav {
+  position: absolute;
+  z-index: 5;
+  top: 5rem;
+  left: 17rem;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.65rem 1rem;
+  background: rgba(6, 16, 18, 0.82);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.capability-nav span {
+  padding: 0.35rem 0.65rem;
+  color: #a9c5c2;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+.capability-nav span:first-child {
+  background: rgba(85, 226, 213, 0.12);
+  color: var(--cyan);
 }
 
 .brand-index,
@@ -104,12 +272,26 @@ h2 {
   animation: pulse 1.8s infinite;
 }
 .header-place {
-  justify-self: end;
   display: flex;
   gap: 0.6rem;
   align-items: baseline;
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+@media (max-width: 800px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    padding: 2rem;
+  }
+  .login-intro dl,
+  .login-intro > p:last-of-type {
+    display: none;
+  }
+  .login-kicker {
+    margin-top: 3rem;
+  }
 }
 .header-place strong {
   color: var(--text);

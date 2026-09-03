@@ -42,8 +42,17 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
   await page.goto("/");
 
   await expect(
+    page.getByRole("heading", { name: "进入低空智慧调度平台" }),
+  ).toBeVisible();
+  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  await expect(
     page.getByRole("heading", { name: "低空态势总览" }),
   ).toBeVisible();
+  await expect(page.getByRole("navigation")).toContainText("数据智能");
+  await expect(page.getByRole("navigation")).not.toContainText("空间规则");
   await expect(page.getByTestId("situation-map")).toHaveAttribute(
     "data-center",
     "106.6282,26.6467",
@@ -93,4 +102,23 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
 
   expect(localPmtilesRequests).toContain("/maps/guanshanhu.pmtiles");
   expect(externalRequests).toEqual([]);
+});
+
+test("按角色能力显示功能入口并可退出登录", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("账号").fill("spatial-admin");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  await expect(page.getByRole("navigation")).toContainText("运行态势");
+  await expect(page.getByRole("navigation")).toContainText("空间规则");
+  await expect(page.getByRole("navigation")).not.toContainText(
+    "AI异常线索研判",
+  );
+  await expect(page.getByText("空间管理员", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "退出登录" }).click();
+  await expect(
+    page.getByRole("heading", { name: "进入低空智慧调度平台" }),
+  ).toBeVisible();
 });
