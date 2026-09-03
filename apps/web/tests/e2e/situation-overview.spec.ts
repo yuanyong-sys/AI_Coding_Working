@@ -140,8 +140,6 @@ test("空间管理员发布空间规则并在地图查看生效版本", async ({
   await page.getByLabel("最高高度（米）").fill("180");
   await page.getByLabel("生效时间").fill("2026-09-03T00:00");
   await page.getByLabel("失效时间").fill("2027-09-30T00:00");
-  await page.getByRole("button", { name: "保存草稿" }).click();
-  await expect(page.getByText("草稿已保存")).toBeVisible();
   await page.getByRole("button", { name: "发布版本" }).click();
 
   await expect(page.getByText("已发布 v1")).toBeVisible();

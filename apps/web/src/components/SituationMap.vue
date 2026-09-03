@@ -243,7 +243,14 @@ onMounted(() => {
   map.on("load", renderSituation);
 });
 
-watch(() => props.drones, renderSituation, { deep: true });
+watch(
+  () => props.drones,
+  () => {
+    renderTracks();
+    renderMarkers();
+  },
+  { deep: true },
+);
 watch(() => props.spatialRules, renderSpatialRules, { deep: true });
 watch(() => props.validationPosition, renderPreflightPosition, { deep: true });
 

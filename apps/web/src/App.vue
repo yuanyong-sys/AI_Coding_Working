@@ -144,7 +144,8 @@ let freshnessTimer: ReturnType<typeof setInterval> | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let spatialRulesTimer: ReturnType<typeof setInterval> | undefined;
 let situationSocket: WebSocket | undefined;
-let situationRefreshQueue = Promise.resolve();
+let situationRefreshRunning = false;
+let situationRefreshDirty = false;
 
 async function refreshSituation(): Promise<boolean> {
   try {
@@ -176,9 +177,22 @@ function connectSituationStream() {
   situationSocket = connectSituationEvents(
     cursor.value,
     () => {
-      situationRefreshQueue = situationRefreshQueue.then(async () => {
-        if (!(await refreshSituation())) situationSocket?.close();
-      });
+      situationRefreshDirty = true;
+      if (situationRefreshRunning) return;
+      situationRefreshRunning = true;
+      void (async () => {
+        try {
+          while (situationRefreshDirty) {
+            situationRefreshDirty = false;
+            if (!(await refreshSituation())) {
+              situationSocket?.close();
+              break;
+            }
+          }
+        } finally {
+          situationRefreshRunning = false;
+        }
+      })();
     },
     () => {
       if (!user.value) return;
@@ -223,6 +237,14 @@ async function saveDraft() {
 async function publishDraft() {
   spatialRuleError.value = "";
   try {
+    spatialDraft.geometry = JSON.parse(
+      geometryText.value,
+    ) as SpatialRuleDraft["geometry"];
+    await saveSpatialRuleDraft({
+      ...spatialDraft,
+      valid_from: toApiTime(spatialDraft.valid_from),
+      valid_to: toApiTime(spatialDraft.valid_to),
+    });
     const published = await publishSpatialRule(spatialDraft.rule_id);
     spatialRuleStatus.value = `已发布 v${published.version}`;
     await refreshSpatialRules();
