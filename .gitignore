@@ -1,1 +1,10 @@
 .DS_Store
+.venv/
+__pycache__/
+.pytest_cache/
+*.db
+node_modules/
+dist/
+test-results/
+playwright-report/
+.pnpm-store/
