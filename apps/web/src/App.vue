@@ -9,6 +9,7 @@ import {
 } from "vue";
 
 import { fetchSession, login, logout, type AuthenticatedUser } from "@/auth";
+import { runDataQuery, type DataQueryResponse } from "@/data-query";
 import {
   fetchAIClues,
   fetchInferenceHealth,
@@ -60,6 +61,12 @@ const password = ref("");
 const loginError = ref("");
 const loginPending = ref(false);
 const activeView = ref("运行态势");
+const dataQuestion = ref("最近1小时有多少架无人机？");
+const dataSourceFilter = ref<"real" | "simulated" | null>(null);
+const dataQueryResult = ref<DataQueryResponse | null>(null);
+const dataQueryPending = ref(false);
+const dataQueryError = ref("");
+const dataQueryDetailsOpen = ref(false);
 const spatialRules = ref<SpatialRuleVersion[]>([]);
 const spatialRuleStatus = ref("");
 const spatialRuleError = ref("");
@@ -170,6 +177,16 @@ const displayedSpatialRules = computed(() => {
     selectedRule,
   ];
 });
+const mapDrones = computed(() => {
+  if (
+    activeView.value !== "数据智能" ||
+    dataQueryResult.value?.visualization.type !== "map"
+  ) {
+    return displayedDrones.value;
+  }
+  const ids = new Set(dataQueryResult.value.visualization.drone_ids);
+  return displayedDrones.value.filter((drone) => ids.has(drone.drone_id));
+});
 const navigation = computed(() => {
   const capabilities = new Set(user.value?.capabilities ?? []);
   return [
@@ -250,6 +267,24 @@ async function reviewSelectedClue(reviewStatus: ReviewStatus) {
       reason instanceof Error ? reason.message : "研判结果保存失败";
   } finally {
     clueReviewPending.value = false;
+  }
+}
+
+async function submitDataQuestion() {
+  if (dataQueryPending.value) return;
+  dataQueryPending.value = true;
+  dataQueryError.value = "";
+  try {
+    dataQueryResult.value = await runDataQuery(
+      dataQuestion.value,
+      dataSourceFilter.value,
+    );
+    dataQueryDetailsOpen.value = false;
+  } catch (reason) {
+    dataQueryError.value =
+      reason instanceof Error ? reason.message : "数据智能查询失败";
+  } finally {
+    dataQueryPending.value = false;
   }
 }
 
@@ -560,7 +595,7 @@ watch(activeView, (view) => {
 
     <section class="map-stage">
       <SituationMap
-        :drones="displayedDrones"
+        :drones="mapDrones"
         :spatial-rules="displayedSpatialRules"
         :validation-position="preflightResult?.violations[0]?.position"
         :incursion-alert="visibleIncursionAlert"
@@ -573,7 +608,110 @@ watch(activeView, (view) => {
     </section>
 
     <aside
-      v-if="activeView === '空间规则'"
+      v-if="activeView === '数据智能'"
+      class="signal-rail data-query-panel"
+      aria-label="数据智能查询"
+    >
+      <p class="section-code">DATA / READ ONLY</p>
+      <h2>数据智能查询</h2>
+      <p class="scope-warning">只读查询，不触发飞行控制或配置修改。</p>
+      <label>
+        <span>固定自然语言问题</span>
+        <textarea v-model="dataQuestion" rows="3"></textarea>
+      </label>
+      <label>
+        <span>数据来源</span>
+        <select v-model="dataSourceFilter">
+          <option :value="null">全部来源</option>
+          <option value="real">真实数据</option>
+          <option value="simulated">模拟数据</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        class="primary-action"
+        :disabled="dataQueryPending"
+        @click="submitDataQuestion"
+      >
+        {{ dataQueryPending ? "查询中…" : "执行只读查询" }}
+      </button>
+      <p v-if="dataQueryError" class="form-error" role="alert">
+        {{ dataQueryError }}
+      </p>
+      <article v-if="dataQueryResult" class="query-answer" aria-live="polite">
+        <strong>{{ dataQueryResult.answer }}</strong>
+        <div
+          v-if="dataQueryResult.visualization.type === 'chart'"
+          class="query-chart"
+          aria-label="查询结果图表"
+        >
+          <span
+            :style="{
+              width: `${Math.min(100, dataQueryResult.visualization.value ?? 0)}%`,
+            }"
+          ></span>
+          <b>{{ dataQueryResult.visualization.value }}</b>
+        </div>
+        <dl>
+          <div>
+            <dt>时间范围</dt>
+            <dd>
+              {{
+                formatSourceTime(dataQueryResult.query_basis.time_range.start)
+              }}
+              至
+              {{ formatSourceTime(dataQueryResult.query_basis.time_range.end) }}
+            </dd>
+          </div>
+          <div>
+            <dt>数据来源</dt>
+            <dd>{{ dataQueryResult.query_basis.data_sources.join("、") }}</dd>
+          </div>
+          <div>
+            <dt>统计口径</dt>
+            <dd>{{ dataQueryResult.query_basis.statistical_definition }}</dd>
+          </div>
+          <div>
+            <dt>筛选条件</dt>
+            <dd>
+              来源 {{ dataQueryResult.query_basis.filters.source_type }} · 角色
+              {{ dataQueryResult.query_basis.filters.role }}
+            </dd>
+          </div>
+        </dl>
+        <button
+          type="button"
+          class="detail-entry"
+          :aria-expanded="dataQueryDetailsOpen"
+          @click="dataQueryDetailsOpen = !dataQueryDetailsOpen"
+        >
+          {{ dataQueryDetailsOpen ? "收起" : "查看" }}
+          {{ dataQueryResult.detail_entry.record_type }}明细（{{
+            dataQueryResult.detail_entry.records.length
+          }}）
+        </button>
+        <ol v-if="dataQueryDetailsOpen" class="query-details">
+          <li
+            v-for="record in dataQueryResult.detail_entry.records"
+            :key="record.source_type + ':' + record.event_id"
+          >
+            <strong>{{ record.drone_id }}</strong>
+            <span>{{ record.event_id }}</span>
+            <time :datetime="record.source_time">
+              来源时间 {{ formatSourceTime(record.source_time) }}
+            </time>
+            <small>
+              {{ record.source_type === "simulated" ? "模拟数据" : "真实数据" }}
+            </small>
+          </li>
+        </ol>
+        <small v-if="dataQueryResult.visualization.type === 'map'">
+          查询结果已只读定位到地图
+        </small>
+      </article>
+    </aside>
+    <aside
+      v-else-if="activeView === '空间规则'"
       class="signal-rail spatial-editor"
       aria-label="空间规则编辑"
     >

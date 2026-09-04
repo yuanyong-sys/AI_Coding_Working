@@ -332,3 +332,53 @@ test("线索研判员查看 AI异常线索并联动地图位置", async ({ page,
   await expect(page.getByText("研判结果 · 误报")).toBeVisible();
   await expect(page.getByText(/误报 · clue-reviewer ·/)).toBeVisible();
 });
+
+test("态势查看者执行带查询依据的数据智能查询", async ({ page, request }) => {
+  const sourceTime = new Date(Date.now() - 5_000).toISOString();
+  const telemetry = await request.post(
+    "http://127.0.0.1:8000/api/telemetry/batches",
+    {
+      data: {
+        events: [
+          {
+            event_id: "query-e2e-001",
+            drone_id: "GSH-QUERY-001",
+            longitude: 106.628,
+            latitude: 26.647,
+            altitude_m: 105,
+            heading_deg: 45,
+            speed_mps: 8,
+            flight_state: "in_flight",
+            source_time: sourceTime,
+            source_type: "simulated",
+            sortie_id: "QUERY-SORTIE-001",
+          },
+        ],
+      },
+    },
+  );
+  expect(telemetry.status()).toBe(202);
+
+  await page.goto("/");
+  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "数据智能" }).click();
+
+  await page.getByLabel("固定自然语言问题").fill("最近30分钟有哪些无人机？");
+  await page.getByLabel("数据来源").selectOption("simulated");
+  await page.getByRole("button", { name: "执行只读查询" }).click();
+
+  await expect(page.getByText(/已接入无人机为：GSH-QUERY-001/)).toBeVisible();
+  await expect(page.getByText("统计口径", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /查看\s*无人机遥测明细/ }).click();
+  await expect(page.getByText("query-e2e-001", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("模拟数据", { exact: true }).last(),
+  ).toBeVisible();
+  await expect(page.getByText("查询结果已只读定位到地图")).toBeVisible();
+  await expect(page.getByLabel(/GSH-QUERY-001/)).toBeVisible();
+  await expect(
+    page.getByText("只读查询，不触发飞行控制或配置修改。"),
+  ).toBeVisible();
+});

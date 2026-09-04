@@ -23,6 +23,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from low_altitude_poc_api.ai_clues import configure_ai_clues
 from low_altitude_poc_api.auth import AuthenticatedUser, configure_auth
+from low_altitude_poc_api.data_query import configure_data_query
 from low_altitude_poc_api.incursions import (
     IncursionAlert,
     IncursionBase,
@@ -227,6 +228,7 @@ def create_app(
     require_user = auth.require_user
     configure_spatial_rules(app, engine, auth)
     configure_preflight_validation(app, engine, auth)
+    configure_data_query(app, engine, auth, clock=clock)
     configure_ai_clues(
         app,
         engine,

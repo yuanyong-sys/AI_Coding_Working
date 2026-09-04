@@ -578,6 +578,85 @@ h2 {
 .inference-health small {
   color: var(--muted);
 }
+.data-query-panel label {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.data-query-panel textarea,
+.data-query-panel select {
+  width: 100%;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  background: #0a1118;
+  color: var(--text);
+}
+.query-answer {
+  margin-top: 0.9rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(71, 210, 255, 0.35);
+  background: rgba(71, 210, 255, 0.06);
+}
+.query-answer dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+}
+.query-answer dt,
+.query-answer small,
+.detail-entry {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+.detail-entry {
+  width: 100%;
+  padding: 0.45rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.query-details {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 11rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.query-details li {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.45rem;
+  border-left: 2px solid var(--cyan);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.62rem;
+}
+.query-answer dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.68rem;
+}
+.query-chart {
+  position: relative;
+  height: 1.4rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--line);
+  background: #070b0f;
+}
+.query-chart span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--amber));
+}
+.query-chart b {
+  position: absolute;
+  top: 0.16rem;
+  right: 0.4rem;
+  font-size: 0.7rem;
+}
 .clue-card[data-selected="true"] {
   border-color: var(--amber);
   background: rgba(247, 185, 85, 0.12);
