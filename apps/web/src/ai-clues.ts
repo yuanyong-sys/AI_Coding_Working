@@ -23,6 +23,13 @@ export type ReviewHistoryItem = {
   reviewed_at: string;
 };
 
+export type InferenceHealth = {
+  status: "healthy" | "degraded";
+  reason: string | null;
+  model_version: string | null;
+  reported_at: string | null;
+};
+
 export const reviewStatusLabels: Record<ReviewStatus, string> = {
   confirmed: "确认",
   false_positive: "误报",
@@ -47,6 +54,12 @@ export async function fetchAIClues(): Promise<AIClue[]> {
   const response = await fetch("/api/ai-clues");
   if (!response.ok) throw new Error("AI异常线索读取失败");
   return ((await response.json()) as { clues: AIClue[] }).clues;
+}
+
+export async function fetchInferenceHealth(): Promise<InferenceHealth> {
+  const response = await fetch("/api/inference/health");
+  if (!response.ok) throw new Error("推理状态读取失败");
+  return (await response.json()) as InferenceHealth;
 }
 
 export function clueMaterialUrl(clueId: string): string {

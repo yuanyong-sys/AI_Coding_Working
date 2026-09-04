@@ -1,0 +1,37 @@
+{
+  "evaluation_set_version": "guanshanhu-ai-clues-v1",
+  "cases": [
+    {
+      "case_id": "fire-001",
+      "video": "../../fixtures/suspected-fire.mp4",
+      "expected_anomaly_type": "suspected_fire",
+      "source_time": "2026-09-03T06:30:05Z",
+      "longitude": 106.6282,
+      "latitude": 26.6467
+    },
+    {
+      "case_id": "traffic-accident-001",
+      "video": "../../fixtures/suspected-traffic-accident.mp4",
+      "expected_anomaly_type": "suspected_traffic_accident",
+      "source_time": "2026-09-03T06:31:05Z",
+      "longitude": 106.6221,
+      "latitude": 26.6501
+    },
+    {
+      "case_id": "crowd-001",
+      "video": "../../fixtures/suspected-crowd.mp4",
+      "expected_anomaly_type": "suspected_crowd",
+      "source_time": "2026-09-03T06:32:05Z",
+      "longitude": 106.6351,
+      "latitude": 26.6422
+    },
+    {
+      "case_id": "no-anomaly-001",
+      "video": "../../fixtures/no-anomaly.mp4",
+      "expected_anomaly_type": null,
+      "source_time": "2026-09-03T06:33:05Z",
+      "longitude": 106.6301,
+      "latitude": 26.6401
+    }
+  ]
+}

@@ -11,12 +11,14 @@ import {
 import { fetchSession, login, logout, type AuthenticatedUser } from "@/auth";
 import {
   fetchAIClues,
+  fetchInferenceHealth,
   clueMaterialUrl,
   formatAnomalyType,
   formatClueSource,
   reviewStatusLabels,
   updateAIClueReview,
   type AIClue,
+  type InferenceHealth,
   type ReviewStatus,
 } from "@/ai-clues";
 import SituationMap from "@/components/SituationMap.vue";
@@ -46,6 +48,7 @@ const incursionAlerts = ref<IncursionAlert[]>([]);
 const selectedIncursionAlert = ref<IncursionAlert | null>(null);
 const aiClues = ref<AIClue[]>([]);
 const selectedAIClue = ref<AIClue | null>(null);
+const inferenceHealth = ref<InferenceHealth | null>(null);
 const clueReviewPending = ref(false);
 const clueReviewError = ref("");
 const loading = ref(true);
@@ -215,7 +218,12 @@ async function refreshSpatialRules() {
 async function refreshAIClues() {
   if (!user.value?.capabilities.includes("clue:review")) return;
   try {
-    aiClues.value = await fetchAIClues();
+    const [clues, health] = await Promise.all([
+      fetchAIClues(),
+      fetchInferenceHealth(),
+    ]);
+    aiClues.value = clues;
+    inferenceHealth.value = health;
     selectedAIClue.value ??= aiClues.value[0] ?? null;
   } catch (reason) {
     error.value =
@@ -723,6 +731,23 @@ watch(activeView, (view) => {
       <p class="section-code">AI CLUE / REVIEW</p>
       <h2>AI异常线索</h2>
       <p class="scope-warning">算法识别结果仅供核实，不代表确认事件。</p>
+      <div
+        v-if="inferenceHealth"
+        class="inference-health"
+        :data-status="inferenceHealth.status"
+        role="status"
+      >
+        <strong>
+          {{ inferenceHealth.status === "healthy" ? "推理正常" : "推理降级" }}
+        </strong>
+        <span v-if="inferenceHealth.reason">{{ inferenceHealth.reason }}</span>
+        <small v-if="inferenceHealth.model_version">
+          模型 · {{ inferenceHealth.model_version }}
+        </small>
+        <small v-if="inferenceHealth.status === 'degraded'">
+          降级期间不生成伪线索，既有线索仍可查看和研判。
+        </small>
+      </div>
       <article
         v-for="clue in aiClues"
         :key="clue.clue_id"

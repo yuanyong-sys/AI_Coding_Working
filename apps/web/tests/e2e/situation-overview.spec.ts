@@ -302,6 +302,11 @@ test("线索研判员查看 AI异常线索并联动地图位置", async ({ page,
   await page.getByRole("button", { name: "AI异常线索研判" }).click();
 
   await expect(page.getByRole("heading", { name: "AI异常线索" })).toBeVisible();
+  await expect(page.getByText("推理降级", { exact: true })).toBeVisible();
+  await expect(page.getByText("推理进程不可达", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("降级期间不生成伪线索，既有线索仍可查看和研判。"),
+  ).toBeVisible();
   await expect(page.getByText("疑似烟火", { exact: true })).toBeVisible();
   await expect(page.getByText("置信度 87.0%")).toBeVisible();
   const clueCard = page.getByTestId("ai-clue-card");

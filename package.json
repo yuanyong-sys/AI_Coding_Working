@@ -8,6 +8,7 @@
     "lint": "pnpm typecheck && uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache ruff check",
     "simulate": "python3 tools/run_simulator.py",
     "infer:demo": "PYTHONPATH=src uv run --directory apps/api python -m low_altitude_poc_api.inference_worker --video ../../tools/fixtures/suspected-fire.mp4 --source-time 2026-09-03T06:30:05Z --longitude 106.6282 --latitude 26.6467 --api-url http://127.0.0.1:8000",
+    "evaluate:ai": "PYTHONPATH=src uv run --directory apps/api python -m low_altitude_poc_api.evaluation_runner --manifest ../../tools/evaluation/v1/manifest.json --api-url http://127.0.0.1:8000 --token $LOW_ALTITUDE_INFERENCE_TOKEN",
     "test": "uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache pytest",
     "test:e2e": "pnpm --filter @low-altitude/web test:e2e",
     "typecheck": "pnpm --filter @low-altitude/web typecheck"

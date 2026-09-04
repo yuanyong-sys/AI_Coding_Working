@@ -561,6 +561,23 @@ h2 {
   text-align: left;
   cursor: pointer;
 }
+.inference-health {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.8rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(92, 214, 158, 0.45);
+  background: rgba(92, 214, 158, 0.08);
+  font-size: 0.66rem;
+}
+.inference-health[data-status="degraded"] {
+  border-color: rgba(255, 89, 103, 0.55);
+  background: rgba(255, 89, 103, 0.09);
+}
+.inference-health span,
+.inference-health small {
+  color: var(--muted);
+}
 .clue-card[data-selected="true"] {
   border-color: var(--amber);
   background: rgba(247, 185, 85, 0.12);

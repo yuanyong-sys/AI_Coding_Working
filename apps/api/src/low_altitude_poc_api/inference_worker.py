@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -9,7 +10,11 @@ from urllib.request import Request, urlopen
 
 from low_altitude_poc_api.ai_clues import ClueLocation, InferenceResult
 
-MODEL_VERSION = "deterministic-dark-region-v1"
+MODEL_VERSION = "deterministic-frame-intensity-v2"
+
+
+class NoClueDetected(RuntimeError):
+    pass
 
 
 def run_ffmpeg(*arguments: str, capture_output: bool = False) -> bytes:
@@ -50,12 +55,20 @@ def infer_video(
         capture_output=True,
     )
     dark_ratio = sum(pixel < 50 for pixel in grayscale) / len(grayscale)
-    if dark_ratio < 0.1:
-        raise RuntimeError("固定模型未在该预录视频中识别到 AI异常线索")
+    mean_brightness = sum(grayscale) / len(grayscale)
+    if 165 <= mean_brightness < 220:
+        raise NoClueDetected("固定模型未在该预录视频中识别到 AI异常线索")
+    anomaly_type = (
+        "suspected_fire"
+        if mean_brightness < 80
+        else "suspected_traffic_accident"
+        if mean_brightness < 170
+        else "suspected_crowd"
+    )
     confidence = round(min(0.99, 0.65 + dark_ratio * 0.5), 2)
     return InferenceResult(
         result_id=result_id,
-        anomaly_type="suspected_fire",
+        anomaly_type=anomaly_type,
         confidence=confidence,
         source_time=source_time,
         location=ClueLocation(longitude=longitude, latitude=latitude),
@@ -78,6 +91,22 @@ def submit_result(api_url: str, token: str, result: InferenceResult) -> None:
     with urlopen(request, timeout=10) as response:
         if response.status != 202:
             raise RuntimeError(f"业务平台拒绝推理结果：HTTP {response.status}")
+
+
+def submit_health(
+    api_url: str, token: str, *, status: str, reason: str | None = None
+) -> None:
+    request = Request(
+        f"{api_url.rstrip('/')}/api/inference/health",
+        data=json.dumps(
+            {"status": status, "reason": reason, "model_version": MODEL_VERSION}
+        ).encode(),
+        headers={"Content-Type": "application/json", "X-Inference-Token": token},
+        method="POST",
+    )
+    with urlopen(request, timeout=10) as response:
+        if response.status != 204:
+            raise RuntimeError(f"业务平台拒绝推理状态：HTTP {response.status}")
 
 
 def main() -> None:
@@ -113,6 +142,7 @@ def main() -> None:
         if not args.token:
             parser.error("--api-url requires --token or LOW_ALTITUDE_INFERENCE_TOKEN")
         submit_result(args.api_url, args.token, result)
+        submit_health(args.api_url, args.token, status="healthy")
     print(result.model_dump_json())
 
 

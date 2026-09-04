@@ -227,7 +227,7 @@ def test_independent_worker_extracts_repeatable_clue_from_prerecorded_video(tmp_
     second = InferenceResult.model_validate(outputs[1])
     assert first == second
     assert first.anomaly_type == "suspected_fire"
-    assert first.model_version == "deterministic-dark-region-v1"
+    assert first.model_version == "deterministic-frame-intensity-v2"
     assert first.source_type == "evaluation"
     assert first.confidence == 0.87
     assert (material_root / first.material_reference).is_file()

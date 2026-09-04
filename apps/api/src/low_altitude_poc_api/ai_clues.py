@@ -4,13 +4,14 @@ import json
 import logging
 import os
 import secrets
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import Engine, ForeignKey, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -101,6 +102,19 @@ class ReviewRequest(BaseModel):
     review_status: ReviewStatus
 
 
+class InferenceHealthReport(BaseModel):
+    status: Literal["healthy", "degraded"]
+    reason: str | None = None
+    model_version: str
+
+
+class InferenceHealth(BaseModel):
+    status: Literal["healthy", "degraded"]
+    reason: str | None
+    model_version: str | None
+    reported_at: datetime | None
+
+
 def configure_ai_clues(
     app: FastAPI,
     engine: Engine,
@@ -108,6 +122,8 @@ def configure_ai_clues(
     *,
     inference_token: str | None = None,
     material_root: Path | None = None,
+    clock: Callable[[], datetime] | None = None,
+    health_timeout_seconds: float = 15,
 ) -> None:
     ClueBase.metadata.create_all(engine)
     configured_token = inference_token or os.getenv("LOW_ALTITUDE_INFERENCE_TOKEN")
@@ -119,6 +135,8 @@ def configure_ai_clues(
         or Path(os.getenv("LOW_ALTITUDE_CLUE_MATERIAL_ROOT", "var/clue-materials"))
     ).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    now = clock or (lambda: datetime.now(UTC))
+    latest_health: tuple[InferenceHealthReport, datetime] | None = None
 
     def require_clue_reviewer(
         user: AuthenticatedUser = Depends(auth.require_user),  # noqa: B008
@@ -158,13 +176,37 @@ def configure_ai_clues(
         status_code=status.HTTP_202_ACCEPTED,
     )
     def accept_inference_result(
-        result: InferenceResult,
+        payload: dict[str, Any],
         adapter_token: Annotated[str | None, Header(alias="X-Inference-Token")] = None,
     ) -> AIClueCreated:
+        nonlocal latest_health
         if not secrets.compare_digest(adapter_token or "", configured_token):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        try:
+            result = InferenceResult.model_validate(payload)
+        except ValidationError as reason:
+            latest_health = (
+                InferenceHealthReport(
+                    status="degraded",
+                    reason="推理结果无效",
+                    model_version=str(payload.get("model_version", "unknown")),
+                ),
+                now(),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="推理结果不符合契约",
+            ) from reason
         material_path = (root / result.material_reference).resolve()
         if not material_path.is_relative_to(root) or not material_path.is_file():
+            latest_health = (
+                InferenceHealthReport(
+                    status="degraded",
+                    reason="推理结果无效：研判材料不可用",
+                    model_version=result.model_version,
+                ),
+                now(),
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="material reference is not present in the controlled directory",
@@ -180,6 +222,56 @@ def configure_ai_clues(
                 )
                 database.commit()
         return AIClueCreated(clue_id=result.result_id, status="pending_review")
+
+    @app.get(
+        "/api/inference/results/{result_id}/display-ready",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    def inference_result_display_ready(
+        result_id: str,
+        adapter_token: Annotated[str | None, Header(alias="X-Inference-Token")] = None,
+    ) -> None:
+        if not secrets.compare_digest(adapter_token or "", configured_token):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        with Session(engine) as database:
+            if database.get(AIClueRecord, result_id) is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    @app.post("/api/inference/health", status_code=status.HTTP_204_NO_CONTENT)
+    def report_inference_health(
+        report: InferenceHealthReport,
+        adapter_token: Annotated[str | None, Header(alias="X-Inference-Token")] = None,
+    ) -> None:
+        nonlocal latest_health
+        if not secrets.compare_digest(adapter_token or "", configured_token):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        latest_health = (report, now())
+
+    @app.get("/api/inference/health", response_model=InferenceHealth)
+    def get_inference_health(
+        _user: AuthenticatedUser = Depends(auth.require_user),  # noqa: B008
+    ) -> InferenceHealth:
+        if latest_health is None:
+            return InferenceHealth(
+                status="degraded",
+                reason="推理进程不可达",
+                model_version=None,
+                reported_at=None,
+            )
+        report, reported_at = latest_health
+        if (now() - reported_at).total_seconds() > health_timeout_seconds:
+            return InferenceHealth(
+                status="degraded",
+                reason="推理进程心跳超时",
+                model_version=report.model_version,
+                reported_at=reported_at,
+            )
+        return InferenceHealth(
+            status=report.status,
+            reason=report.reason,
+            model_version=report.model_version,
+            reported_at=reported_at,
+        )
 
     @app.get("/api/ai-clues", response_model=AIClueList)
     def list_ai_clues(

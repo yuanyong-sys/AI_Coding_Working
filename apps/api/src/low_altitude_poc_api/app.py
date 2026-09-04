@@ -233,6 +233,7 @@ def create_app(
         auth,
         inference_token=inference_token,
         material_root=clue_material_root,
+        clock=clock,
     )
 
     @app.post(

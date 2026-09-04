@@ -42,7 +42,15 @@ pnpm dev
 LOW_ALTITUDE_INFERENCE_TOKEN='请替换为本地推理令牌' pnpm infer:demo
 ```
 
-该命令启动独立推理进程，读取仓库内固定预录视频、通过 FFmpeg 抽取关键帧，并以确定性暗区模型生成一条“疑似烟火”AI异常线索。截图作为研判材料写入 `apps/api/var/clue-materials/frames/`，业务数据库只保存受控相对引用；结构化推理结果同时保存在 `apps/api/var/inference-results/latest.json`。使用 `clue-reviewer` 登录后，可在“AI异常线索研判”专题视图查看类型、置信度、来源时间、位置、评测来源和模型版本。
+该命令启动独立推理进程，读取仓库内固定预录视频、通过 FFmpeg 抽取关键帧，并以确定性画面亮度模型生成一条“疑似烟火”AI异常线索。截图作为研判材料写入 `apps/api/var/clue-materials/frames/`，业务数据库只保存受控相对引用；结构化推理结果同时保存在 `apps/api/var/inference-results/latest.json`。使用 `clue-reviewer` 登录后，可在“AI异常线索研判”专题视图查看类型、置信度、来源时间、位置、评测来源和模型版本。
+
+固定评测集覆盖疑似交通事故、疑似烟火、人员聚集和无异常负样本，并在清单中记录每段材料的预期结果。平台使用 `local-inference-token` 启动后运行：
+
+```bash
+LOW_ALTITUDE_INFERENCE_TOKEN='请使用平台启动时的本地推理令牌' pnpm evaluate:ai
+```
+
+评测报告写入 `apps/api/var/evaluation/latest.json`，包含正样本正确检出率、无异常负样本误报数量、推理耗时、线索展示就绪延迟、模型版本、评测集版本和逐材料结果。线索展示就绪延迟从推理完成计至平台确认该线索已持久化且可供专题界面查询，可用于重复运行与比较。推理进程无心跳、心跳超时或提交无效结果时，“AI异常线索研判”专题视图会明确显示推理降级；降级不会生成伪线索，既有线索仍可查看和研判。
 
 运行推理需要本机可执行的 `ffmpeg`。推理结果仅为待复核线索，不代表确认事件。
 
