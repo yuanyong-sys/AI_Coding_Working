@@ -5,7 +5,7 @@ import { Protocol } from "pmtiles";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { FeatureCollection, LineString, Polygon } from "geojson";
 
-import type { DroneSnapshot } from "@/situation";
+import type { DroneSnapshot, IncursionAlert } from "@/situation";
 import type { SpatialRuleVersion } from "@/spatial-rules";
 import type { PlannedRoutePoint } from "@/preflight";
 
@@ -13,11 +13,13 @@ const props = defineProps<{
   drones: DroneSnapshot[];
   spatialRules: SpatialRuleVersion[];
   validationPosition?: PlannedRoutePoint;
+  incursionAlert?: IncursionAlert | null;
 }>();
 const mapContainer = ref<HTMLElement>();
 const markers: Marker[] = [];
 let map: Map | undefined;
 let preflightMarker: Marker | undefined;
+let incursionMarker: Marker | undefined;
 const protocol = new Protocol();
 const flightStateLabels: Record<string, string> = {
   pending: "待飞",
@@ -36,7 +38,10 @@ function trackGeoJson(): FeatureCollection<LineString> {
       .filter((drone) => drone.track.length >= 2)
       .map((drone) => ({
         type: "Feature",
-        properties: { drone_id: drone.drone_id },
+        properties: {
+          drone_id: drone.drone_id,
+          selected: drone.drone_id === props.incursionAlert?.drone_id,
+        },
         geometry: {
           type: "LineString",
           coordinates: drone.track.map((point) => [
@@ -72,8 +77,8 @@ function renderTracks() {
     type: "line",
     source: "drone-tracks",
     paint: {
-      "line-color": "#70fff0",
-      "line-width": 2,
+      "line-color": ["case", ["get", "selected"], "#ff5967", "#70fff0"],
+      "line-width": ["case", ["get", "selected"], 4, 2],
       "line-opacity": 0.9,
       "line-dasharray": [2, 2],
     },
@@ -88,6 +93,9 @@ function renderMarkers() {
     const flightStateLabel =
       flightStateLabels[drone.flight_state] ?? drone.flight_state;
     element.className = `drone-marker drone-marker--${drone.source_type}`;
+    if (drone.drone_id === props.incursionAlert?.drone_id) {
+      element.classList.add("drone-marker--alert");
+    }
     element.dataset.testid = `drone-marker-${drone.drone_id}`;
     element.dataset.position = `${drone.longitude},${drone.latitude}`;
     element.dataset.flightState = drone.flight_state;
@@ -124,6 +132,7 @@ function spatialRulesGeoJson(): FeatureCollection<Polygon> {
         rule_id: rule.rule_id,
         rule_type: rule.rule_type,
         name: rule.name,
+        selected: rule.rule_id === props.incursionAlert?.rule_id,
       },
       geometry: rule.geometry,
     })),
@@ -154,7 +163,7 @@ function renderSpatialRules() {
         "#ff5967",
         "#55e2d5",
       ],
-      "fill-opacity": 0.2,
+      "fill-opacity": ["case", ["get", "selected"], 0.42, 0.2],
     },
   });
   map.addLayer({
@@ -172,6 +181,32 @@ function renderSpatialRules() {
       "line-width": 2,
       "line-dasharray": [2, 1],
     },
+  });
+}
+
+function renderIncursionAlert() {
+  incursionMarker?.remove();
+  incursionMarker = undefined;
+  if (!map) return;
+  renderSpatialRules();
+  renderTracks();
+  renderMarkers();
+  if (!props.incursionAlert) return;
+  const element = document.createElement("div");
+  element.className = "incursion-alert-marker";
+  element.dataset.testid = "incursion-alert-position";
+  element.setAttribute("role", "img");
+  element.setAttribute(
+    "aria-label",
+    `${props.incursionAlert.drone_id} 越界告警命中位置`,
+  );
+  element.textContent = "!";
+  incursionMarker = new maplibregl.Marker({ element, anchor: "center" })
+    .setLngLat([props.incursionAlert.longitude, props.incursionAlert.latitude])
+    .addTo(map);
+  map.flyTo({
+    center: [props.incursionAlert.longitude, props.incursionAlert.latitude],
+    zoom: Math.max(map.getZoom(), 14),
   });
 }
 
@@ -206,6 +241,7 @@ function renderSituation() {
   renderTracks();
   renderMarkers();
   renderPreflightPosition();
+  renderIncursionAlert();
 }
 
 onMounted(() => {
@@ -253,10 +289,12 @@ watch(
 );
 watch(() => props.spatialRules, renderSpatialRules, { deep: true });
 watch(() => props.validationPosition, renderPreflightPosition, { deep: true });
+watch(() => props.incursionAlert, renderIncursionAlert, { deep: true });
 
 onBeforeUnmount(() => {
   for (const marker of markers.splice(0)) marker.remove();
   preflightMarker?.remove();
+  incursionMarker?.remove();
   map?.remove();
   maplibregl.removeProtocol("pmtiles");
 });

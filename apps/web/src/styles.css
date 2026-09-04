@@ -487,6 +487,52 @@ h2 {
   font-size: 1.4rem;
   font-weight: 700;
 }
+.incursion-alert-marker {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 2px solid #ff5967;
+  border-radius: 50%;
+  background: #3b0b12;
+  color: #fff;
+  box-shadow: 0 0 1.4rem rgba(255, 89, 103, 0.9);
+  font-weight: 800;
+}
+.scope-warning {
+  margin-bottom: 1rem;
+  color: var(--amber);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+.incursion-panel {
+  overflow-y: auto;
+}
+.incursion-card {
+  width: 100%;
+  margin-bottom: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 89, 103, 0.45);
+  border-left: 0.2rem solid #ff5967;
+  background: rgba(255, 89, 103, 0.07);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.incursion-card[data-status="ended"] {
+  opacity: 0.64;
+  border-color: var(--line);
+}
+.incursion-card > * {
+  display: block;
+  margin-top: 0.25rem;
+}
+.incursion-card > span,
+.incursion-card > small,
+.incursion-card > time {
+  color: var(--muted);
+  font-size: 0.63rem;
+}
 .spatial-rule-map-labels span {
   margin-top: 0.25rem;
   color: var(--muted);
@@ -565,6 +611,10 @@ h2 {
 }
 .drone-marker--simulated {
   color: var(--amber);
+}
+.drone-marker--alert {
+  color: #ff5967;
+  filter: drop-shadow(0 0 0.7rem rgba(255, 89, 103, 0.95));
 }
 
 .signal-item {

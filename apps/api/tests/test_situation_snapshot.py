@@ -53,6 +53,7 @@ def test_simulated_telemetry_is_visible_in_situation_snapshot(tmp_path):
     assert snapshot_response.status_code == 200
     snapshot = snapshot_response.json()
     assert snapshot.pop("cursor") == 1
+    assert snapshot.pop("incursion_alerts") == []
     metrics = snapshot.pop("metrics")
     platform_received_time = datetime.fromisoformat(
         snapshot["drones"][0].pop("platform_received_time")

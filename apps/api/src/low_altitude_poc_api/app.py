@@ -16,10 +16,17 @@ from sqlalchemy import (
     distinct,
     func,
     select,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from low_altitude_poc_api.auth import AuthenticatedUser, configure_auth
+from low_altitude_poc_api.incursions import (
+    IncursionAlert,
+    IncursionBase,
+    evaluate_incursions,
+    list_incursion_alerts,
+)
 from low_altitude_poc_api.preflight import configure_preflight_validation
 from low_altitude_poc_api.spatial_rules import configure_spatial_rules
 
@@ -169,6 +176,7 @@ class SituationMetrics(BaseModel):
 
 class SituationSnapshot(BaseModel):
     drones: list[DroneSnapshot]
+    incursion_alerts: list[IncursionAlert]
     metrics: SituationMetrics
     cursor: int
 
@@ -178,13 +186,37 @@ def create_app(
     demo_password: str | None = None,
     clock: Callable[[], datetime] | None = None,
     event_retention: int = 1000,
+    incursion_duration_seconds: float | None = None,
+    incursion_max_gap_seconds: float | None = None,
+    incursion_boundary_buffer_m: float | None = None,
 ) -> FastAPI:
     clock = clock or (lambda: datetime.now(UTC))
     database_url = database_url or os.getenv(
         "LOW_ALTITUDE_DATABASE_URL", "sqlite:///./low_altitude_poc.db"
     )
+    if incursion_duration_seconds is None:
+        incursion_duration_seconds = float(
+            os.getenv("LOW_ALTITUDE_INCURSION_DURATION_SECONDS", "2")
+        )
+    if incursion_boundary_buffer_m is None:
+        incursion_boundary_buffer_m = float(
+            os.getenv("LOW_ALTITUDE_INCURSION_BOUNDARY_BUFFER_M", "5")
+        )
+    if incursion_max_gap_seconds is None:
+        incursion_max_gap_seconds = float(
+            os.getenv("LOW_ALTITUDE_INCURSION_MAX_GAP_SECONDS", "5")
+        )
+    if (
+        incursion_duration_seconds <= 0
+        or incursion_max_gap_seconds <= 0
+        or incursion_boundary_buffer_m < 0
+    ):
+        raise ValueError(
+            "越界告警持续时间和最大遥测间隔必须大于零，边界缓冲区不得为负数"
+        )
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
+    IncursionBase.metadata.create_all(engine)
 
     app = FastAPI(title="无人机低空智慧调度平台 POC")
     auth = configure_auth(app, engine, demo_password)
@@ -203,6 +235,7 @@ def create_app(
         accepted = 0
         errors: list[IngestError] = []
         with Session(engine) as session:
+            session.execute(text("BEGIN IMMEDIATE"))
             for raw_event in batch.events:
                 try:
                     event = TelemetryEvent.model_validate(
@@ -238,6 +271,20 @@ def create_app(
                         event_id=event.event_id,
                         sortie_id=event.sortie_id,
                     )
+                )
+                evaluate_incursions(
+                    session,
+                    drone_id=event.drone_id,
+                    longitude=event.longitude,
+                    latitude=event.latitude,
+                    altitude_m=event.altitude_m,
+                    source_time=event.source_time,
+                    flight_state=event.flight_state,
+                    platform_received_time=received_at,
+                    source_type=event.source_type,
+                    duration_seconds=incursion_duration_seconds,
+                    max_gap_seconds=incursion_max_gap_seconds,
+                    boundary_buffer_m=incursion_boundary_buffer_m,
                 )
                 session.add(
                     SituationEvent(
@@ -314,6 +361,7 @@ def create_app(
             ]
             return SituationSnapshot(
                 drones=drones,
+                incursion_alerts=list_incursion_alerts(session),
                 metrics=SituationMetrics(
                     flight_sorties=session.scalar(
                         select(func.count(distinct(TelemetrySortie.sortie_id)))

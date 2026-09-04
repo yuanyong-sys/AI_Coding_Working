@@ -23,8 +23,26 @@ export interface TrackPoint {
 
 export interface SituationSnapshot {
   drones: DroneSnapshot[];
+  incursion_alerts: IncursionAlert[];
   metrics: SituationMetrics;
   cursor: number;
+}
+
+export interface IncursionAlert {
+  id: number;
+  drone_id: string;
+  rule_id: string;
+  rule_version: number;
+  rule_type: "no_fly_zone" | "geofence";
+  reason: string;
+  started_at: string;
+  ended_at: string | null;
+  longitude: number;
+  latitude: number;
+  altitude_m: number;
+  platform_received_time: string;
+  source_type: "simulated" | "real";
+  rule_snapshot: SpatialRuleVersion;
 }
 
 export interface SituationMetrics {
@@ -77,3 +95,4 @@ export function formatSourceTime(value: string): string {
     .format(new Date(value))
     .replaceAll("/", "-");
 }
+import type { SpatialRuleVersion } from "@/spatial-rules";

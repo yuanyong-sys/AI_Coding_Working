@@ -8,6 +8,7 @@ import {
   fetchSituationSnapshot,
   formatSourceTime,
   type DroneSnapshot,
+  type IncursionAlert,
   type SituationMetrics,
 } from "@/situation";
 import {
@@ -24,6 +25,8 @@ import {
 } from "@/preflight";
 
 const drones = ref<DroneSnapshot[]>([]);
+const incursionAlerts = ref<IncursionAlert[]>([]);
+const selectedIncursionAlert = ref<IncursionAlert | null>(null);
 const loading = ref(true);
 const error = ref("");
 const user = ref<AuthenticatedUser | null>(null);
@@ -130,11 +133,25 @@ const displayedMetrics = computed(() => {
   };
 });
 const selectedDrone = computed(() => displayedDrones.value[0]);
+const visibleIncursionAlert = computed(() =>
+  activeView.value === "越界告警" ? selectedIncursionAlert.value : null,
+);
+const displayedSpatialRules = computed(() => {
+  const selectedRule = visibleIncursionAlert.value?.rule_snapshot;
+  if (!selectedRule) return spatialRules.value;
+  return [
+    ...spatialRules.value.filter(
+      (rule) => rule.rule_id !== selectedRule.rule_id,
+    ),
+    selectedRule,
+  ];
+});
 const navigation = computed(() => {
   const capabilities = new Set(user.value?.capabilities ?? []);
   return [
     { label: "运行态势", visible: capabilities.has("situation:read") },
     { label: "航前规则校验", visible: capabilities.has("situation:read") },
+    { label: "越界告警", visible: capabilities.has("situation:read") },
     { label: "数据智能", visible: capabilities.has("query:read") },
     { label: "AI异常线索研判", visible: capabilities.has("clue:review") },
     { label: "空间规则", visible: capabilities.has("spatial:manage") },
@@ -151,6 +168,7 @@ async function refreshSituation(): Promise<boolean> {
   try {
     const snapshot = await fetchSituationSnapshot();
     drones.value = snapshot.drones;
+    incursionAlerts.value = snapshot.incursion_alerts;
     snapshotMetrics.value = snapshot.metrics;
     cursor.value = snapshot.cursor;
     error.value = "";
@@ -476,8 +494,9 @@ onBeforeUnmount(() => {
     <section class="map-stage">
       <SituationMap
         :drones="displayedDrones"
-        :spatial-rules="spatialRules"
+        :spatial-rules="displayedSpatialRules"
         :validation-position="preflightResult?.violations[0]?.position"
+        :incursion-alert="visibleIncursionAlert"
       />
       <div class="map-legend" aria-label="地图图例">
         <span><i class="legend-dot"></i> 已接入无人机</span>
@@ -535,6 +554,43 @@ onBeforeUnmount(() => {
           发布版本
         </button>
       </div>
+    </aside>
+    <aside
+      v-else-if="activeView === '越界告警'"
+      class="signal-rail incursion-panel"
+      aria-label="越界告警专题视图"
+    >
+      <p class="section-code">INCURSION / RULE HIT</p>
+      <h2>越界告警</h2>
+      <p class="scope-warning">
+        规则命中提示，不代表违规认定，不输出飞行控制指令。
+      </p>
+      <button
+        v-for="alert in incursionAlerts"
+        :key="alert.id"
+        type="button"
+        class="incursion-card"
+        :data-status="alert.ended_at ? 'ended' : 'active'"
+        @click="selectedIncursionAlert = alert"
+      >
+        <span>{{ alert.ended_at ? "已结束" : "持续中" }}</span>
+        <strong>{{ alert.drone_id }}</strong>
+        <p>{{ alert.reason }}</p>
+        <small>{{ alert.rule_id }} · v{{ alert.rule_version }}</small>
+        <small>{{
+          alert.source_type === "simulated" ? "模拟数据" : "真实数据"
+        }}</small>
+        <time :datetime="alert.started_at"
+          >开始 {{ formatSourceTime(alert.started_at) }}</time
+        >
+        <time :datetime="alert.platform_received_time"
+          >平台接收 {{ formatSourceTime(alert.platform_received_time) }}</time
+        >
+        <time v-if="alert.ended_at" :datetime="alert.ended_at"
+          >结束 {{ formatSourceTime(alert.ended_at) }}</time
+        >
+      </button>
+      <p v-if="!incursionAlerts.length" class="quiet-state">当前无越界告警</p>
     </aside>
     <aside
       v-else-if="activeView === '航前规则校验'"

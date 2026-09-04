@@ -201,3 +201,72 @@ test("用户提交计划航线并在地图定位航前规则校验结果", async
   );
   await expect(page.getByText("规则判断，不代表审批或飞行许可")).toBeVisible();
 });
+
+test("越界告警专题视图联动无人机与空间规则", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:8000/api/auth/login", {
+    data: { username: "spatial-admin", password: "local-e2e-password" },
+  });
+  const now = Date.now();
+  const ruleId = "E2E-NFZ-INCURSION";
+  await request.post("http://127.0.0.1:8000/api/spatial-rules/drafts", {
+    data: {
+      rule_id: ruleId,
+      name: "越界告警测试禁飞区",
+      rule_type: "no_fly_zone",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [106.66, 26.67],
+            [106.68, 26.67],
+            [106.68, 26.69],
+            [106.66, 26.69],
+            [106.66, 26.67],
+          ],
+        ],
+      },
+      min_altitude_m: 60,
+      max_altitude_m: 180,
+      valid_from: new Date(now - 60_000).toISOString(),
+      valid_to: new Date(now + 60_000).toISOString(),
+      source: "Playwright 越界告警",
+    },
+  });
+  await request.post(
+    `http://127.0.0.1:8000/api/spatial-rules/drafts/${ruleId}/publish`,
+  );
+  for (const [index, longitude] of [106.67, 106.671, 106.672].entries()) {
+    await request.post("http://127.0.0.1:8000/api/telemetry/batches", {
+      data: {
+        events: [
+          {
+            event_id: `e2e-incursion-${index}`,
+            sortie_id: "E2E-INCURSION-SORTIE",
+            drone_id: "UAV-GSH-ALERT",
+            longitude,
+            latitude: 26.68,
+            altitude_m: 100,
+            heading_deg: 90,
+            speed_mps: 8,
+            flight_state: "flying",
+            source_time: new Date(now + index * 1000).toISOString(),
+            source_type: "simulated",
+          },
+        ],
+      },
+    });
+  }
+
+  await page.goto("/");
+  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "越界告警", exact: true }).click();
+  await expect(page.getByText("UAV-GSH-ALERT", { exact: true })).toBeVisible();
+  await page.getByText("UAV-GSH-ALERT", { exact: true }).click();
+  await expect(page.getByTestId("incursion-alert-position")).toBeVisible();
+  await expect(page.getByText(`${ruleId} · v1`)).toBeVisible();
+  await expect(
+    page.getByText("规则命中提示，不代表违规认定，不输出飞行控制指令。"),
+  ).toBeVisible();
+});
