@@ -19,7 +19,9 @@ uv sync --directory apps/api
 ## 启动
 
 ```bash
-LOW_ALTITUDE_DEMO_PASSWORD='请替换为本地演示密码' pnpm dev
+LOW_ALTITUDE_DEMO_PASSWORD='请替换为本地演示密码' \
+LOW_ALTITUDE_INFERENCE_TOKEN='请替换为本地推理令牌' \
+pnpm dev
 ```
 
 该命令同时启动 API 与 Web；按 `Ctrl+C` 会一并关闭。打开 <http://127.0.0.1:5173>。Web 开发服务器将 `/api` 代理到本地 API；地图从同源的 `guanshanhu.pmtiles` 读取，不需要公网或独立瓦片服务。
@@ -31,6 +33,18 @@ LOW_ALTITUDE_DEMO_PASSWORD='请替换为本地演示密码' pnpm dev
 - `spatial-admin`：空间管理员，可查看运行态势和空间规则入口
 
 密码不会写入源码，数据库中仅保存加盐哈希。若未设置环境变量，API 会在启动日志中生成并显示本次初始化密码。登录会话有效期为 8 小时，仅通过 HttpOnly、SameSite=Strict Cookie 保存。
+
+## 固定视频推理
+
+保持平台运行，在另一个终端使用与平台相同的本地推理令牌执行：
+
+```bash
+LOW_ALTITUDE_INFERENCE_TOKEN='请替换为本地推理令牌' pnpm infer:demo
+```
+
+该命令启动独立推理进程，读取仓库内固定预录视频、通过 FFmpeg 抽取关键帧，并以确定性暗区模型生成一条“疑似烟火”AI异常线索。截图作为研判材料写入 `apps/api/var/clue-materials/frames/`，业务数据库只保存受控相对引用；结构化推理结果同时保存在 `apps/api/var/inference-results/latest.json`。使用 `clue-reviewer` 登录后，可在“AI异常线索研判”专题视图查看类型、置信度、来源时间、位置、评测来源和模型版本。
+
+运行推理需要本机可执行的 `ffmpeg`。推理结果仅为待复核线索，不代表确认事件。
 
 提交一条模拟遥测：
 

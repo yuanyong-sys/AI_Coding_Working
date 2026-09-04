@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 test("模拟无人机显示在观山湖本地态势总览", async ({ page, request }) => {
   const localPmtilesRequests: string[] = [];
@@ -269,4 +271,52 @@ test("越界告警专题视图联动无人机与空间规则", async ({ page, re
   await expect(
     page.getByText("规则命中提示，不代表违规认定，不输出飞行控制指令。"),
   ).toBeVisible();
+});
+
+test("线索研判员查看 AI异常线索并联动地图位置", async ({ page, request }) => {
+  const materialRoot = join("/private/tmp", "low-altitude-e2e-clue-materials");
+  await mkdir(join(materialRoot, "frames"), { recursive: true });
+  await writeFile(join(materialRoot, "frames/e2e-fire.jpg"), "local-frame");
+  const accepted = await request.post(
+    "http://127.0.0.1:8000/api/inference/results",
+    {
+      headers: { "X-Inference-Token": "local-e2e-inference-token" },
+      data: {
+        result_id: "e2e-fire-clue",
+        anomaly_type: "suspected_fire",
+        confidence: 0.87,
+        source_time: "2026-09-03T06:30:05Z",
+        location: { longitude: 106.6282, latitude: 26.6467 },
+        material_reference: "frames/e2e-fire.jpg",
+        model_version: "deterministic-dark-region-v1",
+        source_type: "evaluation",
+      },
+    },
+  );
+  expect(accepted.status(), await accepted.text()).toBe(202);
+
+  await page.goto("/");
+  await page.getByLabel("账号").fill("clue-reviewer");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "AI异常线索研判" }).click();
+
+  await expect(page.getByRole("heading", { name: "AI异常线索" })).toBeVisible();
+  await expect(page.getByText("疑似烟火", { exact: true })).toBeVisible();
+  await expect(page.getByText("置信度 87.0%")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /疑似烟火/ }).getByText("评测来源", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("2026-09-03 14:30:05")).toBeVisible();
+  await page.getByRole("button", { name: /疑似烟火/ }).click();
+  await expect(page.getByTestId("ai-clue-position")).toHaveAttribute(
+    "data-position",
+    "106.6282,26.6467",
+  );
+  await expect(page.getByTestId("ai-clue-position")).toContainText(
+    "疑似烟火 · 87.0%",
+  );
+  await expect(page.getByTestId("ai-clue-position")).toContainText("评测来源");
 });

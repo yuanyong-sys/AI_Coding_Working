@@ -1,7 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 
 import { fetchSession, login, logout, type AuthenticatedUser } from "@/auth";
+import {
+  fetchAIClues,
+  formatAnomalyType,
+  formatClueSource,
+  type AIClue,
+} from "@/ai-clues";
 import SituationMap from "@/components/SituationMap.vue";
 import {
   connectSituationEvents,
@@ -27,6 +40,8 @@ import {
 const drones = ref<DroneSnapshot[]>([]);
 const incursionAlerts = ref<IncursionAlert[]>([]);
 const selectedIncursionAlert = ref<IncursionAlert | null>(null);
+const aiClues = ref<AIClue[]>([]);
+const selectedAIClue = ref<AIClue | null>(null);
 const loading = ref(true);
 const error = ref("");
 const user = ref<AuthenticatedUser | null>(null);
@@ -191,6 +206,17 @@ async function refreshSpatialRules() {
   }
 }
 
+async function refreshAIClues() {
+  if (!user.value?.capabilities.includes("clue:review")) return;
+  try {
+    aiClues.value = await fetchAIClues();
+    selectedAIClue.value ??= aiClues.value[0] ?? null;
+  } catch (reason) {
+    error.value =
+      reason instanceof Error ? reason.message : "AI异常线索读取失败";
+  }
+}
+
 function connectSituationStream() {
   situationSocket = connectSituationEvents(
     cursor.value,
@@ -222,6 +248,7 @@ function connectSituationStream() {
 async function startSituationRefresh() {
   await refreshSituation();
   await refreshSpatialRules();
+  await refreshAIClues();
   connectSituationStream();
   freshnessTimer = setInterval(() => {
     clockNow.value = Date.now();
@@ -327,6 +354,10 @@ onBeforeUnmount(() => {
   if (freshnessTimer) clearInterval(freshnessTimer);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (spatialRulesTimer) clearInterval(spatialRulesTimer);
+});
+
+watch(activeView, (view) => {
+  if (view === "AI异常线索研判") void refreshAIClues();
 });
 </script>
 
@@ -497,6 +528,7 @@ onBeforeUnmount(() => {
         :spatial-rules="displayedSpatialRules"
         :validation-position="preflightResult?.violations[0]?.position"
         :incursion-alert="visibleIncursionAlert"
+        :ai-clue="activeView === 'AI异常线索研判' ? selectedAIClue : null"
       />
       <div class="map-legend" aria-label="地图图例">
         <span><i class="legend-dot"></i> 已接入无人机</span>
@@ -654,6 +686,34 @@ onBeforeUnmount(() => {
         </template>
         <small>规则判断，不代表审批或飞行许可</small>
       </article>
+    </aside>
+    <aside
+      v-else-if="activeView === 'AI异常线索研判'"
+      class="signal-rail clue-panel"
+      aria-label="AI异常线索专题视图"
+    >
+      <p class="section-code">AI CLUE / REVIEW</p>
+      <h2>AI异常线索</h2>
+      <p class="scope-warning">算法识别结果仅供核实，不代表确认事件。</p>
+      <button
+        v-for="clue in aiClues"
+        :key="clue.clue_id"
+        type="button"
+        class="clue-card"
+        :aria-pressed="selectedAIClue?.clue_id === clue.clue_id"
+        :aria-label="`${formatAnomalyType(clue.anomaly_type)}，置信度 ${(clue.confidence * 100).toFixed(1)}%`"
+        @click="selectedAIClue = clue"
+      >
+        <span>{{ formatClueSource(clue.source_type) }}</span>
+        <strong>{{ formatAnomalyType(clue.anomaly_type) }}</strong>
+        <p>置信度 {{ (clue.confidence * 100).toFixed(1) }}%</p>
+        <time :datetime="clue.source_time">{{
+          formatSourceTime(clue.source_time)
+        }}</time>
+        <small>研判材料 · {{ clue.material_reference }}</small>
+        <small>模型 · {{ clue.model_version }}</small>
+      </button>
+      <p v-if="!aiClues.length" class="quiet-state">当前无待复核 AI异常线索</p>
     </aside>
     <aside v-else class="signal-rail" aria-label="实时信号">
       <p class="section-code">SIGNAL / LIVE</p>

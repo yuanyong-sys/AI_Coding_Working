@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const testDatabaseUrl = `sqlite:///${join(tmpdir(), `low-altitude-e2e-${process.pid}.db`)}`;
+const clueMaterialRoot = "/private/tmp/low-altitude-e2e-clue-materials";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -20,6 +21,8 @@ export default defineConfig({
       env: {
         LOW_ALTITUDE_DATABASE_URL: testDatabaseUrl,
         LOW_ALTITUDE_DEMO_PASSWORD: "local-e2e-password",
+        LOW_ALTITUDE_INFERENCE_TOKEN: "local-e2e-inference-token",
+        LOW_ALTITUDE_CLUE_MATERIAL_ROOT: clueMaterialRoot,
       },
       url: "http://127.0.0.1:8000/docs",
       reuseExistingServer: false,

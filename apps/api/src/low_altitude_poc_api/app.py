@@ -3,6 +3,7 @@ import json
 import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, status
@@ -20,6 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
+from low_altitude_poc_api.ai_clues import configure_ai_clues
 from low_altitude_poc_api.auth import AuthenticatedUser, configure_auth
 from low_altitude_poc_api.incursions import (
     IncursionAlert,
@@ -189,6 +191,8 @@ def create_app(
     incursion_duration_seconds: float | None = None,
     incursion_max_gap_seconds: float | None = None,
     incursion_boundary_buffer_m: float | None = None,
+    inference_token: str | None = None,
+    clue_material_root: Path | None = None,
 ) -> FastAPI:
     clock = clock or (lambda: datetime.now(UTC))
     database_url = database_url or os.getenv(
@@ -223,6 +227,13 @@ def create_app(
     require_user = auth.require_user
     configure_spatial_rules(app, engine, auth)
     configure_preflight_validation(app, engine, auth)
+    configure_ai_clues(
+        app,
+        engine,
+        auth,
+        inference_token=inference_token,
+        material_root=clue_material_root,
+    )
 
     @app.post(
         "/api/telemetry/batches",

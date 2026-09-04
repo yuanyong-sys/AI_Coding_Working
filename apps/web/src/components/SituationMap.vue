@@ -8,18 +8,21 @@ import type { FeatureCollection, LineString, Polygon } from "geojson";
 import type { DroneSnapshot, IncursionAlert } from "@/situation";
 import type { SpatialRuleVersion } from "@/spatial-rules";
 import type { PlannedRoutePoint } from "@/preflight";
+import { formatAnomalyType, formatClueSource, type AIClue } from "@/ai-clues";
 
 const props = defineProps<{
   drones: DroneSnapshot[];
   spatialRules: SpatialRuleVersion[];
   validationPosition?: PlannedRoutePoint;
   incursionAlert?: IncursionAlert | null;
+  aiClue?: AIClue | null;
 }>();
 const mapContainer = ref<HTMLElement>();
 const markers: Marker[] = [];
 let map: Map | undefined;
 let preflightMarker: Marker | undefined;
 let incursionMarker: Marker | undefined;
+let clueMarker: Marker | undefined;
 const protocol = new Protocol();
 const flightStateLabels: Record<string, string> = {
   pending: "待飞",
@@ -236,12 +239,47 @@ function renderPreflightPosition() {
   });
 }
 
+function renderAIClue() {
+  clueMarker?.remove();
+  clueMarker = undefined;
+  if (!map || !props.aiClue) return;
+  const element = document.createElement("div");
+  element.className = "ai-clue-marker";
+  element.dataset.testid = "ai-clue-position";
+  element.dataset.position = `${props.aiClue.location.longitude},${props.aiClue.location.latitude}`;
+  element.setAttribute("role", "img");
+  const clueType = formatAnomalyType(props.aiClue.anomaly_type);
+  const confidence = `${(props.aiClue.confidence * 100).toFixed(1)}%`;
+  element.setAttribute(
+    "aria-label",
+    `${clueType}，置信度 ${confidence}，${formatClueSource(props.aiClue.source_type)}，来源时间 ${props.aiClue.source_time}`,
+  );
+  const glyph = document.createElement("span");
+  glyph.textContent = "◎";
+  const label = document.createElement("strong");
+  label.textContent = `${clueType} · ${confidence}`;
+  const meta = document.createElement("small");
+  meta.textContent = formatClueSource(props.aiClue.source_type);
+  element.append(glyph, label, meta);
+  clueMarker = new maplibregl.Marker({ element, anchor: "center" })
+    .setLngLat([
+      props.aiClue.location.longitude,
+      props.aiClue.location.latitude,
+    ])
+    .addTo(map);
+  map.flyTo({
+    center: [props.aiClue.location.longitude, props.aiClue.location.latitude],
+    zoom: Math.max(map.getZoom(), 14),
+  });
+}
+
 function renderSituation() {
   renderSpatialRules();
   renderTracks();
   renderMarkers();
   renderPreflightPosition();
   renderIncursionAlert();
+  renderAIClue();
 }
 
 onMounted(() => {
@@ -290,11 +328,13 @@ watch(
 watch(() => props.spatialRules, renderSpatialRules, { deep: true });
 watch(() => props.validationPosition, renderPreflightPosition, { deep: true });
 watch(() => props.incursionAlert, renderIncursionAlert, { deep: true });
+watch(() => props.aiClue, renderAIClue, { deep: true });
 
 onBeforeUnmount(() => {
   for (const marker of markers.splice(0)) marker.remove();
   preflightMarker?.remove();
   incursionMarker?.remove();
+  clueMarker?.remove();
   map?.remove();
   maplibregl.removeProtocol("pmtiles");
 });
