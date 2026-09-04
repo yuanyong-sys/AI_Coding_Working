@@ -11,9 +11,13 @@ import {
 import { fetchSession, login, logout, type AuthenticatedUser } from "@/auth";
 import {
   fetchAIClues,
+  clueMaterialUrl,
   formatAnomalyType,
   formatClueSource,
+  reviewStatusLabels,
+  updateAIClueReview,
   type AIClue,
+  type ReviewStatus,
 } from "@/ai-clues";
 import SituationMap from "@/components/SituationMap.vue";
 import {
@@ -42,6 +46,8 @@ const incursionAlerts = ref<IncursionAlert[]>([]);
 const selectedIncursionAlert = ref<IncursionAlert | null>(null);
 const aiClues = ref<AIClue[]>([]);
 const selectedAIClue = ref<AIClue | null>(null);
+const clueReviewPending = ref(false);
+const clueReviewError = ref("");
 const loading = ref(true);
 const error = ref("");
 const user = ref<AuthenticatedUser | null>(null);
@@ -214,6 +220,28 @@ async function refreshAIClues() {
   } catch (reason) {
     error.value =
       reason instanceof Error ? reason.message : "AI异常线索读取失败";
+  }
+}
+
+async function reviewSelectedClue(reviewStatus: ReviewStatus) {
+  if (!selectedAIClue.value || clueReviewPending.value) return;
+  clueReviewPending.value = true;
+  clueReviewError.value = "";
+  try {
+    const reviewed = await updateAIClueReview(
+      selectedAIClue.value.clue_id,
+      reviewStatus,
+    );
+    selectedAIClue.value = reviewed;
+    const index = aiClues.value.findIndex(
+      (clue) => clue.clue_id === reviewed.clue_id,
+    );
+    if (index >= 0) aiClues.value[index] = reviewed;
+  } catch (reason) {
+    clueReviewError.value =
+      reason instanceof Error ? reason.message : "研判结果保存失败";
+  } finally {
+    clueReviewPending.value = false;
   }
 }
 
@@ -695,24 +723,65 @@ watch(activeView, (view) => {
       <p class="section-code">AI CLUE / REVIEW</p>
       <h2>AI异常线索</h2>
       <p class="scope-warning">算法识别结果仅供核实，不代表确认事件。</p>
-      <button
+      <article
         v-for="clue in aiClues"
         :key="clue.clue_id"
-        type="button"
         class="clue-card"
-        :aria-pressed="selectedAIClue?.clue_id === clue.clue_id"
-        :aria-label="`${formatAnomalyType(clue.anomaly_type)}，置信度 ${(clue.confidence * 100).toFixed(1)}%`"
-        @click="selectedAIClue = clue"
+        data-testid="ai-clue-card"
+        :data-selected="selectedAIClue?.clue_id === clue.clue_id"
       >
         <span>{{ formatClueSource(clue.source_type) }}</span>
-        <strong>{{ formatAnomalyType(clue.anomaly_type) }}</strong>
+        <button
+          type="button"
+          class="clue-select"
+          :aria-pressed="selectedAIClue?.clue_id === clue.clue_id"
+          :aria-label="`${formatAnomalyType(clue.anomaly_type)}，置信度 ${(clue.confidence * 100).toFixed(1)}%`"
+          @click="selectedAIClue = clue"
+        >
+          <strong>{{ formatAnomalyType(clue.anomaly_type) }}</strong>
+          <small>定位地图位置</small>
+        </button>
         <p>置信度 {{ (clue.confidence * 100).toFixed(1) }}%</p>
         <time :datetime="clue.source_time">{{
           formatSourceTime(clue.source_time)
         }}</time>
         <small>研判材料 · {{ clue.material_reference }}</small>
         <small>模型 · {{ clue.model_version }}</small>
-      </button>
+        <template v-if="selectedAIClue?.clue_id === clue.clue_id">
+          <img
+            class="clue-material"
+            :src="clueMaterialUrl(clue.clue_id)"
+            :alt="`${formatAnomalyType(clue.anomaly_type)}研判材料`"
+          />
+          <p class="review-current">
+            研判结果 · {{ reviewStatusLabels[clue.review_status] }}
+          </p>
+          <div class="review-actions" aria-label="设置研判结果">
+            <button
+              v-for="status in [
+                'confirmed',
+                'false_positive',
+                'pending_review',
+              ] as ReviewStatus[]"
+              :key="status"
+              type="button"
+              :disabled="clueReviewPending"
+              @click="reviewSelectedClue(status)"
+            >
+              {{ reviewStatusLabels[status] }}
+            </button>
+          </div>
+          <p v-if="clueReviewError" class="form-error" role="alert">
+            {{ clueReviewError }}
+          </p>
+          <ol v-if="clue.review_history.length" class="review-history">
+            <li v-for="(item, index) in clue.review_history" :key="index">
+              {{ reviewStatusLabels[item.review_status] }} ·
+              {{ item.reviewed_by }} · {{ formatSourceTime(item.reviewed_at) }}
+            </li>
+          </ol>
+        </template>
+      </article>
       <p v-if="!aiClues.length" class="quiet-state">当前无待复核 AI异常线索</p>
     </aside>
     <aside v-else class="signal-rail" aria-label="实时信号">

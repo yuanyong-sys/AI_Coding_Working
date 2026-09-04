@@ -4,14 +4,14 @@ import json
 import logging
 import os
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Engine, String, select
+from sqlalchemy import Engine, ForeignKey, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from low_altitude_poc_api.auth import AuthenticatedUser, AuthService
@@ -29,6 +29,18 @@ class AIClueRecord(ClueBase):
     clue_id: Mapped[str] = mapped_column(String, primary_key=True)
     payload: Mapped[str] = mapped_column(String)
     review_status: Mapped[str] = mapped_column(String)
+
+
+class AIClueReviewRecord(ClueBase):
+    __tablename__ = "ai_clue_review_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clue_id: Mapped[str] = mapped_column(
+        ForeignKey("ai_anomaly_clues.clue_id"), index=True
+    )
+    review_status: Mapped[str] = mapped_column(String)
+    reviewed_by: Mapped[str] = mapped_column(String)
+    reviewed_at: Mapped[str] = mapped_column(String)
 
 
 class ClueLocation(BaseModel):
@@ -59,9 +71,21 @@ class InferenceResult(BaseModel):
         return value
 
 
+ReviewStatus = Literal["confirmed", "false_positive", "pending_review"]
+
+
+class ReviewHistoryItem(BaseModel):
+    review_status: ReviewStatus
+    reviewed_by: str
+    reviewed_at: datetime
+
+
 class AIClue(InferenceResult):
     clue_id: str
-    review_status: Literal["pending_review"]
+    review_status: ReviewStatus
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
+    review_history: list[ReviewHistoryItem] = Field(default_factory=list)
 
 
 class AIClueCreated(BaseModel):
@@ -71,6 +95,10 @@ class AIClueCreated(BaseModel):
 
 class AIClueList(BaseModel):
     clues: list[AIClue]
+
+
+class ReviewRequest(BaseModel):
+    review_status: ReviewStatus
 
 
 def configure_ai_clues(
@@ -99,6 +127,30 @@ def configure_ai_clues(
             auth.record_audit(user.username, "ai_clue_access_denied", "denied")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
         return user
+
+    def clue_from_record(database: Session, record: AIClueRecord) -> AIClue:
+        history_records = database.scalars(
+            select(AIClueReviewRecord)
+            .where(AIClueReviewRecord.clue_id == record.clue_id)
+            .order_by(AIClueReviewRecord.id)
+        ).all()
+        history = [
+            ReviewHistoryItem(
+                review_status=item.review_status,
+                reviewed_by=item.reviewed_by,
+                reviewed_at=datetime.fromisoformat(item.reviewed_at),
+            )
+            for item in history_records
+        ]
+        latest = history[-1] if history else None
+        return AIClue(
+            **json.loads(record.payload),
+            clue_id=record.clue_id,
+            review_status=record.review_status,
+            reviewed_by=latest.reviewed_by if latest else None,
+            reviewed_at=latest.reviewed_at if latest else None,
+            review_history=history,
+        )
 
     @app.post(
         "/api/inference/results",
@@ -138,14 +190,7 @@ def configure_ai_clues(
                 select(AIClueRecord).order_by(AIClueRecord.clue_id)
             ).all()
             return AIClueList(
-                clues=[
-                    AIClue(
-                        **json.loads(record.payload),
-                        clue_id=record.clue_id,
-                        review_status="pending_review",
-                    )
-                    for record in records
-                ]
+                clues=[clue_from_record(database, record) for record in records]
             )
 
     @app.get("/api/ai-clues/{clue_id}/material")
@@ -161,4 +206,40 @@ def configure_ai_clues(
         material_path = (root / result.material_reference).resolve()
         if not material_path.is_relative_to(root) or not material_path.is_file():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        auth.record_audit(
+            _user.username,
+            "ai_clue_material_accessed",
+            "allowed",
+            subject=clue_id,
+        )
         return FileResponse(material_path)
+
+    @app.put("/api/ai-clues/{clue_id}/review", response_model=AIClue)
+    def review_ai_clue(
+        clue_id: str,
+        request: ReviewRequest,
+        user: AuthenticatedUser = Depends(require_clue_reviewer),  # noqa: B008
+    ) -> AIClue:
+        reviewed_at = datetime.now(UTC).isoformat()
+        with Session(engine) as database:
+            record = database.get(AIClueRecord, clue_id)
+            if record is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+            record.review_status = request.review_status
+            database.add(
+                AIClueReviewRecord(
+                    clue_id=clue_id,
+                    review_status=request.review_status,
+                    reviewed_by=user.username,
+                    reviewed_at=reviewed_at,
+                )
+            )
+            auth.record_audit(
+                user.username,
+                "ai_clue_reviewed",
+                "allowed",
+                subject=f"{clue_id}:{request.review_status}",
+                database=database,
+            )
+            database.commit()
+            return clue_from_record(database, record)

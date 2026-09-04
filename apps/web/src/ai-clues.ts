@@ -9,7 +9,24 @@ export type AIClue = {
   material_reference: string;
   model_version: string;
   source_type: "simulated" | "evaluation";
-  review_status: "pending_review";
+  review_status: ReviewStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_history: ReviewHistoryItem[];
+};
+
+export type ReviewStatus = "confirmed" | "false_positive" | "pending_review";
+
+export type ReviewHistoryItem = {
+  review_status: ReviewStatus;
+  reviewed_by: string;
+  reviewed_at: string;
+};
+
+export const reviewStatusLabels: Record<ReviewStatus, string> = {
+  confirmed: "确认",
+  false_positive: "误报",
+  pending_review: "待复核",
 };
 
 const anomalyTypeLabels: Record<AIClue["anomaly_type"], string> = {
@@ -30,4 +47,24 @@ export async function fetchAIClues(): Promise<AIClue[]> {
   const response = await fetch("/api/ai-clues");
   if (!response.ok) throw new Error("AI异常线索读取失败");
   return ((await response.json()) as { clues: AIClue[] }).clues;
+}
+
+export function clueMaterialUrl(clueId: string): string {
+  return `/api/ai-clues/${encodeURIComponent(clueId)}/material`;
+}
+
+export async function updateAIClueReview(
+  clueId: string,
+  reviewStatus: ReviewStatus,
+): Promise<AIClue> {
+  const response = await fetch(
+    `/api/ai-clues/${encodeURIComponent(clueId)}/review`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ review_status: reviewStatus }),
+    },
+  );
+  if (!response.ok) throw new Error("研判结果保存失败");
+  return (await response.json()) as AIClue;
 }

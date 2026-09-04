@@ -304,11 +304,8 @@ test("线索研判员查看 AI异常线索并联动地图位置", async ({ page,
   await expect(page.getByRole("heading", { name: "AI异常线索" })).toBeVisible();
   await expect(page.getByText("疑似烟火", { exact: true })).toBeVisible();
   await expect(page.getByText("置信度 87.0%")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /疑似烟火/ }).getByText("评测来源", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  const clueCard = page.getByTestId("ai-clue-card");
+  await expect(clueCard.getByText("评测来源", { exact: true })).toBeVisible();
   await expect(page.getByText("2026-09-03 14:30:05")).toBeVisible();
   await page.getByRole("button", { name: /疑似烟火/ }).click();
   await expect(page.getByTestId("ai-clue-position")).toHaveAttribute(
@@ -319,4 +316,14 @@ test("线索研判员查看 AI异常线索并联动地图位置", async ({ page,
     "疑似烟火 · 87.0%",
   );
   await expect(page.getByTestId("ai-clue-position")).toContainText("评测来源");
+  await expect(page.getByAltText("疑似烟火研判材料")).toHaveAttribute(
+    "src",
+    "/api/ai-clues/e2e-fire-clue/material",
+  );
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(page.getByText("研判结果 · 确认")).toBeVisible();
+  await expect(page.getByText(/确认 · clue-reviewer ·/)).toBeVisible();
+  await page.getByRole("button", { name: "误报", exact: true }).click();
+  await expect(page.getByText("研判结果 · 误报")).toBeVisible();
+  await expect(page.getByText(/误报 · clue-reviewer ·/)).toBeVisible();
 });

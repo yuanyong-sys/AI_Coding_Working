@@ -78,6 +78,9 @@ def test_inference_contract_creates_reviewable_ai_anomaly_clue(tmp_path):
                 **inference_result(),
                 "clue_id": "inference-fire-001",
                 "review_status": "pending_review",
+                "reviewed_by": None,
+                "reviewed_at": None,
+                "review_history": [],
             }
         ]
     }
@@ -106,6 +109,82 @@ def test_inference_contract_rejects_material_outside_controlled_directory(tmp_pa
         )
 
     assert response.status_code == 422
+
+
+def test_reviewer_can_review_clue_and_trace_material_access_and_history(tmp_path):
+    material_root = tmp_path / "clue-materials"
+    frame = material_root / "frames" / "inference-fire-001.jpg"
+    frame.parent.mkdir(parents=True)
+    frame.write_bytes(b"controlled-local-frame")
+    app = create_app(
+        database_url=f"sqlite:///{tmp_path / 'review.db'}",
+        demo_password=TEST_PASSWORD,
+        inference_token=INFERENCE_TOKEN,
+        clue_material_root=material_root,
+    )
+
+    with TestClient(app) as client:
+        client.post(
+            "/api/inference/results",
+            json=inference_result(),
+            headers={"X-Inference-Token": INFERENCE_TOKEN},
+        )
+        anonymous_material = client.get("/api/ai-clues/inference-fire-001/material")
+
+        login(client, "situation-viewer")
+        viewer_material = client.get("/api/ai-clues/inference-fire-001/material")
+        viewer_review = client.put(
+            "/api/ai-clues/inference-fire-001/review",
+            json={"review_status": "confirmed"},
+        )
+        client.post("/api/auth/logout")
+
+        login(client, "clue-reviewer")
+        material = client.get("/api/ai-clues/inference-fire-001/material")
+        confirmed = client.put(
+            "/api/ai-clues/inference-fire-001/review",
+            json={"review_status": "confirmed"},
+        )
+        false_positive = client.put(
+            "/api/ai-clues/inference-fire-001/review",
+            json={"review_status": "false_positive"},
+        )
+        pending = client.put(
+            "/api/ai-clues/inference-fire-001/review",
+            json={"review_status": "pending_review"},
+        )
+        audit = client.get("/api/audit/events").json()["events"]
+
+    assert anonymous_material.status_code == 401
+    assert viewer_material.status_code == 403
+    assert viewer_review.status_code == 403
+    assert material.status_code == 200
+    assert confirmed.status_code == 200
+    assert false_positive.status_code == 200
+    assert pending.status_code == 200
+    reviewed = pending.json()
+    assert reviewed["review_status"] == "pending_review"
+    assert reviewed["reviewed_by"] == "clue-reviewer"
+    assert reviewed["reviewed_at"] is not None
+    assert [item["review_status"] for item in reviewed["review_history"]] == [
+        "confirmed",
+        "false_positive",
+        "pending_review",
+    ]
+    assert {item["reviewed_by"] for item in reviewed["review_history"]} == {
+        "clue-reviewer"
+    }
+    relevant_audit = [
+        (event["action"], event["outcome"], event["subject"])
+        for event in audit
+        if event["action"] in {"ai_clue_material_accessed", "ai_clue_reviewed"}
+    ]
+    assert relevant_audit == [
+        ("ai_clue_material_accessed", "allowed", "inference-fire-001"),
+        ("ai_clue_reviewed", "allowed", "inference-fire-001:confirmed"),
+        ("ai_clue_reviewed", "allowed", "inference-fire-001:false_positive"),
+        ("ai_clue_reviewed", "allowed", "inference-fire-001:pending_review"),
+    ]
 
 
 def test_independent_worker_extracts_repeatable_clue_from_prerecorded_video(tmp_path):

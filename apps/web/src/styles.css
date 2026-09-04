@@ -561,7 +561,7 @@ h2 {
   text-align: left;
   cursor: pointer;
 }
-.clue-card[aria-pressed="true"] {
+.clue-card[data-selected="true"] {
   border-color: var(--amber);
   background: rgba(247, 185, 85, 0.12);
 }
@@ -574,6 +574,55 @@ h2 {
 }
 .clue-card > strong {
   margin-top: 0.45rem;
+}
+.clue-select {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.clue-select small {
+  color: var(--amber);
+}
+.clue-material {
+  width: 100%;
+  max-height: 10rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--line);
+  object-fit: contain;
+  background: #070b0f;
+}
+.review-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+.review-actions button {
+  padding: 0.35rem 0.2rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+.review-actions button:hover {
+  border-color: var(--amber);
+}
+.review-current {
+  color: var(--amber) !important;
+}
+.review-history {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.62rem;
 }
 .clue-card > p,
 .clue-card > time,
