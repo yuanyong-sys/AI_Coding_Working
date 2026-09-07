@@ -619,8 +619,8 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
       </div>
     </div>
     <div class="mm-foot">
-      <button class="btn btn-outline" id="mm-hover-btn">悬停</button>
-      <button class="btn btn-outline" id="mm-return-btn">返航</button>
+      <button class="btn btn-outline" id="mm-hover-btn">模拟悬停</button>
+      <button class="btn btn-outline" id="mm-return-btn">模拟返航</button>
       <button class="btn btn-outline" id="mm-link-loss-btn">模拟断链</button>
       <button class="btn btn-outline" id="mm-low-battery-btn">模拟低电</button>
       <button class="btn btn-outline" id="mm-fail-next" aria-pressed="false">下次指令模拟失败</button>
@@ -964,15 +964,15 @@ function closeMonitor(){ $('#monitor-mask').classList.remove('open'); clearInter
 $('#monitor-close').addEventListener('click', closeMonitor);
 $('#monitor-mask').addEventListener('click', e => { if (e.target.id === 'monitor-mask') closeMonitor(); });
 async function sendControl(button, command, successText){
-  const original = button.textContent; button.disabled = true; button.textContent = '发送中…';
+  const original = button.textContent; button.disabled = true; button.textContent = `${original}·发送中…`;
   const failureToggle = $('#mm-fail-next');
   const simulateFailure = failureToggle.getAttribute('aria-pressed') === 'true';
   failureToggle.setAttribute('aria-pressed', 'false'); failureToggle.classList.remove('on');
   try {
     await api(`/api/tasks/${button.dataset.code}/control`, {method:'POST',body:JSON.stringify({command,simulateFailure})});
-    button.textContent = '成功'; toast(successText, 'ok');
-  } catch (_) { button.textContent = '失败·重试'; toast(`${original}指令发送失败，可重试`, 'err'); }
-  finally { button.disabled = false; setTimeout(() => { if (button.textContent === '成功') button.textContent = original; }, 1200); }
+    button.textContent = `${original}·成功`; toast(successText, 'ok');
+  } catch (_) { button.textContent = `${original}·失败·重试`; toast(`${original}指令发送失败，可重试`, 'err'); }
+  finally { button.disabled = false; setTimeout(() => { if (button.textContent.endsWith('·成功')) button.textContent = original; }, 1200); }
 }
 $('#mm-fail-next').addEventListener('click', e => {
   const pressed = e.currentTarget.getAttribute('aria-pressed') !== 'true';
@@ -1123,7 +1123,8 @@ $('#btn-next').addEventListener('click', async () => {
     try {
       const payload = {name:draft.name,date:draft.date,start:draft.start,end:draft.end,droneId:draft.drone,
         battery:DRONE_BATTERY[draft.drone] || 0,route:draft.route,aiItems:draft.ai,type:draft.type,
-        priority:draft.prio,owner:draft.owner,area:draft.area,dock:draft.dock,backupDrone:draft.backup};
+        priority:draft.prio,owner:draft.owner,area:draft.area,dock:draft.dock,
+        backupDrone:draft.backup === '不指定' ? null : draft.backup};
       const validation = await api('/api/tasks/validate', {method:'POST',body:JSON.stringify(payload)});
       if (!validation.canDispatch) {
         showConflict(validation.blockers.map(x => `<div><b>${esc(x.message)}</b></div>`).join(''));

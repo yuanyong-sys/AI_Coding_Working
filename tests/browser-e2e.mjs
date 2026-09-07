@@ -170,7 +170,7 @@ export async function browserEndToEnd() {
     const hoverFeedback = await evaluate(cdp, "Array.from(document.querySelectorAll('.toast'),t=>t.textContent)");
     assert.ok(hoverFeedback.some(text => text.includes('模拟悬停指令已成功执行')), JSON.stringify(hoverFeedback));
     await evaluate(cdp, "document.querySelector('#mm-fail-next').click(); document.querySelector('#mm-return-btn').click()");
-    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('返航指令发送失败'))");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('模拟返航指令发送失败'))");
     await evaluate(cdp, "document.querySelector('#mm-link-loss-btn').click()");
     await waitFor(cdp, "document.querySelector('#mm-link-loss-btn').textContent === '完成'");
     const taskSideAlert = await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.alerts.find(a=>a.missionId==='RW-20260905-012')})()`);

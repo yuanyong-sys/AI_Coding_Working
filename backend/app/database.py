@@ -42,7 +42,7 @@ class Database:
                     if name not in columns:
                         await connection.execute(text(f"ALTER TABLE mission ADD COLUMN {name} {kind}"))
                 audit_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(audit)"))).all()}
-                for name in ("subject_id", "result", "detail"):
+                for name in ("subject_id", "result", "detail", "actor", "before_state", "after_state", "failure_reason"):
                     if name not in audit_columns:
                         await connection.execute(text(f"ALTER TABLE audit ADD COLUMN {name} VARCHAR"))
                 alert_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(alert)"))).all()}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from enum import StrEnum
 from datetime import date as Date
 from datetime import time as Time
 
@@ -47,17 +48,36 @@ class BatchDispatchRequest(BaseModel):
     taskIds: list[str]
 
 
+class MissionStatus(StrEnum):
+    PENDING_DISPATCH = "PENDING_DISPATCH"
+    PENDING_EXECUTION = "PENDING_EXECUTION"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    ABNORMAL = "ABNORMAL"
+    TERMINATED = "TERMINATED"
+
+
+class ControlCommand(StrEnum):
+    HOVER = "HOVER"
+    RETURN = "RETURN"
+
+
+class AnomalyKind(StrEnum):
+    LINK_LOSS = "LINK_LOSS"
+    LOW_BATTERY = "LOW_BATTERY"
+
+
 class TransitionRequest(BaseModel):
-    target: str
+    target: MissionStatus
 
 
 class ControlRequest(BaseModel):
-    command: str
+    command: ControlCommand
     simulateFailure: bool = False
 
 
 class AnomalyRequest(BaseModel):
-    kind: str
+    kind: AnomalyKind
 
 
 class DemoState(BaseModel):

@@ -172,6 +172,8 @@ def serialize_audit(item: Audit) -> dict:
         "id": f"AUDIT-{item.id:04d}", "action": item.action,
         "snapshotVersion": item.snapshot_version, "occurredAt": item.occurred_at.isoformat(),
         "subjectId": item.subject_id, "result": item.result, "detail": item.detail,
+        "actor": item.actor, "beforeState": item.before_state, "afterState": item.after_state,
+        "failureReason": item.failure_reason,
     }
 
 
@@ -207,6 +209,11 @@ async def validate_mission(session: AsyncSession, draft: MissionDraft) -> dict:
         blockers.append({"code": "LOW_BATTERY", "message": "无人机电量低于 30%"})
     elif drone.status == "OFFLINE":
         blockers.append({"code": "DRONE_UNAVAILABLE", "message": "执行无人机当前离线"})
+    if draft.backupDrone not in {None, "", "不指定"}:
+        backup_id = DRONE_ALIASES.get(draft.backupDrone, draft.backupDrone)
+        backup = await session.get(Drone, backup_id)
+        if backup is None or backup.status == "OFFLINE" or backup.battery < 30 or backup_id == canonical_drone_id:
+            blockers.append({"code": "BACKUP_UNAVAILABLE", "message": "备用无人机不可用"})
     if draft.route in RESTRICTED_ROUTES:
         blockers.append({"code": "AIRSPACE_CONFLICT", "message": "航线命中演示空域限制"})
     if not draft.aiItems:
@@ -226,6 +233,7 @@ async def validate_mission(session: AsyncSession, draft: MissionDraft) -> dict:
 
 async def create_mission(session: AsyncSession, draft: MissionDraft) -> Mission:
     canonical_drone_id = DRONE_ALIASES.get(draft.droneId, draft.droneId)
+    backup_drone = None if draft.backupDrone in {None, "", "不指定"} else DRONE_ALIASES.get(draft.backupDrone, draft.backupDrone)
     mission = Mission(
         id=f"RW-{uuid4().hex[:10].upper()}",
         name=draft.name,
@@ -243,7 +251,7 @@ async def create_mission(session: AsyncSession, draft: MissionDraft) -> Mission:
         owner=draft.owner,
         area=draft.area,
         dock=draft.dock,
-        backup_drone=draft.backupDrone,
+        backup_drone=backup_drone,
     )
     session.add(mission)
     await session.commit()
@@ -265,7 +273,8 @@ async def batch_dispatch(session: AsyncSession, mission_ids: list[str]) -> dict:
         session.add(Audit(
             action="MISSION_DISPATCH", snapshot_version=SNAPSHOT_VERSION,
             occurred_at=datetime.now(timezone.utc), subject_id=mission.id,
-            result="SUCCESS", detail="批量模拟下发",
+            result="SUCCESS", detail="批量模拟下发", actor="王警官",
+            before_state="PENDING_DISPATCH", after_state="PENDING_EXECUTION",
         ))
     await session.commit()
     eligible_ids = {item.id for item in eligible}
@@ -318,7 +327,9 @@ def monitor_snapshot(mission: Mission) -> dict:
 
 
 async def record_audit(
-    session: AsyncSession, *, action: str, mission_id: str, result: str, detail: str
+    session: AsyncSession, *, action: str, mission_id: str, result: str, detail: str,
+    before_state: str | None = None, after_state: str | None = None,
+    failure_reason: str | None = None, actor: str = "王警官",
 ) -> Audit:
     entry = Audit(
         action=action,
@@ -327,6 +338,10 @@ async def record_audit(
         subject_id=mission_id,
         result=result,
         detail=detail,
+        actor=actor,
+        before_state=before_state,
+        after_state=after_state,
+        failure_reason=failure_reason,
     )
     session.add(entry)
     await session.commit()
@@ -335,6 +350,7 @@ async def record_audit(
 
 
 async def handle_mission_anomaly(session: AsyncSession, mission: Mission, kind: str) -> dict:
+    before_state = mission.status
     existing = await session.scalar(select(Alert).where(Alert.mission_id == mission.id))
     if existing is None:
         existing = Alert(
@@ -349,7 +365,8 @@ async def handle_mission_anomaly(session: AsyncSession, mission: Mission, kind: 
             mission_id=mission.id,
         )
         session.add(existing)
-    if mission.backup_drone and mission.drone_id != mission.backup_drone:
+    backup = await session.get(Drone, mission.backup_drone) if mission.backup_drone else None
+    if backup and backup.status != "OFFLINE" and backup.battery >= 30 and mission.drone_id != backup.id:
         mission.drone_id = DRONE_ALIASES.get(mission.backup_drone, mission.backup_drone)
         mission.control_state = "AUTO_BACKUP_SWITCH"
         outcome = "BACKUP_SWITCHED"
@@ -363,6 +380,7 @@ async def handle_mission_anomaly(session: AsyncSession, mission: Mission, kind: 
         action = "MISSION_MARKED_ABNORMAL"
     await record_audit(
         session, action=action, mission_id=mission.id, result="SUCCESS", detail=kind,
+        before_state=before_state, after_state=mission.status,
     )
     await session.refresh(existing)
     return {"outcome": outcome, "mission": serialize_mission(mission), "alert": serialize_alert(existing)}

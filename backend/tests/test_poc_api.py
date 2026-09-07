@@ -194,6 +194,10 @@ async def test_running_mission_monitor_and_controls_are_audited(client: AsyncCli
         ("MISSION_CONTROL_HOVER", "SUCCESS"),
         ("MISSION_CONTROL_RETURN", "FAILED"),
     ]
+    assert audit[-1]["actor"] == "王警官"
+    assert audit[-1]["beforeState"] == "RUNNING"
+    assert audit[-1]["afterState"] == "RUNNING"
+    assert audit[-1]["failureReason"] == "模拟指令失败"
 
 
 @pytest.mark.asyncio
