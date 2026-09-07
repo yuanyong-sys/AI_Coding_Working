@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,7 +13,12 @@ from app.domains.demo.router import router as demo_router
 from app.domains.demo.service import ensure_seeded
 
 
-def create_app(*, database_url: str | None = None, serve_frontend: bool = True) -> FastAPI:
+def create_app(
+    *,
+    database_url: str | None = None,
+    legacy_json: Path | None = None,
+    serve_frontend: bool = True,
+) -> FastAPI:
     settings = Settings(database_url=database_url) if database_url else Settings()
     database = Database(settings.database_url)
 
@@ -21,7 +26,8 @@ def create_app(*, database_url: str | None = None, serve_frontend: bool = True) 
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await database.create_schema()
         async with database.sessions() as session:
-            await ensure_seeded(session)
+            migration_source = legacy_json if legacy_json is not None else (settings.legacy_json if database_url is None else None)
+            await ensure_seeded(session, legacy_json=migration_source)
         yield
         await database.close()
 
@@ -40,13 +46,21 @@ def create_app(*, database_url: str | None = None, serve_frontend: bool = True) 
 
 
 def _mount_frontend(app: FastAPI, frontend_dist: Path, prototype_root: Path) -> None:
-    @app.get("/prototype/screen-overview.html", include_in_schema=False)
-    async def prototype_overview() -> FileResponse:
-        return FileResponse(prototype_root / "screen-overview.html")
+    prototype_pages = {"screen-overview.html", "dispatch-tasks.html", "alert-workbench.html", "stats-ledger.html"}
+
+    @app.get("/prototype/{page}", include_in_schema=False)
+    async def prototype_page(page: str) -> FileResponse:
+        if page not in prototype_pages:
+            raise HTTPException(status_code=404, detail="PROTOTYPE_NOT_FOUND")
+        return FileResponse(prototype_root / page)
 
     assets = frontend_dist / "assets"
     if assets.exists():
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.get("/api/{route:path}", include_in_schema=False)
+    async def unknown_api(route: str) -> None:
+        raise HTTPException(status_code=404, detail="API_NOT_FOUND")
 
     @app.get("/{route:path}", include_in_schema=False)
     async def frontend_route(route: str) -> FileResponse:

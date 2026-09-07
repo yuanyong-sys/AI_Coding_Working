@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务调度 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#1A2333; --muted:#5A6B85; --border:#E2E8F2;
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit; font-size:inherit}
+a{color:var(--blue-600); text-decoration:none}
+:focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:2px}
+::placeholder{color:#9AA9C2}
+
+/* ===== 左侧深色导航 ===== */
+.layout{display:flex; min-height:100vh}
+.sidenav{width:232px; flex:none; background:var(--navy-900); color:#EAF1FB; display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh}
+.nav-logo{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid rgba(76,154,255,.18); color:#EAF1FB}
+.nav-logo:hover{background:rgba(76,154,255,.08)}
+.nav-logo .t1{font-size:15px; font-weight:700; letter-spacing:1px}
+.nav-logo .t2{font-size:11px; color:#8FA3C4; margin-top:2px}
+.nav-menu{padding:12px 10px; display:flex; flex-direction:column; gap:2px}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px;
+  font-size:14px; color:#B9C8E0; transition:background .15s,color .15s}
+.nav-item:hover{background:rgba(76,154,255,.12); color:#EAF1FB}
+.nav-item.active{background:var(--blue-600); color:#fff; font-weight:600}
+.nav-item svg{flex:none}
+.nav-foot{margin-top:auto; padding:14px 16px; font-size:11px; color:#5E7295; border-top:1px solid rgba(76,154,255,.14); line-height:1.7}
+
+/* ===== 主列 ===== */
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+.topbar{height:56px; flex:none; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:20}
+.crumb{font-size:14px; color:var(--muted)}
+.crumb b{color:var(--fg); font-weight:600}
+.crumb .sep{margin:0 8px; color:#C3CEDF}
+.top-right{display:flex; align-items:center; gap:18px}
+.top-search{display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border);
+  border-radius:6px; padding:0 10px; height:32px; width:220px; color:var(--muted)}
+.top-search input{border:none; background:none; outline:none; flex:1; font-size:13px; color:var(--fg); font-family:inherit}
+.bell{position:relative; width:34px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.bell:hover{background:var(--bg); color:var(--fg)}
+.bell .badge{position:absolute; top:2px; right:2px; min-width:16px; height:16px; border-radius:8px; background:var(--alert-red);
+  color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-weight:600}
+.top-time{font-size:13px; color:var(--muted)}
+.top-user{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg)}
+.top-user .avatar{width:30px; height:30px; border-radius:50%; background:var(--navy-700); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600}
+
+/* ===== 工具条 / 统计条 ===== */
+.content{flex:1; padding:20px 24px 32px; min-width:0}
+.toolbar{display:flex; align-items:center; gap:12px; margin-bottom:14px}
+.seg{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden}
+.seg button{height:34px; padding:0 16px; font-size:13px; color:var(--muted); transition:background .15s,color .15s}
+.seg button:hover{color:var(--fg); background:#EEF3FA}
+.seg button.on{background:var(--navy-700); color:#fff; font-weight:600}
+.select, .input{height:34px; border:1px solid var(--border); border-radius:6px; background:var(--surface);
+  font-size:13px; color:var(--fg); padding:0 10px; font-family:inherit; transition:border-color .15s}
+.select:hover, .input:hover{border-color:#C7D3E6}
+.select:focus, .input:focus{outline:none; border-color:var(--blue-600); box-shadow:0 0 0 2px rgba(31,111,235,.15)}
+.input{width:220px}
+.btn{height:34px; padding:0 14px; border-radius:6px; font-size:13px; display:inline-flex; align-items:center; gap:6px;
+  transition:all .15s; border:1px solid transparent}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{background:var(--blue-600); color:#fff; font-weight:600}
+.btn-primary:hover{background:#1A63D4}
+.btn-outline{border-color:var(--border); color:var(--fg); background:var(--surface)}
+.btn-outline:hover{border-color:var(--blue-600); color:var(--blue-600); background:#F2F7FF}
+.btn-danger{background:var(--alert-red); color:#fff; font-weight:600}
+.btn-danger:hover{background:#CE3A3F}
+.btn-danger-outline{border-color:var(--alert-red); color:var(--alert-red); background:var(--surface)}
+.btn-danger-outline:hover{background:#FDEEEE}
+.spacer{flex:1}
+
+.stats-strip{display:flex; gap:10px; margin-bottom:16px}
+.stat-chip{display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border);
+  border-radius:6px; padding:8px 14px; font-size:13px; color:var(--muted); transition:all .15s}
+.stat-chip:hover{border-color:var(--blue-400); background:#F7FAFF}
+.stat-chip.on{border-color:var(--blue-600); background:#EEF4FF; color:var(--fg); font-weight:600}
+.stat-chip .n{font-size:18px; font-weight:700; color:var(--fg)}
+.stat-chip .dot{width:8px; height:8px; border-radius:50%}
+.d-pending{background:#8FA3C4}.d-ready{background:var(--blue-400)}.d-running{background:var(--blue-600)}
+.d-done{background:var(--safe-green)}.d-error{background:var(--alert-red)}
+
+/* ===== 看板 ===== */
+.kanban{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; align-items:start}
+.k-col{background:#EBF0F7; border:1px solid var(--border); border-radius:8px; padding:10px; min-height:300px}
+.k-head{display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:600; padding:2px 4px 10px}
+.k-head .cnt{color:var(--muted); font-weight:400}
+.k-head .kh-l{display:flex; align-items:center; gap:7px}
+.k-cards{display:flex; flex-direction:column; gap:10px}
+.k-more{font-size:12px; color:var(--muted); text-align:center; padding:6px 0 2px}
+.k-card{background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px 12px;
+  position:relative; transition:box-shadow .15s, border-color .15s; cursor:default}
+.k-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.k-card.urgent{border-left:3px solid var(--alert-red)}
+.k-card.clickable{cursor:pointer}
+.kc-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px}
+.kc-name{font-size:13px; font-weight:600; line-height:1.4}
+.kc-code{font-size:11px; color:var(--muted); margin-bottom:8px}
+.kc-meta{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted)}
+.kc-meta .row{display:flex; align-items:center; gap:6px}
+.kc-foot{display:flex; align-items:center; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); font-size:12px; color:var(--muted)}
+.tag{display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:3px; font-size:11px; font-weight:600; flex:none}
+.tag-routine{background:#E8F1FF; color:var(--blue-600)}
+.tag-special{background:#E0F7FA; color:#0E7C8C}
+.tag-emerg{background:#FDEEEE; color:var(--alert-red)}
+.prio{font-size:11px; font-weight:600; padding:1px 6px; border-radius:3px; flex:none}
+.prio-normal{background:#EEF2F8; color:var(--muted)}
+.prio-important{background:#FFF3E3; color:var(--warn-orange)}
+.prio-urgent{background:#FDEEEE; color:var(--alert-red)}
+.prog{display:flex; align-items:center; gap:8px; margin-top:8px}
+.prog-bar{flex:1; height:5px; border-radius:3px; background:#E8EDF5; overflow:hidden}
+.prog-fill{height:100%; border-radius:3px; background:var(--blue-600)}
+.prog-fill.done{background:var(--safe-green)}
+.prog-fill.err{background:var(--alert-red)}
+.prog .num{font-size:11px; color:var(--muted)}
+
+/* ===== 列表视图 ===== */
+.table-tools{display:flex; align-items:center; gap:12px; margin-bottom:10px; min-height:34px}
+.batch-info{font-size:13px; color:var(--muted)}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto}
+table{width:100%; border-collapse:collapse; min-width:960px}
+th{font-size:12px; color:var(--muted); font-weight:600; text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); background:#F8FAFD; white-space:nowrap}
+td{font-size:13px; padding:10px 12px; border-bottom:1px solid #EEF2F8; white-space:nowrap}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:#F7FAFF}
+tbody tr:last-child td{border-bottom:none}
+.badge{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:11px; font-size:12px; font-weight:600}
+.badge i{width:6px; height:6px; border-radius:50%; display:inline-block}
+.b-pending{background:#EEF2F8; color:var(--muted)} .b-pending i{background:#8FA3C4}
+.b-ready{background:#E8F1FF; color:var(--blue-600)} .b-ready i{background:var(--blue-400)}
+.b-running{background:#E4EDFF; color:var(--blue-600)} .b-running i{background:var(--blue-600)}
+.b-done{background:#E6F6EE; color:var(--safe-green)} .b-done i{background:var(--safe-green)}
+.b-error{background:#FDEEEE; color:var(--alert-red)} .b-error i{background:var(--alert-red)}
+.row-prog{display:flex; align-items:center; gap:8px; width:110px}
+.row-prog .prog-bar{width:64px; flex:none}
+.op-link{font-size:13px; color:var(--blue-600); padding:2px 4px; border-radius:3px}
+.op-link:hover{background:#EEF4FF}
+.op-link.danger{color:var(--alert-red)}
+.op-link.danger:hover{background:#FDEEEE}
+input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); cursor:pointer}
+
+/* ===== 甘特视图 ===== */
+.gantt{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto; padding:16px}
+.g-inner{min-width:980px}
+.g-axis{display:flex; margin-left:120px; border-bottom:1px solid var(--border); position:relative}
+.g-tick{flex:1; font-size:11px; color:var(--muted); padding-bottom:6px; border-left:1px dashed var(--border); padding-left:4px}
+.g-row{display:flex; align-items:center; height:52px; border-bottom:1px solid #EEF2F8}
+.g-row:last-child{border-bottom:none}
+.g-name{width:120px; flex:none; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px}
+.g-name .st{width:8px; height:8px; border-radius:50%}
+.g-track{flex:1; position:relative; height:34px; background:
+  repeating-linear-gradient(90deg, transparent 0, transparent calc(100%/12 - 1px), #EEF2F8 calc(100%/12 - 1px), #EEF2F8 calc(100%/12));}
+.g-block{position:absolute; top:5px; height:24px; border-radius:4px; font-size:11px; color:#fff;
+  display:flex; align-items:center; padding:0 8px; white-space:nowrap; overflow:hidden; cursor:pointer; transition:filter .15s}
+.g-block:hover{filter:brightness(1.12)}
+.g-block.running{background:var(--blue-600)}
+.g-block.ready{background:transparent; border:1.5px solid var(--blue-600); color:var(--blue-600)}
+.g-block.done{background:#9BBFAE; }
+.g-block.error{background:var(--alert-red)}
+.g-block.pending{background:transparent; border:1.5px dashed #8FA3C4; color:var(--muted)}
+.g-conflict{position:absolute; top:5px; height:24px; border-radius:4px; background:rgba(229,72,77,.28);
+  border:1.5px dashed var(--alert-red); cursor:help}
+.g-legend{display:flex; gap:18px; font-size:12px; color:var(--muted); margin-top:12px; flex-wrap:wrap}
+.g-legend span{display:flex; align-items:center; gap:6px}
+.g-legend i{width:14px; height:10px; border-radius:2px; display:inline-block}
+
+/* ===== 抽屉 ===== */
+.mask{position:fixed; inset:0; background:rgba(11,27,51,.45); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s}
+.mask.open{opacity:1; pointer-events:auto}
+.drawer{position:fixed; top:0; right:0; width:560px; max-width:94vw; height:100vh; background:var(--surface); z-index:50;
+  box-shadow:-8px 0 28px rgba(11,27,51,.18); transform:translateX(100%); transition:transform .25s ease;
+  display:flex; flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer-head{flex:none; display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border)}
+.drawer-head h3{font-size:16px}
+.x-btn{width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.x-btn:hover{background:var(--bg); color:var(--fg)}
+.stepper{flex:none; display:flex; padding:14px 20px; border-bottom:1px solid var(--border); gap:4px}
+.step-item{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; font-size:11px; color:var(--muted)}
+.step-item .s-dot{width:22px; height:22px; border-radius:50%; border:1.5px solid var(--border); background:var(--surface);
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--muted)}
+.step-item .s-line{height:2px; width:100%; background:var(--border); border-radius:1px; margin-top:-17px; z-index:-1}
+.step-item.cur{color:var(--blue-600); font-weight:600}
+.step-item.cur .s-dot{border-color:var(--blue-600); background:var(--blue-600); color:#fff}
+.step-item.ok{color:var(--safe-green)}
+.step-item.ok .s-dot{border-color:var(--safe-green); background:var(--safe-green); color:#fff}
+.drawer-body{flex:1; overflow-y:auto; padding:20px}
+.step-pane{display:none}
+.step-pane.on{display:block}
+.field{margin-bottom:16px}
+.field label{display:block; font-size:13px; font-weight:600; margin-bottom:6px}
+.field label .req{color:var(--alert-red); margin-left:2px}
+.field .hint{font-size:12px; color:var(--muted); margin-top:5px; font-weight:400}
+.err-msg{display:none; font-size:12px; color:var(--alert-red); margin-top:5px}
+.field.error .err-msg{display:block}
+.field.error .input, .field.error .select{border-color:var(--alert-red)}
+.w-full{width:100%}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.radio-cards{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+.radio-card{border:1px solid var(--border); border-radius:6px; padding:10px 8px; text-align:center; font-size:13px; cursor:pointer; transition:all .15s; background:var(--surface)}
+.radio-card:hover{border-color:var(--blue-400); background:#F7FAFF}
+.radio-card.sel{border-color:var(--blue-600); background:#EEF4FF; color:var(--blue-600); font-weight:600}
+.mini-map{background:var(--navy-900); border-radius:8px; border:1px solid var(--navy-700); padding:8px; margin-bottom:14px}
+.mini-map svg{display:block; width:100%; height:auto}
+.ai-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.ai-card{display:flex; align-items:center; gap:10px; border:1px solid var(--border); border-radius:6px; padding:12px; cursor:pointer; transition:all .15s}
+.ai-card:hover{border-color:var(--blue-400); background:#F7FAFF}
+.ai-card.sel{border-color:var(--blue-600); background:#EEF4FF}
+.ai-card .ai-ic{width:34px; height:34px; border-radius:6px; background:#E8F1FF; color:var(--blue-600); display:flex; align-items:center; justify-content:center; flex:none}
+.ai-card.sel .ai-ic{background:var(--blue-600); color:#fff}
+.ai-card b{font-size:13px; display:block}
+.ai-card span{font-size:11px; color:var(--muted)}
+.sum-list{border:1px solid var(--border); border-radius:8px; overflow:hidden}
+.sum-row{display:flex; font-size:13px; padding:10px 14px; border-bottom:1px solid #EEF2F8}
+.sum-row:last-child{border-bottom:none}
+.sum-row .k{width:96px; color:var(--muted); flex:none}
+.sum-ok{display:flex; gap:8px; align-items:flex-start; background:#E6F6EE; border:1px solid #BFE6D2; border-radius:6px; padding:10px 12px; font-size:12px; color:#1E7A4E; margin-top:14px; line-height:1.6}
+.drawer-foot{flex:none; display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+.conflict-box{display:none; background:#FDEEEE; border:1px solid #F5C2C4; border-radius:6px; padding:10px 12px; font-size:12px; color:var(--alert-red); margin-bottom:14px; line-height:1.6}
+.conflict-box.show{display:block}
+
+/* ===== 执行监控弹层 ===== */
+.modal-wrap{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(11,27,51,.55)}
+.modal-wrap.open{display:flex}
+.monitor-modal{width:880px; max-width:94vw; max-height:92vh; background:var(--surface); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 18px 50px rgba(11,27,51,.35)}
+.mm-head{display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border)}
+.mm-head h3{font-size:15px}
+.mm-head .sub{font-size:12px; color:var(--muted); margin-left:10px}
+.mm-body{display:grid; grid-template-columns:1.5fr 1fr; gap:14px; padding:16px 20px; overflow-y:auto}
+.video-box{background:var(--navy-900); border-radius:8px; position:relative; min-height:340px; overflow:hidden; display:flex; align-items:center; justify-content:center}
+.video-box .vb-label{color:#8FA3C4; font-size:13px; display:flex; flex-direction:column; align-items:center; gap:8px}
+.video-box .vb-corner{position:absolute; top:10px; left:12px; font-size:11px; color:#8FA3C4; display:flex; align-items:center; gap:6px}
+.video-box .vb-corner .rec{width:8px; height:8px; border-radius:50%; background:var(--alert-red); animation:recBlink 1.2s infinite}
+@keyframes recBlink{0%,100%{opacity:1}50%{opacity:.25}}
+.video-box .vb-cam{position:absolute; bottom:10px; left:12px; font-size:11px; color:#8FA3C4}
+.video-box .vb-time{position:absolute; top:10px; right:12px; font-size:11px; color:#EAF1FB}
+.mm-side{display:flex; flex-direction:column; gap:14px}
+.param-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.param{background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 12px}
+.param .pk{font-size:11px; color:var(--muted)}
+.param .pv{font-size:22px; font-weight:700; margin-top:2px}
+.param .pv .u{font-size:11px; color:var(--muted); font-weight:400; margin-left:3px}
+.traj-box{background:var(--navy-900); border-radius:8px; padding:10px; border:1px solid var(--navy-700)}
+.traj-box .tb-t{font-size:11px; color:#8FA3C4; margin-bottom:6px}
+.mm-foot{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+
+/* ===== 二次确认 ===== */
+.confirm-dialog{width:400px; max-width:92vw; background:var(--surface); border-radius:10px; padding:22px; box-shadow:0 18px 50px rgba(11,27,51,.35)}
+.confirm-dialog h4{font-size:15px; display:flex; align-items:center; gap:8px; margin-bottom:10px; color:var(--fg)}
+.confirm-dialog p{font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:20px}
+.confirm-dialog .cd-btns{display:flex; justify-content:flex-end; gap:10px}
+.warn-ic{color:var(--alert-red); flex:none}
+
+/* ===== Toast ===== */
+#toast-box{position:fixed; top:20px; right:20px; z-index:99; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--navy-800); border:1px solid var(--blue-400); border-left:4px solid var(--blue-400); color:#EAF1FB;
+  border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  animation:toastIn .2s ease-out; max-width:340px; line-height:1.5}
+.toast.warn{border-color:var(--warn-orange); border-left-color:var(--warn-orange)}
+.toast.err{border-color:var(--alert-red); border-left-color:var(--alert-red)}
+.toast.ok{border-color:var(--safe-green); border-left-color:var(--safe-green)}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0; transform:translateX(20px)}to{opacity:1; transform:none}}
+@keyframes toastOut{to{opacity:0; transform:translateX(20px)}}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ===== 左侧导航 ===== -->
+  <aside class="sidenav" data-od-id="side-nav">
+    <a class="nav-logo" href="index.html">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4C9AFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/>
+        <path d="M12 8v5M9.5 10.5h5"/>
+      </svg>
+      <span><span class="t1">无人机低空智慧调度平台</span><br><span class="t2">公安交管 · 低空巡检</span></span>
+    </a>
+    <nav class="nav-menu">
+      <a class="nav-item" href="screen-overview.html" data-od-id="nav-screen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        态势一张图
+      </a>
+      <a class="nav-item active" href="dispatch-tasks.html" data-od-id="nav-dispatch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 5l1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
+        任务调度
+      </a>
+      <a class="nav-item" href="alert-workbench.html" data-od-id="nav-alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+        告警线索
+      </a>
+      <a class="nav-item" href="stats-ledger.html" data-od-id="nav-ledger">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        台账统计
+      </a>
+      <a class="nav-item" href="#" data-od-id="nav-resource">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        资源管理
+      </a>
+      <a class="nav-item" href="#" data-od-id="nav-system">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg>
+        系统管理
+      </a>
+    </nav>
+    <div class="nav-foot">v1.0 · 设计稿示例数据<br>数据日期 2026-09-05</div>
+  </aside>
+
+  <!-- ===== 主列 ===== -->
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <div class="crumb">任务调度<span class="sep">/</span><b>任务总览</b></div>
+      <div class="top-right">
+        <div class="top-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" placeholder="全局搜索" aria-label="全局搜索">
+        </div>
+        <button class="bell" aria-label="告警通知" id="bell-btn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span class="badge num">5</span>
+        </button>
+        <span class="top-time num" id="top-clock">--:--</span>
+        <span class="top-user"><span class="avatar">王</span>王警官</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- 工具条 -->
+      <div class="toolbar" data-od-id="dispatch-toolbar">
+        <div class="seg" data-od-id="view-switch" role="tablist" aria-label="视图切换">
+          <button class="on" data-view="kanban">看板</button>
+          <button data-view="list">列表</button>
+          <button data-view="gantt">甘特</button>
+        </div>
+        <select class="select" id="f-status" aria-label="状态筛选">
+          <option value="全部">全部状态</option>
+          <option>待下发</option><option>待执行</option><option>执行中</option><option>已完成</option><option>异常</option>
+        </select>
+        <input class="input" id="f-search" type="text" placeholder="搜索任务名称 / 编号 / 航线" aria-label="搜索任务">
+        <span class="spacer"></span>
+        <button class="btn btn-primary" id="btn-new" data-od-id="btn-new-task">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          新建任务
+        </button>
+      </div>
+
+      <!-- 统计条 -->
+      <div class="stats-strip" data-od-id="stats-strip" id="stats-strip"></div>
+
+      <!-- 看板视图 -->
+      <section id="view-kanban">
+        <div class="kanban" data-od-id="kanban-board" id="kanban-board"></div>
+      </section>
+
+      <!-- 列表视图 -->
+      <section id="view-list" hidden>
+        <div class="table-tools">
+          <span class="batch-info" id="batch-info">未选择任务</span>
+          <button class="btn btn-outline" id="btn-batch" disabled>批量下发</button>
+          <span class="spacer"></span>
+          <span class="batch-info num" id="list-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table data-od-id="task-table">
+            <thead><tr>
+              <th style="width:36px"><input type="checkbox" id="check-all" aria-label="全选"></th>
+              <th>任务编号</th><th>任务名称</th><th>类型</th><th>无人机</th><th>航线</th>
+              <th>计划时间</th><th>状态</th><th>进度</th><th>负责人</th><th>操作</th>
+            </tr></thead>
+            <tbody id="task-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 甘特视图 -->
+      <section id="view-gantt" hidden>
+        <div class="gantt" data-od-id="gantt-view">
+          <div class="g-inner" id="gantt-inner"></div>
+          <div class="g-legend">
+            <span><i style="background:var(--blue-600)"></i>执行中</span>
+            <span><i style="background:transparent;border:1.5px solid var(--blue-600)"></i>待执行</span>
+            <span><i style="background:#9BBFAE"></i>已完成</span>
+            <span><i style="background:var(--alert-red)"></i>异常</span>
+            <span><i style="background:rgba(229,72,77,.28);border:1.5px dashed var(--alert-red)"></i>时段冲突</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 新建任务抽屉 ===== -->
+<div class="mask" id="drawer-mask"></div>
+<aside class="drawer" id="new-task-drawer" data-od-id="new-task-drawer" aria-label="新建任务">
+  <div class="drawer-head">
+    <h3>新建巡查任务</h3>
+    <button class="x-btn" id="drawer-close" aria-label="关闭">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="stepper" id="stepper"></div>
+  <div class="drawer-body">
+    <form id="step-form" data-od-id="step-form" novalidate>
+      <div class="conflict-box" id="conflict-box"></div>
+
+      <!-- 步骤一：基本信息 -->
+      <div class="step-pane on" data-step="0">
+        <div class="field" data-f="name">
+          <label>任务名称<span class="req">*</span></label>
+          <input class="input w-full" id="f-name" type="text" placeholder="例如：滨江大道晚高峰常态巡查">
+          <div class="err-msg">请填写任务名称</div>
+        </div>
+        <div class="field" data-f="type">
+          <label>任务类型<span class="req">*</span></label>
+          <div class="radio-cards" id="f-type">
+            <div class="radio-card sel" data-val="常态巡查">常态巡查</div>
+            <div class="radio-card" data-val="专项巡查">专项巡查</div>
+            <div class="radio-card" data-val="应急">应急</div>
+          </div>
+        </div>
+        <div class="field" data-f="prio">
+          <label>优先级<span class="req">*</span></label>
+          <div class="radio-cards" id="f-prio">
+            <div class="radio-card sel" data-val="普通">普通</div>
+            <div class="radio-card" data-val="重要">重要</div>
+            <div class="radio-card" data-val="紧急">紧急</div>
+          </div>
+        </div>
+        <div class="field" data-f="time">
+          <label>计划时间窗<span class="req">*</span></label>
+          <div class="row2">
+            <input class="input w-full" id="f-date" type="date" value="2026-09-05">
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="input w-full" id="f-start" type="time" value="15:00">
+              <span style="color:var(--muted)">至</span>
+              <input class="input w-full" id="f-end" type="time" value="16:30">
+            </div>
+          </div>
+          <div class="err-msg" id="time-err">请完整填写时间窗，且结束时间须晚于开始时间</div>
+          <div class="hint">时间窗将与所选无人机的已排任务做冲突校验</div>
+        </div>
+        <div class="field">
+          <label>负责人</label>
+          <select class="select w-full" id="f-owner">
+            <option>王警官</option><option>李强</option><option>王敏</option><option>赵磊</option><option>陈晨</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 步骤二：航线与区域 -->
+      <div class="step-pane" data-step="1">
+        <div class="mini-map" data-od-id="drawer-mini-map">
+          <svg viewBox="0 0 500 240" role="img" aria-label="航线选择示意地图（示例）">
+            <rect width="500" height="240" fill="#0B1B33"/>
+            <g stroke="#1E3A61" stroke-width="1.2" fill="none">
+              <path d="M-10 60 L510 50"/><path d="M-10 130 L510 120"/><path d="M-10 200 L510 195"/>
+              <path d="M80 -10 L70 250"/><path d="M220 -10 L215 250"/><path d="M360 -10 L365 250"/>
+            </g>
+            <path d="M40 200 C140 160 220 110 330 90 C400 76 440 60 470 42" fill="none" stroke="#3DD9EB" stroke-width="2" stroke-dasharray="8 5"/>
+            <circle cx="40" cy="200" r="4" fill="#3DD9EB"/><circle cx="470" cy="42" r="4" fill="#3DD9EB"/>
+            <rect x="250" y="30" width="150" height="90" rx="6" fill="none" stroke="#4C9AFF" stroke-width="1.5" stroke-dasharray="6 4"/>
+            <text x="262" y="48" font-size="11" fill="#4C9AFF">框选巡查区域（示意）</text>
+            <text x="30" y="222" font-size="11" fill="#8FA3C4">机巢 J-01</text>
+            <text x="300" y="140" font-size="11" fill="#8FA3C4">滨江大道</text>
+            <text x="12" y="16" font-size="10" fill="#5E7295">示意地图 · 非真实地理数据</text>
+          </svg>
+        </div>
+        <div class="field" data-f="route">
+          <label>巡查航线<span class="req">*</span></label>
+          <select class="select w-full" id="f-route">
+            <option value="">请选择航线</option>
+            <option>滨江东线</option><option>老城环线</option><option>中山路往返线</option>
+            <option>解放路东段</option><option>物流园环线</option><option>人民路沿线</option>
+          </select>
+          <div class="err-msg">请选择巡查航线</div>
+        </div>
+        <div class="field">
+          <label>巡查区域</label>
+          <select class="select w-full" id="f-area">
+            <option>滨江商务区</option><option>中心老城区</option><option>城北物流园</option>
+          </select>
+          <div class="hint">可在上方示意地图框选补充巡查区域（演示为示意交互）</div>
+        </div>
+      </div>
+
+      <!-- 步骤三：执行资源 -->
+      <div class="step-pane" data-step="2">
+        <div class="field" data-f="drone">
+          <label>执行无人机<span class="req">*</span></label>
+          <select class="select w-full" id="f-drone">
+            <option value="">请选择无人机</option>
+            <option>警航-01</option><option>警航-02</option><option>警航-03</option>
+            <option>警航-04</option><option>警航-05</option><option>警航-06</option>
+          </select>
+          <div class="err-msg">请选择执行无人机</div>
+        </div>
+        <div class="field">
+          <label>起飞机巢</label>
+          <select class="select w-full" id="f-dock">
+            <option>机巢 J-01（滨江商务区）</option><option>机巢 J-02（中心老城区）</option><option>机巢 J-03（城北物流园）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>备用无人机</label>
+          <select class="select w-full" id="f-backup">
+            <option>不指定</option><option>警航-02</option><option>警航-04</option><option>警航-06</option>
+          </select>
+          <div class="hint">主用机断链或低电时自动切换备用机续飞</div>
+        </div>
+      </div>
+
+      <!-- 步骤四：AI 识别项 -->
+      <div class="step-pane" data-step="3">
+        <div class="field" data-f="ai">
+          <label>AI 识别项（至少选择 1 项）<span class="req">*</span></label>
+          <div class="ai-grid" id="f-ai">
+            <div class="ai-card sel" data-val="交通事故">
+              <span class="ai-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16l1.5-5A2 2 0 018.4 9.5h7.2a2 2 0 011.9 1.5L19 16M5 16h14M5 16v3h2v-1.5h10V19h2v-3"/><circle cx="8" cy="16.5" r=".5"/><circle cx="16" cy="16.5" r=".5"/></svg></span>
+              <span><b>交通事故</b><span>碰撞、侧翻、抛洒物</span></span>
+            </div>
+            <div class="ai-card sel" data-val="车辆违停">
+              <span class="ai-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="6" rx="2"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg></span>
+              <span><b>车辆违停</b><span>禁停区滞留识别</span></span>
+            </div>
+            <div class="ai-card" data-val="行人闯入">
+              <span class="ai-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.2"/><path d="M12 8v5l-3 6M12 13l3.5 5M8.5 10.5l7-1"/></svg></span>
+              <span><b>行人闯入</b><span>机动车道行人检测</span></span>
+            </div>
+            <div class="ai-card" data-val="烟雾火情">
+              <span class="ai-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3-4 5-4 9a4 4 0 008 0c0-2-1.5-3-2-4.5C13 9 16 10 16 13"/><path d="M8 20h8"/></svg></span>
+              <span><b>烟雾火情</b><span>烟雾与明火识别</span></span>
+            </div>
+            <div class="ai-card" data-val="道路拥堵">
+              <span class="ai-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17h16M6 17v-3h4v3M14 17v-3h4v3M9 17v-5h6v5"/></svg></span>
+              <span><b>道路拥堵</b><span>车流密度排队长度</span></span>
+            </div>
+          </div>
+          <div class="err-msg">请至少选择 1 项 AI 识别能力</div>
+        </div>
+      </div>
+
+      <!-- 步骤五：确认下发 -->
+      <div class="step-pane" data-step="4">
+        <div class="sum-list" id="sum-list"></div>
+        <div class="sum-ok">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M20 6L9 17l-5-5"/></svg>
+          空域校验通过，所选时段无空域限制；确认后任务进入「待下发」队列，由值班调度复核后下发执行。
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-outline" id="btn-prev" disabled>上一步</button>
+    <span class="spacer"></span>
+    <button class="btn btn-outline" id="btn-cancel">取消</button>
+    <button class="btn btn-primary" id="btn-next">下一步</button>
+  </div>
+</aside>
+
+<!-- ===== 执行监控弹层 ===== -->
+<div class="modal-wrap" id="monitor-mask">
+  <div class="monitor-modal" data-od-id="monitor-modal" role="dialog" aria-label="执行监控">
+    <div class="mm-head">
+      <h3>执行监控<span class="sub num" id="mm-code">—</span></h3>
+      <button class="x-btn" id="monitor-close" aria-label="关闭监控">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mm-body">
+      <div class="video-box">
+        <span class="vb-corner"><span class="rec"></span>LIVE · 实时图传画面 · 示例</span>
+        <span class="vb-time num" id="mm-vtime">--:--:--</span>
+        <span class="vb-label">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="15" height="12" rx="2"/><path d="M17.5 10.5l4-2.5v8l-4-2.5"/></svg>
+          视频流占位（设计稿不接入真实图传）
+        </span>
+        <span class="vb-cam" id="mm-cam">机位：警航-03 · 前视云台 4K</span>
+      </div>
+      <div class="mm-side">
+        <div class="param-grid">
+          <div class="param"><div class="pk">飞行高度</div><div class="pv num" id="mm-alt">120<span class="u">m</span></div></div>
+          <div class="param"><div class="pk">地速</div><div class="pv num" id="mm-spd">12.4<span class="u">m/s</span></div></div>
+          <div class="param"><div class="pk">剩余电量</div><div class="pv num" id="mm-batt">68<span class="u">%</span></div></div>
+          <div class="param"><div class="pk">图传信号</div><div class="pv num" id="mm-sig">-67<span class="u">dBm</span></div></div>
+        </div>
+        <div class="traj-box">
+          <div class="tb-t">实时轨迹（示意）</div>
+          <svg viewBox="0 0 280 150" style="width:100%;height:auto;display:block" role="img" aria-label="轨迹示意">
+            <rect width="280" height="150" fill="#0B1B33"/>
+            <g stroke="#1E3A61" stroke-width="1" fill="none">
+              <path d="M0 45 H280M0 95 H280M70 0 V150M160 0 V150M240 0 V150"/>
+            </g>
+            <path d="M20 130 C70 110 110 80 160 66 C200 55 230 40 262 26" fill="none" stroke="#3DD9EB" stroke-width="1.6" stroke-dasharray="5 4" opacity=".6"/>
+            <path d="M20 130 C60 115 96 92 136 79" fill="none" stroke="#3DD9EB" stroke-width="2.2"/>
+            <circle cx="20" cy="130" r="3.5" fill="#3DD9EB"/>
+            <circle cx="136" cy="79" r="5" fill="#4C9AFF" stroke="#EAF1FB" stroke-width="1.5"/>
+            <text x="144" y="74" font-size="10" fill="#EAF1FB" id="mm-traj-name">警航-03</text>
+          </svg>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.7" id="mm-desc">—</div>
+      </div>
+    </div>
+    <div class="mm-foot">
+      <button class="btn btn-outline" id="mm-hover-btn">悬停</button>
+      <button class="btn btn-outline" id="mm-return-btn">返航</button>
+      <button class="btn btn-danger" id="mm-stop-btn">终止任务</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 二次确认弹窗 ===== -->
+<div class="modal-wrap" id="confirm-mask">
+  <div class="confirm-dialog" data-od-id="confirm-dialog" role="alertdialog" aria-label="二次确认">
+    <h4>
+      <svg class="warn-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+      <span id="cf-title">确认终止任务？</span>
+    </h4>
+    <p id="cf-desc">—</p>
+    <div class="cd-btns">
+      <button class="btn btn-outline" id="cf-cancel">取消</button>
+      <button class="btn btn-danger" id="cf-ok">确认终止</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+
+<script>
+'use strict';
+/* ================= 数据 ================= */
+const STATUS = ['待下发','待执行','执行中','已完成','异常'];
+const STATUS_CLS = {待下发:'pending', 待执行:'ready', 执行中:'running', 已完成:'done', 异常:'error'};
+const TYPE_CLS = {常态巡查:'tag-routine', 专项巡查:'tag-special', 应急:'tag-emerg'};
+const PRIO_CLS = {普通:'prio-normal', 重要:'prio-important', 紧急:'prio-urgent'};
+
+let TASKS = [
+  {code:'RW-20260905-012', name:'贵北高速惠水段航线巡检', type:'常态巡查', drone:'警航-03', route:'滨江东线',   date:'09-05', start:'09:00', end:'10:30', status:'执行中', prio:'重要', owner:'李强', progress:65},
+  {code:'RW-20260905-015', name:'都匀城区违停专项巡查', type:'专项巡查', drone:'警航-01', route:'老城环线',   date:'09-05', start:'10:00', end:'11:30', status:'执行中', prio:'紧急', owner:'王敏', progress:40},
+  {code:'RW-20260905-013', name:'解放路车流监测巡查', type:'常态巡查', drone:'警航-02', route:'解放路东段', date:'09-05', start:'08:30', end:'10:00', status:'执行中', prio:'普通', owner:'陈晨', progress:80},
+  {code:'RW-20260905-014', name:'都匀城区背街小巷巡查', type:'常态巡查', drone:'警航-05', route:'老城环线',   date:'09-05', start:'10:30', end:'12:00', status:'执行中', prio:'普通', owner:'赵磊', progress:20},
+  {code:'RW-20260905-022', name:'贵北高速惠水段事故应急复勘', type:'应急', drone:'警航-04', route:'滨江东线',   date:'09-05', start:'11:00', end:'12:00', status:'执行中', prio:'紧急', owner:'李强', progress:55},
+  {code:'RW-20260905-024', name:'人民路商圈午间巡查', type:'常态巡查', drone:'警航-06', route:'人民路沿线', date:'09-05', start:'11:30', end:'13:00', status:'执行中', prio:'普通', owner:'王敏', progress:35},
+  {code:'RW-20260905-025', name:'高铁站落客平台巡查', type:'常态巡查', drone:'警航-02', route:'人民路沿线', date:'09-05', start:'13:00', end:'14:00', status:'执行中', prio:'重要', owner:'陈晨', progress:10},
+  {code:'RW-20260905-026', name:'城北物流园消防通道巡查', type:'专项巡查', drone:'警航-06', route:'物流园环线', date:'09-05', start:'14:00', end:'15:00', status:'执行中', prio:'重要', owner:'赵磊', progress:5},
+  {code:'RW-20260905-018', name:'城北物流园夜间巡查', type:'常态巡查', drone:'警航-05', route:'物流园环线', date:'09-05', start:'19:00', end:'20:30', status:'待下发', prio:'普通', owner:'赵磊', progress:0},
+  {code:'RW-20260905-020', name:'中山路施工路段专项巡查', type:'专项巡查', drone:'警航-03', route:'中山路往返线', date:'09-05', start:'15:00', end:'16:00', status:'待下发', prio:'重要', owner:'王敏', progress:0},
+  {code:'RW-20260905-023', name:'夜市商圈秩序巡查', type:'常态巡查', drone:'警航-01', route:'老城环线',   date:'09-05', start:'18:30', end:'20:00', status:'待下发', prio:'普通', owner:'王警官', progress:0},
+  {code:'RW-20260905-019', name:'中山路晚高峰巡查', type:'常态巡查', drone:'警航-02', route:'中山路往返线', date:'09-05', start:'16:30', end:'18:00', status:'待执行', prio:'重要', owner:'陈晨', progress:0},
+  {code:'RW-20260905-016', name:'城北高速入口巡查', type:'常态巡查', drone:'警航-04', route:'物流园环线', date:'09-05', start:'15:30', end:'16:30', status:'待执行', prio:'普通', owner:'李强', progress:0},
+  {code:'RW-20260905-017', name:'校园周边护学巡查', type:'专项巡查', drone:'警航-01', route:'人民路沿线', date:'09-05', start:'16:00', end:'17:30', status:'待执行', prio:'重要', owner:'王敏', progress:0},
+  {code:'RW-20260905-027', name:'贵北高速惠水段晚巡', type:'常态巡查', drone:'警航-03', route:'滨江东线',   date:'09-05', start:'17:00', end:'18:30', status:'待执行', prio:'普通', owner:'李强', progress:0},
+  {code:'RW-20260905-028', name:'解放路护栏隐患复查', type:'专项巡查', drone:'警航-06', route:'解放路东段', date:'09-05', start:'15:00', end:'15:40', status:'待执行', prio:'普通', owner:'赵磊', progress:0},
+  {code:'RW-20260905-009', name:'人民路沿线常态巡查', type:'常态巡查', drone:'警航-01', route:'人民路沿线', date:'09-05', start:'08:00', end:'09:30', status:'已完成', prio:'普通', owner:'王敏', progress:100},
+  {code:'RW-20260905-005', name:'贵北高速惠水段早巡', type:'常态巡查', drone:'警航-03', route:'滨江东线',   date:'09-05', start:'07:30', end:'08:40', status:'已完成', prio:'普通', owner:'李强', progress:100},
+  {code:'RW-20260905-011', name:'高铁站周边秩序巡查', type:'专项巡查', drone:'警航-06', route:'人民路沿线', date:'09-05', start:'08:20', end:'09:20', status:'已完成', prio:'重要', owner:'赵磊', progress:100},
+  {code:'RW-20260905-021', name:'解放路事故应急巡查', type:'应急', drone:'警航-04', route:'解放路东段', date:'09-05', start:'13:00', end:'14:00', status:'异常', prio:'紧急', owner:'刘洋', progress:48, err:'图传断链，已触发低电返航'},
+];
+/* 用于新建任务时间窗冲突校验（各无人机已排时段） */
+const BUSY = {
+  '警航-01':[['10:00','11:30','都匀城区违停专项巡查'],['16:00','17:30','校园周边护学巡查']],
+  '警航-02':[['08:30','10:00','解放路车流监测巡查'],['16:30','18:00','中山路晚高峰巡查']],
+  '警航-03':[['09:00','10:30','贵北高速惠水段航线巡检'],['15:00','16:00','中山路施工路段专项巡查']],
+  '警航-04':[['11:00','12:00','贵北高速惠水段事故应急复勘'],['15:30','16:30','城北高速入口巡查']],
+  '警航-05':[['10:30','12:00','都匀城区背街小巷巡查'],['19:00','20:30','城北物流园夜间巡查']],
+  '警航-06':[['11:30','13:00','人民路商圈午间巡查'],['14:00','15:00','城北物流园消防通道巡查']],
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ================= Toast ================= */
+function toast(msg, kind){
+  const box = $('#toast-box');
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 260); }, 3000);
+}
+
+/* ================= 顶部时钟 ================= */
+function tickClock(){
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  $('#top-clock').textContent = p(d.getHours()) + ':' + p(d.getMinutes());
+  const vt = $('#mm-vtime');
+  if (vt) vt.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+tickClock(); setInterval(tickClock, 1000);
+$('#bell-btn').addEventListener('click', () => toast('您有 5 条未读告警，请前往「告警线索」工作台处置', 'warn'));
+
+/* ================= 视图与筛选状态 ================= */
+let curView = 'kanban', fStatus = '全部', fSearch = '';
+const checked = new Set();
+
+function matchTask(t){
+  if (fStatus !== '全部' && t.status !== fStatus) return false;
+  if (fSearch){
+    const q = fSearch.toLowerCase();
+    return (t.name + t.code + t.route + t.drone).toLowerCase().includes(q);
+  }
+  return true;
+}
+
+/* ================= 统计条 ================= */
+function renderStats(){
+  const counts = {};
+  STATUS.forEach(s => counts[s] = TASKS.filter(t => t.status === s).length);
+  counts['已完成'] = 32; /* 含历史归档 */
+  $('#stats-strip').innerHTML = STATUS.map(s =>
+    `<button class="stat-chip${fStatus === s ? ' on' : ''}" data-st="${s}">
+      <span class="dot d-${STATUS_CLS[s]}"></span>${s}<span class="n num">${counts[s]}</span>
+    </button>`).join('');
+  $$('#stats-strip .stat-chip').forEach(ch => ch.addEventListener('click', () => {
+    fStatus = (fStatus === ch.dataset.st) ? '全部' : ch.dataset.st;
+    $('#f-status').value = fStatus;
+    renderAll();
+  }));
+}
+
+/* ================= 看板 ================= */
+function cardHTML(t){
+  const clickable = t.status === '执行中' ? ' clickable' : '';
+  const prog = t.status === '执行中'
+    ? `<div class="prog"><div class="prog-bar"><div class="prog-fill" style="width:${t.progress}%"></div></div><span class="num">${t.progress}%</span></div>` : '';
+  const err = t.status === '异常'
+    ? `<div class="prog"><div class="prog-bar"><div class="prog-fill err" style="width:${t.progress}%"></div></div><span class="num" style="color:var(--alert-red)">异常</span></div>` : '';
+  return `<div class="k-card${t.prio === '紧急' ? ' urgent' : ''}${clickable}" data-code="${t.code}" tabindex="${t.status === '执行中' ? 0 : -1}">
+    <div class="kc-top"><span class="kc-name">${esc(t.name)}</span><span class="tag ${TYPE_CLS[t.type]}">${t.type}</span></div>
+    <div class="kc-code num">${t.code}</div>
+    <div class="kc-meta">
+      <div class="row">${esc(t.drone)} · ${esc(t.route)}</div>
+      <div class="row num">${t.start} – ${t.end}</div>
+    </div>
+    ${prog}${err}
+    <div class="kc-foot"><span>负责人：${esc(t.owner)}</span><span class="prio ${PRIO_CLS[t.prio]}">${t.prio}</span></div>
+  </div>`;
+}
+
+function renderKanban(){
+  const board = $('#kanban-board');
+  const keys = {待下发:'pending', 待执行:'ready', 执行中:'running', 已完成:'done', 异常:'error'};
+  board.innerHTML = STATUS.map(s => {
+    const list = TASKS.filter(t => t.status === s && matchTask(t));
+    const shown = list.slice(0, 4);
+    const more = list.length > 4 ? `<div class="k-more">另有 ${list.length - 4} 项，可在列表视图查看</div>` : '';
+    const empty = list.length === 0 ? `<div class="k-more">暂无任务</div>` : '';
+    return `<div class="k-col" data-od-id="task-col-${keys[s]}">
+      <div class="k-head"><span class="kh-l"><span class="dot d-${keys[s]}"></span>${s}</span><span class="cnt num">${list.length}</span></div>
+      <div class="k-cards">${shown.map(cardHTML).join('')}${empty}${more}</div>
+    </div>`;
+  }).join('');
+  $$('#kanban-board .k-card.clickable').forEach(c => {
+    const open = () => openMonitor(c.dataset.code);
+    c.addEventListener('click', open);
+    c.addEventListener('keydown', e => { if (e.key === 'Enter') open(); });
+  });
+}
+
+/* ================= 列表 ================= */
+function renderTable(){
+  const list = TASKS.filter(matchTask);
+  $('#list-count').textContent = '共 ' + list.length + ' 条';
+  $('#task-tbody').innerHTML = list.map(t => {
+    const canIssue = t.status === '待下发';
+    const canStop = t.status === '待下发' || t.status === '待执行' || t.status === '执行中';
+    return `<tr>
+      <td><input type="checkbox" class="row-check" data-code="${t.code}" ${checked.has(t.code) ? 'checked' : ''} ${canIssue ? '' : 'disabled'} aria-label="选择 ${esc(t.name)}"></td>
+      <td class="num">${t.code}</td>
+      <td>${esc(t.name)}${t.err ? `<div style="font-size:11px;color:var(--alert-red)">${esc(t.err)}</div>` : ''}</td>
+      <td><span class="tag ${TYPE_CLS[t.type]}">${t.type}</span></td>
+      <td>${esc(t.drone)}</td><td>${esc(t.route)}</td>
+      <td class="num">${t.date} ${t.start}–${t.end}</td>
+      <td><span class="badge b-${STATUS_CLS[t.status]}"><i></i>${t.status}</span></td>
+      <td><div class="row-prog"><div class="prog-bar"><div class="prog-fill${t.status === '已完成' ? ' done' : ''}${t.status === '异常' ? ' err' : ''}" style="width:${t.progress}%"></div></div><span class="num" style="font-size:12px;color:var(--muted)">${t.progress}%</span></div></td>
+      <td>${esc(t.owner)}</td>
+      <td>
+        <button class="op-link" data-act="detail" data-code="${t.code}">详情</button>
+        ${canIssue ? `<button class="op-link" data-act="issue" data-code="${t.code}">下发</button>` : ''}
+        ${canStop ? `<button class="op-link danger" data-act="stop" data-code="${t.code}">终止</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:32px">无符合筛选条件的任务</td></tr>`;
+  $$('#task-tbody .row-check').forEach(c => c.addEventListener('change', () => {
+    c.checked ? checked.add(c.dataset.code) : checked.delete(c.dataset.code);
+    renderBatchBar();
+  }));
+  $$('#task-tbody .op-link').forEach(b => b.addEventListener('click', () => {
+    const t = TASKS.find(x => x.code === b.dataset.code);
+    if (!t) return;
+    if (b.dataset.act === 'detail'){
+      if (t.status === '执行中') openMonitor(t.code);
+      else toast(`${t.code} · ${t.name}：状态 ${t.status}，进度 ${t.progress}%`);
+    } else if (b.dataset.act === 'issue'){
+      t.status = '待执行';
+      toast(`任务 ${t.code} 已下发，进入待执行队列`, 'ok');
+      checked.delete(t.code);
+      renderAll();
+    } else if (b.dataset.act === 'stop'){
+      confirmStop(t.code);
+    }
+  }));
+  renderBatchBar();
+}
+
+function renderBatchBar(){
+  const n = checked.size;
+  $('#batch-info').textContent = n ? `已选 ${n} 项` : '未选择任务';
+  $('#btn-batch').disabled = n === 0;
+}
+$('#check-all').addEventListener('change', e => {
+  checked.clear();
+  if (e.target.checked) TASKS.filter(t => matchTask(t) && t.status === '待下发').forEach(t => checked.add(t.code));
+  renderTable();
+});
+$('#btn-batch').addEventListener('click', () => {
+  let n = 0;
+  TASKS.forEach(t => { if (checked.has(t.code) && t.status === '待下发'){ t.status = '待执行'; n++; } });
+  checked.clear();
+  toast(`已批量下发 ${n} 项任务`, 'ok');
+  renderAll();
+});
+
+/* ================= 甘特 ================= */
+function hm(s){ const [h, m] = s.split(':').map(Number); return h + m / 60; }
+const G_START = 8, G_END = 20; /* 08:00–20:00 */
+function ganttBlock(t){
+  const l = (Math.max(hm(t.start), G_START) - G_START) / (G_END - G_START) * 100;
+  const w = Math.max((Math.min(hm(t.end), G_END) - Math.max(hm(t.start), G_START)) / (G_END - G_START) * 100, 2.5);
+  const cls = {执行中:'running', 待执行:'ready', 已完成:'done', 异常:'error', 待下发:'pending'}[t.status];
+  return `<div class="g-block ${cls}" style="left:${l}%;width:${w}%" title="${esc(t.name)} ${t.start}–${t.end}（${t.status}）">${t.start} ${esc(t.name)}</div>`;
+}
+function renderGantt(){
+  const drones = ['警航-01','警航-02','警航-03','警航-04','警航-05','警航-06'];
+  const stDot = {'警航-01':'var(--blue-600)','警航-02':'var(--blue-600)','警航-03':'var(--blue-600)','警航-04':'var(--alert-red)','警航-05':'var(--blue-600)','警航-06':'var(--safe-green)'};
+  let ticks = '';
+  for (let h = G_START; h <= G_END; h++) ticks += `<div class="g-tick num">${String(h).padStart(2,'0')}:00</div>`;
+  const rows = drones.map(d => {
+    const ts = TASKS.filter(t => t.drone === d);
+    let blocks = ts.map(ganttBlock).join('');
+    /* 冲突叠加：同机重叠时段红色标注 */
+    for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++){
+      const a = ts[i], b = ts[j];
+      const s = Math.max(hm(a.start), hm(b.start)), e = Math.min(hm(a.end), hm(b.end));
+      if (s < e){
+        const l = (s - G_START) / (G_END - G_START) * 100, w = (e - s) / (G_END - G_START) * 100;
+        blocks += `<div class="g-conflict" style="left:${l}%;width:${w}%" title="时段冲突：${a.start}–${a.end} 与 ${b.start}–${b.end} 重叠，请调整"></div>`;
+      }
+    }
+    return `<div class="g-row"><div class="g-name"><span class="st" style="background:${stDot[d]}"></span>${d}</div><div class="g-track">${blocks}</div></div>`;
+  }).join('');
+  const hasConflict = $('#gantt-inner') && rows.includes('g-conflict');
+  $('#gantt-inner').innerHTML = `<div class="g-axis">${ticks}</div>${rows}` +
+    (hasConflict ? `<div style="margin-top:12px;font-size:12px;color:var(--alert-red);display:flex;align-items:center;gap:6px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+      检测到 1 组时段冲突：警航-06「城北物流园消防通道巡查」与「解放路护栏隐患复查」时间窗重叠，请调整后下发。</div>` : '');
+}
+
+/* ================= 渲染调度 ================= */
+function renderAll(){
+  renderStats(); renderKanban(); renderTable(); renderGantt();
+}
+function switchView(v){
+  curView = v;
+  $$('#view-switch-od, [data-od-id="view-switch"] button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $('#view-kanban').hidden = v !== 'kanban';
+  $('#view-list').hidden = v !== 'list';
+  $('#view-gantt').hidden = v !== 'gantt';
+}
+$$('[data-od-id="view-switch"] button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+$('#f-status').addEventListener('change', e => { fStatus = e.target.value; renderAll(); });
+$('#f-search').addEventListener('input', e => { fSearch = e.target.value.trim(); renderKanban(); renderTable(); renderStats(); });
+
+/* ================= 二次确认（通用） ================= */
+let confirmCb = null;
+function openConfirm(title, desc, okText, cb){
+  $('#cf-title').textContent = title;
+  $('#cf-desc').textContent = desc;
+  $('#cf-ok').textContent = okText;
+  confirmCb = cb;
+  $('#confirm-mask').classList.add('open');
+}
+function closeConfirm(){ $('#confirm-mask').classList.remove('open'); confirmCb = null; }
+$('#cf-cancel').addEventListener('click', closeConfirm);
+$('#cf-ok').addEventListener('click', () => { const cb = confirmCb; closeConfirm(); if (cb) cb(); });
+$('#confirm-mask').addEventListener('click', e => { if (e.target.id === 'confirm-mask') closeConfirm(); });
+
+function confirmStop(code){
+  const t = TASKS.find(x => x.code === code);
+  if (!t) return;
+  openConfirm('确认终止任务？',
+    `任务「${t.name}」（${t.code}）终止后无人机将立即执行返航，已采集数据自动归档。该操作不可撤销，且将同步生成一条处置记录。`,
+    '确认终止', () => {
+      TASKS = TASKS.filter(x => x.code !== code);
+      closeMonitor();
+      toast(`任务 ${t.code} 已终止，无人机执行返航，数据已归档`, 'err');
+      renderAll();
+    });
+}
+
+/* ================= 执行监控弹层 ================= */
+let monitorTimer = null;
+function openMonitor(code){
+  const t = TASKS.find(x => x.code === code);
+  if (!t) return;
+  $('#mm-code').textContent = t.code + ' · ' + t.name;
+  $('#mm-cam').textContent = `机位：${t.drone} · 前视云台 4K`;
+  $('#mm-traj-name').textContent = t.drone;
+  $('#mm-desc').textContent = `航线 ${t.route} · 计划 ${t.start}–${t.end} · 负责人 ${t.owner} · 已完成 ${t.progress}%`;
+  const seed = t.progress;
+  $('#mm-alt').innerHTML = (100 + seed % 40) + '<span class="u">m</span>';
+  $('#mm-spd').innerHTML = (8 + (seed % 50) / 10).toFixed(1) + '<span class="u">m/s</span>';
+  $('#mm-batt').innerHTML = (90 - Math.round(seed / 3)) + '<span class="u">%</span>';
+  $('#mm-sig').innerHTML = (-60 - seed % 15) + '<span class="u">dBm</span>';
+  $('#monitor-mask').classList.add('open');
+  $('#mm-stop-btn').dataset.code = code;
+  clearInterval(monitorTimer);
+  monitorTimer = setInterval(() => {
+    const alt = $('#mm-alt'); if (!alt) return;
+    const cur = parseInt(alt.textContent, 10);
+    alt.innerHTML = Math.max(60, cur + (Math.random() > .5 ? 1 : -1)) + '<span class="u">m</span>';
+  }, 3000);
+}
+function closeMonitor(){ $('#monitor-mask').classList.remove('open'); clearInterval(monitorTimer); }
+$('#monitor-close').addEventListener('click', closeMonitor);
+$('#monitor-mask').addEventListener('click', e => { if (e.target.id === 'monitor-mask') closeMonitor(); });
+$('#mm-hover-btn').addEventListener('click', () => toast('已下发悬停指令，无人机保持当前位置悬停'));
+$('#mm-return-btn').addEventListener('click', () => toast('已下发返航指令，无人机沿安全航线返航', 'ok'));
+$('#mm-stop-btn').addEventListener('click', e => confirmStop(e.currentTarget.dataset.code));
+
+/* ================= 新建任务抽屉 ================= */
+const STEP_NAMES = ['基本信息', '航线与区域', '执行资源', 'AI 识别项', '确认下发'];
+let curStep = 0;
+const draft = { type:'常态巡查', prio:'普通', ai:['交通事故','车辆违停'] };
+
+function renderStepper(){
+  $('#stepper').innerHTML = STEP_NAMES.map((n, i) =>
+    `<div class="step-item${i === curStep ? ' cur' : ''}${i < curStep ? ' ok' : ''}">
+      <span class="s-dot num">${i < curStep ? '✓' : i + 1}</span>${n}
+    </div>`).join('');
+}
+function bindRadioGroup(id, key){
+  $$('#' + id + ' .radio-card').forEach(c => c.addEventListener('click', () => {
+    $$('#' + id + ' .radio-card').forEach(x => x.classList.remove('sel'));
+    c.classList.add('sel');
+    draft[key] = c.dataset.val;
+  }));
+}
+bindRadioGroup('f-type', 'type');
+bindRadioGroup('f-prio', 'prio');
+$$('#f-ai .ai-card').forEach(c => c.addEventListener('click', () => {
+  c.classList.toggle('sel');
+  draft.ai = $$('#f-ai .ai-card.sel').map(x => x.dataset.val);
+}));
+
+function setFieldError(name, on, msg){
+  const f = document.querySelector(`.field[data-f="${name}"]`);
+  if (!f) return;
+  f.classList.toggle('error', !!on);
+  if (msg){ const em = f.querySelector('.err-msg'); if (em) em.textContent = msg; }
+}
+function showConflict(html){
+  const box = $('#conflict-box');
+  if (html){ box.innerHTML = html; box.classList.add('show'); }
+  else { box.classList.remove('show'); box.innerHTML = ''; }
+}
+
+function validateStep(step){
+  if (step === 0){
+    let ok = true;
+    const name = $('#f-name').value.trim();
+    setFieldError('name', !name); if (!name) ok = false;
+    const d = $('#f-date').value, s = $('#f-start').value, e = $('#f-end').value;
+    const timeBad = !d || !s || !e || hm(e) <= hm(s);
+    setFieldError('time', timeBad, '请完整填写时间窗，且结束时间须晚于开始时间');
+    if (timeBad) ok = false;
+    if (ok){ draft.name = name; draft.date = d; draft.start = s; draft.end = e; draft.owner = $('#f-owner').value; }
+    return ok;
+  }
+  if (step === 1){
+    const route = $('#f-route').value;
+    setFieldError('route', !route);
+    if (route){ draft.route = route; draft.area = $('#f-area').value; }
+    return !!route;
+  }
+  if (step === 2){
+    const drone = $('#f-drone').value;
+    setFieldError('drone', !drone);
+    if (!drone) return false;
+    /* 时间窗冲突校验（阻断） */
+    const busy = BUSY[drone] || [];
+    const hit = busy.find(([s, e]) => hm(draft.start) < hm(e) && hm(s) < hm(draft.end));
+    if (hit){
+      showConflict(`<b>时间窗冲突，无法下发：</b>${drone} 在 ${hit[0]}–${hit[1]} 已排任务「${hit[2]}」，与本次计划 ${draft.start}–${draft.end} 重叠。请返回「基本信息」调整时间窗，或更换执行无人机。`);
+      return false;
+    }
+    showConflict('');
+    draft.drone = drone; draft.dock = $('#f-dock').value; draft.backup = $('#f-backup').value;
+    return true;
+  }
+  if (step === 3){
+    const bad = draft.ai.length === 0;
+    setFieldError('ai', bad);
+    return !bad;
+  }
+  return true;
+}
+
+function buildSummary(){
+  $('#sum-list').innerHTML = [
+    ['任务名称', draft.name], ['任务类型', draft.type + ' · 优先级 ' + draft.prio],
+    ['计划时间窗', `${draft.date} ${draft.start}–${draft.end}`], ['负责人', draft.owner],
+    ['巡查航线', `${draft.route}（${draft.area}）`], ['执行无人机', draft.drone],
+    ['起飞机巢', draft.dock], ['备用无人机', draft.backup],
+    ['AI 识别项', draft.ai.join('、')],
+  ].map(([k, v]) => `<div class="sum-row"><span class="k">${k}</span><span>${esc(v)}</span></div>`).join('');
+}
+
+function goStep(n){
+  $$('.step-pane').forEach(p => p.classList.toggle('on', +p.dataset.step === n));
+  curStep = n;
+  renderStepper();
+  $('#btn-prev').disabled = n === 0;
+  $('#btn-next').textContent = n === 4 ? '确认下发' : '下一步';
+  if (n === 4) buildSummary();
+}
+function openDrawer(){
+  draft.type = '常态巡查'; draft.prio = '普通'; draft.ai = ['交通事故','车辆违停'];
+  showConflict('');
+  goStep(0);
+  $('#drawer-mask').classList.add('open');
+  $('#new-task-drawer').classList.add('open');
+}
+function closeDrawer(){
+  $('#drawer-mask').classList.remove('open');
+  $('#new-task-drawer').classList.remove('open');
+}
+$('#btn-new').addEventListener('click', openDrawer);
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#btn-cancel').addEventListener('click', closeDrawer);
+$('#drawer-mask').addEventListener('click', closeDrawer);
+$('#btn-prev').addEventListener('click', () => { if (curStep > 0) goStep(curStep - 1); });
+$('#btn-next').addEventListener('click', () => {
+  if (curStep < 4){
+    if (!validateStep(curStep)) return;
+    goStep(curStep + 1);
+  } else {
+    const seq = 29 + Math.floor(Math.random() * 40);
+    const nt = {
+      code:`RW-20260905-0${seq}`, name:draft.name, type:draft.type, drone:draft.drone,
+      route:draft.route, date:draft.date.slice(5), start:draft.start, end:draft.end,
+      status:'待下发', prio:draft.prio, owner:draft.owner, progress:0
+    };
+    (BUSY[draft.drone] = BUSY[draft.drone] || []).push([draft.start, draft.end, draft.name]);
+    TASKS.push(nt);
+    closeDrawer();
+    toast(`任务 ${nt.code} 创建成功，已进入「待下发」队列`, 'ok');
+    renderAll();
+  }
+});
+
+/* Esc 关闭弹层 */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('#confirm-mask').classList.contains('open')) closeConfirm();
+  else if ($('#monitor-mask').classList.contains('open')) closeMonitor();
+  else if ($('#new-task-drawer').classList.contains('open')) closeDrawer();
+});
+
+renderAll();
+</script>
+</body>
+</html>

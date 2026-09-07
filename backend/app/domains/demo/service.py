@@ -1,4 +1,6 @@
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,11 +13,78 @@ from app.domains.mission.models import Mission
 from app.domains.demo.snapshot import ALERTS, DRONES, LEDGERS, MISSIONS, SCHEMA_VERSION, SNAPSHOT_VERSION
 
 
-async def ensure_seeded(session: AsyncSession) -> None:
+async def ensure_seeded(session: AsyncSession, *, legacy_json: Path | None = None) -> None:
     schema_version = await session.get(SystemMeta, "schema_version")
     if schema_version and schema_version.value == str(SCHEMA_VERSION):
         return
+    if legacy_json and legacy_json.exists():
+        document = json.loads(legacy_json.read_text(encoding="utf-8"))
+        await import_legacy_state(session, document)
+        return
     await restore_business_state(session, record_audit=False)
+
+
+async def import_legacy_state(session: AsyncSession, document: dict) -> None:
+    session.add_all(
+        Drone(
+            id=item["id"],
+            status=item["status"],
+            battery=item["battery"],
+            task_id=item.get("taskId"),
+            task=item["task"],
+            x=item["x"],
+            y=item["y"],
+            demo=item.get("demo", True),
+        )
+        for item in document.get("drones", [])
+    )
+    session.add_all(
+        Mission(
+            id=item["id"],
+            name=item["name"],
+            status=item["status"],
+            progress=item["progress"],
+            overdue=item["overdue"],
+            demo=item.get("demo", True),
+        )
+        for item in document.get("tasks", [])
+    )
+    session.add_all(
+        Alert(
+            id=item["id"],
+            type=item["type"],
+            level=item["level"],
+            status=item["status"],
+            location=item["location"],
+            time=item["time"],
+            x=item["x"],
+            y=item["y"],
+            demo=item.get("demo", True),
+        )
+        for item in document.get("alerts", [])
+    )
+    session.add_all(
+        Ledger(
+            id=item["id"],
+            task_id=item["taskId"],
+            mileage_km=item["mileageKm"],
+            clue_count=item["clueCount"],
+            demo=item.get("demo", True),
+        )
+        for item in document.get("ledgers", [])
+    )
+    for entry in document.get("audit", []):
+        occurred_at = datetime.fromisoformat(entry["occurredAt"].replace("Z", "+00:00"))
+        session.add(
+            Audit(
+                action=entry["action"],
+                snapshot_version=entry["snapshotVersion"],
+                occurred_at=occurred_at,
+            )
+        )
+    await session.merge(SystemMeta(key="schema_version", value=str(SCHEMA_VERSION)))
+    await session.merge(SystemMeta(key="legacy_json_imported", value="true"))
+    await session.commit()
 
 
 async def restore_business_state(session: AsyncSession, *, record_audit: bool = True) -> Audit | None:

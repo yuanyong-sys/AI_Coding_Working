@@ -143,8 +143,8 @@ export async function browserEndToEnd() {
         await waitFor(cdp, "Boolean(document.querySelector('iframe[title=\"低空态势一张图\"]'))");
         assert.match(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), /^\/prototype\/screen-overview\.html/);
       } else {
-        await waitFor(cdp, "Boolean(document.querySelector('.poc-badge'))");
-        assert.equal(await evaluate(cdp, "document.querySelector('.poc-badge').textContent"), "POC 演示数据");
+        await waitFor(cdp, "Boolean(document.querySelector('iframe.prototype-frame'))");
+        assert.equal(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), `/prototype/${page}.html`);
       }
     }
 

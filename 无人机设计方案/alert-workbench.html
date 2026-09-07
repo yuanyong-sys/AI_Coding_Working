@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>告警线索处置 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#1A2333; --muted:#5A6B85; --border:#E2E8F2;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:13px; overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit; font-size:inherit}
+a{color:var(--blue-600); text-decoration:none}
+:focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:3px}
+.dark-zone :focus-visible{outline-color:var(--blue-400)}
+svg{display:block}
+
+.layout{display:flex; height:100vh; min-width:1280px}
+
+/* ===== 左侧导航 232px ===== */
+.sidenav{width:232px; flex:none; background:var(--navy-900); color:#EAF1FB; display:flex; flex-direction:column}
+.nav-brand{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid rgba(76,154,255,0.18)}
+.nav-brand .logo{width:34px; height:34px; flex:none; border-radius:8px; background:var(--navy-700);
+  display:flex; align-items:center; justify-content:center; border:1px solid rgba(76,154,255,0.35)}
+.nav-brand b{font-size:14px; letter-spacing:1px; display:block}
+.nav-brand span{font-size:11px; color:#8FA3C4}
+.nav-menu{flex:1; padding:12px 10px; display:flex; flex-direction:column; gap:4px}
+.nav-item{display:flex; align-items:center; gap:10px; height:40px; padding:0 12px; border-radius:6px;
+  color:#8FA3C4; font-size:13px; transition:background .15s,color .15s; border-left:3px solid transparent}
+.nav-item:hover{color:#EAF1FB; background:rgba(76,154,255,0.12); text-decoration:none}
+.nav-item.on{color:#fff; background:rgba(31,111,235,0.32); border-left-color:var(--blue-400)}
+.nav-item svg{flex:none}
+.nav-foot{padding:14px 16px; font-size:11px; color:#8FA3C4; border-top:1px solid rgba(76,154,255,0.18)}
+
+/* ===== 右侧主体 ===== */
+.main{flex:1; display:flex; flex-direction:column; min-width:0}
+
+/* 顶部条 */
+.topbar{height:56px; flex:none; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:16px; padding:0 20px}
+.crumbs{font-size:13px; color:var(--muted)}
+.crumbs b{color:var(--fg); font-weight:600}
+.topbar .spacer{flex:1}
+.top-search{display:flex; align-items:center; gap:6px; width:220px; height:32px; padding:0 10px;
+  border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--muted)}
+.top-search input{border:none; background:none; outline:none; flex:1; font-size:12px; color:var(--fg); font-family:inherit}
+.bell{position:relative; width:34px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); border:1px solid var(--border); background:var(--surface); transition:background .15s}
+.bell:hover{background:var(--bg); color:var(--fg)}
+.bell:active{transform:scale(.96)}
+.bell .badge{position:absolute; top:-6px; right:-6px; min-width:17px; height:17px; padding:0 4px; border-radius:9px;
+  background:var(--alert-red); color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:600}
+.top-clock{color:var(--muted); font-size:13px}
+.top-user{display:flex; align-items:center; gap:8px; font-size:13px}
+.top-user .avatar{width:30px; height:30px; border-radius:50%; background:var(--navy-800); color:#EAF1FB;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600}
+
+/* ===== 顶部统计条 ===== */
+.stats-strip{flex:none; display:flex; gap:12px; padding:12px 20px 0}
+.stat-chip{flex:1; background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  padding:10px 16px; display:flex; align-items:center; gap:14px}
+.stat-chip .ico{width:36px; height:36px; border-radius:8px; flex:none; display:flex; align-items:center; justify-content:center}
+.stat-chip .lbl{font-size:12px; color:var(--muted)}
+.stat-chip .val{font-size:22px; font-weight:700; line-height:1.2}
+.stat-chip .val .unit{font-size:12px; font-weight:400; color:var(--muted)}
+.stat-chip .delta{font-size:11px; margin-left:auto; display:flex; align-items:center; gap:3px}
+.delta.up{color:var(--alert-red)} .delta.down{color:var(--safe-green)}
+.delta .base{color:var(--muted)}
+
+/* ===== 三栏工作台 ===== */
+.workbench{flex:1; display:flex; gap:12px; padding:12px 20px 16px; min-height:0}
+
+/* 左栏 告警队列 */
+.queue{width:360px; flex:none; background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  display:flex; flex-direction:column; min-height:0}
+.queue-head{padding:12px 14px 0; border-bottom:1px solid var(--border)}
+.level-tabs{display:flex; gap:4px}
+.ltab{flex:1; height:34px; border-radius:6px 6px 0 0; font-size:12px; color:var(--muted);
+  display:flex; align-items:center; justify-content:center; gap:5px; border-bottom:2px solid transparent; transition:all .15s}
+.ltab:hover{color:var(--fg); background:var(--bg)}
+.ltab.on{color:var(--blue-600); font-weight:600; border-bottom-color:var(--blue-600); background:color-mix(in srgb,var(--blue-600) 6%, transparent)}
+.ltab .cnt{min-width:18px; height:16px; padding:0 4px; border-radius:8px; background:var(--border); color:var(--muted);
+  font-size:10px; display:inline-flex; align-items:center; justify-content:center}
+.ltab.on .cnt{background:var(--blue-600); color:#fff}
+.ltab[data-level="urgent"] .cnt{background:var(--alert-red); color:#fff}
+.ltab[data-level="major"] .cnt{background:var(--warn-orange); color:#fff}
+.ltab[data-level="minor"] .cnt{background:var(--caution-yellow); color:var(--navy-900)}
+.queue-filter{display:flex; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border)}
+.q-search{flex:1; display:flex; align-items:center; gap:6px; height:30px; padding:0 8px;
+  border:1px solid var(--border); border-radius:5px; background:var(--bg)}
+.q-search input{border:none; background:none; outline:none; flex:1; font-size:12px; font-family:inherit; color:var(--fg); min-width:0}
+.q-select{height:30px; border:1px solid var(--border); border-radius:5px; background:var(--bg);
+  font-size:12px; color:var(--fg); padding:0 6px; font-family:inherit; cursor:pointer}
+.kbd-hint{flex:none; display:flex; align-items:center; gap:10px; padding:6px 14px; font-size:11px; color:var(--muted);
+  background:color-mix(in srgb,var(--blue-600) 5%, var(--surface)); border-bottom:1px solid var(--border)}
+.kbd-hint kbd{border:1px solid var(--border); border-bottom-width:2px; border-radius:3px; background:var(--surface);
+  padding:0 4px; font-family:inherit; font-size:10px; color:var(--fg)}
+.queue-list{flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px}
+.queue-empty{padding:40px 0; text-align:center; color:var(--muted); font-size:12px}
+
+.alert-card{position:relative; border:1px solid var(--border); border-radius:6px; padding:10px 12px 10px 14px;
+  cursor:pointer; transition:background .15s,border-color .15s; text-align:left; width:100%; background:var(--surface)}
+.alert-card:hover{background:var(--bg)}
+.alert-card.sel{border-color:var(--blue-600); background:color-mix(in srgb,var(--blue-600) 6%, var(--surface))}
+.alert-card.urgent-open{border-color:var(--alert-red); animation:borderBreathe 1.2s ease-in-out infinite}
+.alert-card .unread-dot{position:absolute; top:10px; right:10px; width:8px; height:8px; border-radius:50%; background:var(--blue-600)}
+.ac-row1{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+.lv-chip{flex:none; height:20px; padding:0 7px; border-radius:3px; font-size:11px; font-weight:600; color:#fff;
+  display:inline-flex; align-items:center}
+.lv-urgent{background:var(--alert-red)} .lv-major{background:var(--warn-orange)} .lv-minor{background:var(--caution-yellow); color:var(--navy-900)}
+.ac-type{display:flex; align-items:center; gap:5px; font-size:13px; font-weight:600}
+.ac-type svg{color:var(--muted)}
+.ac-time{margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap}
+.ac-row2{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
+.ac-loc{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.ac-conf{margin-left:auto; font-size:12px; white-space:nowrap}
+.ac-conf b{font-weight:600}
+.st-tag{flex:none; height:18px; padding:0 6px; border-radius:3px; font-size:10px; display:inline-flex; align-items:center}
+.st-pending{color:var(--caution-yellow); background:color-mix(in srgb,var(--caution-yellow) 14%, #fff)}
+.st-doing{color:var(--blue-600); background:color-mix(in srgb,var(--blue-600) 10%, #fff)}
+.st-done{color:var(--safe-green); background:color-mix(in srgb,var(--safe-green) 12%, #fff)}
+.st-false{color:var(--muted); background:var(--bg)}
+.ac-esc{margin-top:6px; font-size:11px; color:var(--alert-red); display:flex; align-items:center; gap:4px; font-weight:600}
+
+/* 中央证据区（深色） */
+.evidence{flex:1; min-width:0; background:var(--navy-900); border:1px solid var(--navy-700); border-radius:6px;
+  display:flex; flex-direction:column; color:#EAF1FB; overflow:hidden}
+.ev-head{flex:none; display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid rgba(76,154,255,0.18)}
+.ev-head .t{font-size:14px; font-weight:600}
+.ev-head .sub{font-size:12px; color:#8FA3C4}
+.ev-live{margin-left:auto; display:flex; align-items:center; gap:6px; font-size:12px; color:#8FA3C4}
+.ev-live i{width:8px; height:8px; border-radius:50%; background:var(--alert-red); animation:breathe 1s ease-in-out infinite}
+.ev-stage{flex:1; position:relative; min-height:0; background:var(--navy-900)}
+.ev-stage svg{position:absolute; inset:0; width:100%; height:100%}
+.ev-badge{position:absolute; top:12px; right:12px; font-size:11px; color:#8FA3C4;
+  background:rgba(18,41,74,0.85); border:1px solid rgba(76,154,255,0.3); border-radius:4px; padding:3px 8px}
+.ev-frame-tag{position:absolute; top:12px; left:12px; font-size:11px; color:#3DD9EB;
+  background:rgba(18,41,74,0.85); border:1px solid rgba(76,154,255,0.3); border-radius:4px; padding:3px 8px}
+.ev-ctrl{flex:none; display:flex; align-items:center; justify-content:center; gap:10px; padding:8px 16px;
+  border-top:1px solid rgba(76,154,255,0.18)}
+.ev-btn{width:32px; height:32px; border-radius:5px; border:1px solid rgba(76,154,255,0.3); color:#EAF1FB;
+  display:flex; align-items:center; justify-content:center; transition:background .15s}
+.ev-btn:hover{background:rgba(76,154,255,0.15)}
+.ev-btn:active{transform:scale(.94)}
+.ev-btn.play{width:40px; height:34px; background:var(--blue-600); border-color:var(--blue-600)}
+.ev-btn.play:hover{background:#3d84f0}
+.ev-speed{height:30px; border:1px solid rgba(76,154,255,0.3); border-radius:5px; background:transparent;
+  color:#EAF1FB; font-size:12px; padding:0 6px; cursor:pointer}
+.ev-speed option{color:#1A2333}
+.ev-frames{flex:none; display:flex; gap:8px; padding:8px 16px 10px}
+.frame-th{flex:1; max-width:150px; border:1px solid rgba(76,154,255,0.25); border-radius:4px; overflow:hidden;
+  cursor:pointer; padding:0; transition:border-color .15s; background:var(--navy-800)}
+.frame-th:hover{border-color:var(--blue-400)}
+.frame-th.on{border-color:var(--blue-400); box-shadow:0 0 0 1px var(--blue-400)}
+.frame-th .cap{font-size:10px; color:#8FA3C4; text-align:center; padding:2px 0 3px}
+.frame-th.on .cap{color:#EAF1FB}
+.ev-taskbar{flex:none; display:flex; align-items:center; gap:18px; padding:9px 16px; font-size:12px; color:#8FA3C4;
+  background:var(--navy-800); border-top:1px solid rgba(76,154,255,0.18)}
+.ev-taskbar b{color:#EAF1FB; font-weight:600}
+.ev-taskbar .jump{margin-left:auto; color:var(--blue-400); font-size:12px}
+.ev-taskbar .jump:hover{text-decoration:underline}
+
+/* 右栏 处置面板 */
+.disp{width:400px; flex:none; background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  display:flex; flex-direction:column; min-height:0}
+.disp-scroll{flex:1; overflow-y:auto}
+.disp-sec{padding:14px 16px; border-bottom:1px solid var(--border)}
+.disp-sec h3{font-size:13px; font-weight:600; margin-bottom:10px; display:flex; align-items:center; gap:8px}
+.disp-sec h3::before{content:""; width:3px; height:12px; background:var(--blue-600); border-radius:2px}
+.detail-grid{display:grid; grid-template-columns:72px 1fr; row-gap:8px; font-size:12px}
+.detail-grid .k{color:var(--muted)}
+.detail-grid .v{color:var(--fg)}
+.detail-grid .v b{font-weight:600}
+.conf-meter{display:flex; align-items:center; gap:8px}
+.conf-bar{flex:1; max-width:140px; height:6px; border-radius:3px; background:var(--border); overflow:hidden}
+.conf-fill{height:100%; border-radius:3px}
+.mini-map{margin-top:10px; border:1px solid var(--border); border-radius:5px; overflow:hidden}
+.mini-map svg{width:100%; height:auto}
+.coord{font-size:11px; color:var(--muted); margin-top:6px}
+
+/* 动作区 */
+.action-group{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.btn{height:34px; border-radius:5px; font-size:13px; border:1px solid var(--border); background:var(--surface);
+  color:var(--fg); display:inline-flex; align-items:center; justify-content:center; gap:6px; transition:all .15s}
+.btn:hover{background:var(--bg); border-color:#c9d4e6}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{background:var(--blue-600); border-color:var(--blue-600); color:#fff; grid-column:1 / -1}
+.btn-primary:hover{background:#3d84f0; border-color:#3d84f0}
+.btn-danger{color:var(--alert-red); border-color:color-mix(in srgb,var(--alert-red) 45%, #fff); grid-column:1 / -1}
+.btn-danger:hover{background:color-mix(in srgb,var(--alert-red) 8%, #fff); border-color:var(--alert-red)}
+
+/* 时间轴 */
+.timeline{position:relative; padding-left:18px}
+.timeline::before{content:""; position:absolute; left:5px; top:6px; bottom:6px; width:2px; background:var(--border)}
+.tl-node{position:relative; padding:0 0 16px 8px}
+.tl-node:last-child{padding-bottom:2px}
+.tl-node::before{content:""; position:absolute; left:-18px; top:3px; width:12px; height:12px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border)}
+.tl-node.done::before{background:var(--safe-green); border-color:var(--safe-green)}
+.tl-node.now::before{background:var(--blue-600); border-color:var(--blue-600); width:16px; height:16px; left:-20px; top:1px;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--blue-600) 18%, transparent)}
+.tl-name{font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px}
+.tl-node.now .tl-name{color:var(--blue-600)}
+.tl-meta{font-size:11px; color:var(--muted); margin-top:2px}
+.tl-note{font-size:11px; color:var(--fg); background:var(--bg); border-radius:4px; padding:4px 8px; margin-top:4px}
+
+/* 弹窗 */
+.modal-mask{position:fixed; inset:0; background:rgba(11,27,51,0.5); display:none; align-items:center; justify-content:center; z-index:60}
+.modal-mask.show{display:flex}
+.modal{width:420px; background:var(--surface); border-radius:8px; box-shadow:0 12px 40px rgba(11,27,51,0.25); overflow:hidden;
+  animation:modalIn .18s ease-out}
+@keyframes modalIn{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
+.modal-head{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border)}
+.modal-head b{font-size:14px}
+.modal-x{width:28px; height:28px; border-radius:5px; color:var(--muted); display:flex; align-items:center; justify-content:center}
+.modal-x:hover{background:var(--bg); color:var(--fg)}
+.modal-body{padding:16px 18px; font-size:13px}
+.modal-foot{display:flex; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid var(--border); background:var(--bg)}
+.modal-foot .btn{padding:0 16px}
+.radio-row{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--border); border-radius:5px;
+  margin-bottom:8px; cursor:pointer; transition:all .15s; width:100%; text-align:left; font-size:13px}
+.radio-row:hover{background:var(--bg)}
+.radio-row.on{border-color:var(--blue-600); background:color-mix(in srgb,var(--blue-600) 6%, #fff)}
+.radio-row .r{width:14px; height:14px; border-radius:50%; border:2px solid var(--border); flex:none}
+.radio-row.on .r{border-color:var(--blue-600); background:var(--blue-600); box-shadow:inset 0 0 0 2px #fff}
+.radio-row small{color:var(--muted); margin-left:auto}
+.check-row{display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border); border-radius:5px;
+  margin-bottom:8px; cursor:pointer; font-size:13px; width:100%; text-align:left; transition:all .15s}
+.check-row:hover{background:var(--bg)}
+.check-row.on{border-color:var(--blue-600); background:color-mix(in srgb,var(--blue-600) 6%, #fff)}
+.check-row .c{width:14px; height:14px; border-radius:3px; border:2px solid var(--border); flex:none}
+.check-row.on .c{border-color:var(--blue-600); background:var(--blue-600)}
+.check-row small{color:var(--muted)}
+.esc-warn{display:flex; gap:10px; padding:10px 12px; border-radius:5px; font-size:12px; line-height:1.7;
+  color:var(--alert-red); background:color-mix(in srgb,var(--alert-red) 7%, #fff);
+  border:1px solid color-mix(in srgb,var(--alert-red) 30%, #fff)}
+.btn-solid-danger{background:var(--alert-red); border-color:var(--alert-red); color:#fff}
+.btn-solid-danger:hover{background:#ef6065; border-color:#ef6065}
+
+/* Toast */
+#toast-box{position:fixed; top:20px; right:20px; z-index:99; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--navy-800); border:1px solid var(--blue-400); border-left:4px solid var(--blue-400); color:#EAF1FB;
+  border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,0.35);
+  animation:toastIn .2s ease-out; max-width:340px}
+.toast.warn{border-color:var(--alert-red); border-left-color:var(--alert-red)}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0; transform:translateX(20px)}to{opacity:1; transform:none}}
+@keyframes toastOut{to{opacity:0; transform:translateX(20px)}}
+
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes borderBreathe{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--alert-red) 45%, transparent)}
+  50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--alert-red) 12%, transparent)}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===== 左侧导航 ===== -->
+  <nav class="sidenav" data-od-id="sidenav">
+    <div class="nav-brand">
+      <span class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4C9AFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M12 8v4M9 12h6"/></svg>
+      </span>
+      <div><b>无人机低空智慧调度</b><span>公安交管 · 低空巡检</span></div>
+    </div>
+    <div class="nav-menu">
+      <a class="nav-item" href="screen-overview.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        态势一张图
+      </a>
+      <a class="nav-item" href="dispatch-tasks.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 11l8-4.5M12 11v9M12 11L4 6.5"/></svg>
+        任务调度
+      </a>
+      <a class="nav-item on" href="alert-workbench.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 17H2L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>
+        告警线索
+      </a>
+      <a class="nav-item" href="stats-ledger.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        台账统计
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+        资源管理
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+        系统管理
+      </a>
+    </div>
+    <div class="nav-foot">v1.0 · 数据均为演示示例</div>
+  </nav>
+
+  <!-- ===== 右侧主体 ===== -->
+  <div class="main">
+    <!-- 顶部条 -->
+    <header class="topbar" data-od-id="topbar">
+      <span class="crumbs">告警线索 / <b>处置工作台</b></span>
+      <div class="spacer"></div>
+      <label class="top-search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" placeholder="搜索告警编号 / 地点" id="top-search-input">
+      </label>
+      <button class="bell" data-od-id="top-bell" aria-label="未读告警">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+        <span class="badge num" id="bell-badge">3</span>
+      </button>
+      <span class="top-clock num" id="top-clock">--:--:--</span>
+      <span class="top-user"><span class="avatar">王</span>王警官</span>
+    </header>
+
+    <!-- 统计条 -->
+    <div class="stats-strip" data-od-id="alert-stats-strip">
+      <div class="stat-chip">
+        <span class="ico" style="background:color-mix(in srgb,var(--blue-600) 10%,#fff);color:var(--blue-600)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+        </span>
+        <span><span class="lbl">今日告警</span><br><span class="val num" id="stat-total">47</span></span>
+        <span class="delta up">▲ 6 <span class="base">较昨日</span></span>
+      </div>
+      <div class="stat-chip">
+        <span class="ico" style="background:color-mix(in srgb,var(--caution-yellow) 14%,#fff);color:var(--caution-yellow)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+        </span>
+        <span><span class="lbl">待核实</span><br><span class="val num" id="stat-pending">12</span></span>
+        <span class="delta up">▲ 3 <span class="base">较昨日</span></span>
+      </div>
+      <div class="stat-chip">
+        <span class="ico" style="background:color-mix(in srgb,var(--safe-green) 12%,#fff);color:var(--safe-green)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></svg>
+        </span>
+        <span><span class="lbl">平均处置时长</span><br><span class="val num">6<span class="unit">分</span>32<span class="unit">秒</span></span></span>
+        <span class="delta down">▼ 48秒 <span class="base">较昨日</span></span>
+      </div>
+      <div class="stat-chip">
+        <span class="ico" style="background:color-mix(in srgb,var(--info-cyan) 12%,#fff);color:var(--info-cyan)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12a9 9 0 109-9"/><path d="M3 12l3-3M3 12l3 3"/></svg>
+        </span>
+        <span><span class="lbl">误报率</span><br><span class="val num" id="stat-false-rate">8.5<span class="unit">%</span></span></span>
+        <span class="delta down">▼ 1.2% <span class="base">较昨日</span></span>
+      </div>
+    </div>
+
+    <!-- 三栏工作台 -->
+    <div class="workbench">
+
+      <!-- 左栏：告警队列 -->
+      <aside class="queue" data-od-id="alert-queue">
+        <div class="queue-head">
+          <div class="level-tabs" data-od-id="level-tabs" role="tablist" aria-label="告警级别筛选">
+            <button class="ltab on" data-level="all">全部 <span class="cnt num" id="cnt-all">0</span></button>
+            <button class="ltab" data-level="urgent">紧急 <span class="cnt num" id="cnt-urgent">0</span></button>
+            <button class="ltab" data-level="major">重要 <span class="cnt num" id="cnt-major">0</span></button>
+            <button class="ltab" data-level="minor">提示 <span class="cnt num" id="cnt-minor">0</span></button>
+          </div>
+        </div>
+        <div class="queue-filter">
+          <label class="q-search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5A6B85" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="text" id="queue-search" placeholder="搜索地点 / 类型 / 编号">
+          </label>
+          <select class="q-select" id="queue-time">
+            <option value="all">全部时间</option>
+            <option value="30m">30 分钟内</option>
+            <option value="1h">1 小时内</option>
+            <option value="today">今日</option>
+          </select>
+        </div>
+        <div class="kbd-hint">
+          <span><kbd>↑</kbd><kbd>↓</kbd> 切换线索</span>
+          <span><kbd>Enter</kbd> 确认有效</span>
+          <span><kbd>E</kbd> 转派处置</span>
+        </div>
+        <div class="queue-list" id="queue-list"></div>
+      </aside>
+
+      <!-- 中央：证据区（深色） -->
+      <section class="evidence dark-zone" data-od-id="evidence-area">
+        <div class="ev-head">
+          <span class="t">AI 识别证据</span>
+          <span class="sub" id="ev-sub">—</span>
+          <span class="ev-live"><i></i>抓图回放</span>
+        </div>
+        <div class="ev-stage">
+          <svg id="ev-scene" viewBox="0 0 800 460" preserveAspectRatio="xMidYMid slice" role="img" aria-label="AI 抓图场景示意"></svg>
+          <span class="ev-frame-tag" id="ev-frame-tag">帧 1 / 4 · 14:02:31</span>
+          <span class="ev-badge">AI 抓图 · 示例数据</span>
+        </div>
+        <div class="ev-ctrl">
+          <button class="ev-btn" id="ev-prev" aria-label="上一帧">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button class="ev-btn play" id="ev-play" aria-label="播放 / 暂停">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" id="ev-play-ico"><path d="M7 4l13 8-13 8V4z"/></svg>
+          </button>
+          <button class="ev-btn" id="ev-next" aria-label="下一帧">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <select class="ev-speed" id="ev-speed" aria-label="回放倍速">
+            <option value="1">1.0×</option>
+            <option value="2">2.0×</option>
+            <option value="4">4.0×</option>
+          </select>
+        </div>
+        <div class="ev-frames" id="ev-frames" data-od-id="evidence-frames"></div>
+        <div class="ev-taskbar">
+          <span>来源任务 <b class="num" id="ev-task">—</b></span>
+          <span>执飞 <b id="ev-drone">—</b></span>
+          <span>航线 <b id="ev-route">—</b></span>
+          <a class="jump" href="dispatch-tasks.html">查看任务详情</a>
+        </div>
+      </section>
+
+      <!-- 右栏：处置面板 -->
+      <aside class="disp" data-od-id="disposition-panel">
+        <div class="disp-scroll">
+          <!-- 线索详情 -->
+          <div class="disp-sec">
+            <h3>线索详情</h3>
+            <div class="detail-grid" id="detail-grid"></div>
+            <div class="mini-map">
+              <svg id="mini-map" viewBox="0 0 360 130" role="img" aria-label="告警位置示意地图"></svg>
+            </div>
+            <div class="coord num" id="detail-coord">—</div>
+          </div>
+          <!-- 处置动作 -->
+          <div class="disp-sec">
+            <h3>处置动作</h3>
+            <div class="action-group" data-od-id="action-group">
+              <button class="btn btn-primary" id="act-confirm">确认有效</button>
+              <button class="btn" id="act-reassign">转派处置</button>
+              <button class="btn" id="act-false">标记误报</button>
+              <button class="btn btn-danger" id="act-escalate">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 17H2L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>
+                升级为事件
+              </button>
+            </div>
+          </div>
+          <!-- 处置时间轴 -->
+          <div class="disp-sec" style="border-bottom:none">
+            <h3>处置时间轴</h3>
+            <div class="timeline" id="disp-timeline" data-od-id="disposition-timeline"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- 转派处置弹窗 -->
+<div class="modal-mask" id="reassign-modal" data-od-id="reassign-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="转派处置">
+    <div class="modal-head">
+      <b>转派处置</b>
+      <button class="modal-x" data-close="reassign-modal" aria-label="关闭">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="reassign-body">
+      <button class="radio-row on" data-dept="交管一大队 · 路面执勤组"><span class="r"></span>交管一大队 · 路面执勤组<small>距现场 1.2 km</small></button>
+      <button class="radio-row" data-dept="交管二大队 · 铁骑巡逻组"><span class="r"></span>交管二大队 · 铁骑巡逻组<small>距现场 2.6 km</small></button>
+      <button class="radio-row" data-dept="都匀市公安局 · 综合指挥室"><span class="r"></span>都匀市公安局 · 综合指挥室<small>联动单位</small></button>
+      <button class="radio-row" data-dept="市交通指挥中心 · 调度席"><span class="r"></span>市交通指挥中心 · 调度席<small>重大事件</small></button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="reassign-modal">取消</button>
+      <button class="btn btn-primary" style="grid-column:auto" id="reassign-ok">确认转派</button>
+    </div>
+  </div>
+</div>
+
+<!-- 标记误报弹窗 -->
+<div class="modal-mask" id="false-report-modal" data-od-id="false-report-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="标记误报">
+    <div class="modal-head">
+      <b>标记误报</b>
+      <button class="modal-x" data-close="false-report-modal" aria-label="关闭">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px">请选择误报原因（可多选），将回流至 AI 识别规则配置用于模型优化：</p>
+      <div id="false-reasons">
+        <button class="check-row" data-reason="光影干扰"><span class="c"></span>光影干扰<small>逆光 / 水面反光 / 树影</small></button>
+        <button class="check-row" data-reason="目标遮挡"><span class="c"></span>目标遮挡<small>树木 / 广告牌 / 高架遮挡</small></button>
+        <button class="check-row" data-reason="模型偏差"><span class="c"></span>模型偏差<small>相似目标误判</small></button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="false-report-modal">取消</button>
+      <button class="btn btn-primary" style="grid-column:auto" id="false-ok" disabled>确认误报</button>
+    </div>
+  </div>
+</div>
+
+<!-- 升级事件二次确认 -->
+<div class="modal-mask" id="escalate-confirm" data-od-id="escalate-confirm">
+  <div class="modal" role="alertdialog" aria-modal="true" aria-label="升级为事件确认">
+    <div class="modal-head">
+      <b style="color:var(--alert-red)">升级为事件</b>
+      <button class="modal-x" data-close="escalate-confirm" aria-label="关闭">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="esc-warn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><path d="M12 3l10 17H2L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>
+        <span>升级后该线索将同步至指挥调度事件系统并通知值班领导，生成正式事件单。此操作不可撤销，请确认现场情况属实。</span>
+      </div>
+      <p style="margin-top:12px;font-size:12px;color:var(--muted)" id="esc-target">—</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="escalate-confirm">取消</button>
+      <button class="btn btn-solid-danger" id="escalate-ok">确认升级</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+
+<script>
+'use strict';
+/* ================= 数据 ================= */
+const LEVEL = { urgent:{name:'紧急', color:'#E5484D'}, major:{name:'重要', color:'#F76B15'}, minor:{name:'提示', color:'#F5A623'} };
+const STATUS = { pending:'待核实', doing:'处置中', done:'已办结', false:'误报' };
+const ICONS = {
+  '交通事故':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-9M14 8l6 9M9 8h5M4 17h6M14 17h6"/></svg>',
+  '烟雾火情':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3-2 4 0 7 1.5-1.5 1-3 1-3s4 2 4 6a5 5 0 01-10 0c0-3 2-4 2-4"/></svg>',
+  '道路拥堵':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="10" width="8" height="5" rx="1.5"/><rect x="13" y="6" width="8" height="5" rx="1.5"/><path d="M5 15v2M9 15v2M15 11v2M19 11v2"/></svg>',
+  '车辆违停':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 16V8h3.5a2.5 2.5 0 010 5H9"/></svg>',
+  '行人闯入':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 8v6M12 14l-3 6M12 14l3 6M8 10l4 1 4-1"/></svg>'
+};
+const ALERTS = [
+  { id:'GJ-20260905-031', level:'urgent', type:'交通事故', loc:'兰海高速 K1582 都匀段', ago:3, mins:3, conf:96,
+    status:'pending', unread:true, coord:'107.5218°E · 26.2594°N', drone:'U-03', route:'兰海高速都匀段', task:'RW-20260905-012',
+    found:'14:02:31',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'14:02:31', s:'done', note:'机载视觉模型检出两车剐蹭，置信度 96%'},
+               {n:'值班员核实', op:'王警官', t:'—', s:'now'} ] },
+  { id:'GJ-20260905-030', level:'urgent', type:'烟雾火情', loc:'荔波互通匝道东侧', ago:12, mins:12, conf:91,
+    status:'pending', unread:true, coord:'107.8836°E · 25.4122°N', drone:'U-05', route:'荔波互通环线', task:'RW-20260905-009',
+    found:'13:53:14',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'13:53:14', s:'done', note:'检出灰白色烟雾团，伴随热源特征，置信度 91%'},
+               {n:'值班员核实', op:'王警官', t:'—', s:'now'} ] },
+  { id:'GJ-20260905-029', level:'major', type:'道路拥堵', loc:'贵北高速惠水段北向南', ago:18, mins:18, conf:88,
+    status:'doing', unread:false, coord:'106.6547°E · 26.1318°N', drone:'U-01', route:'贵北高速惠水段', task:'RW-20260905-007',
+    found:'13:47:52',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'13:47:52', s:'done', note:'路段车流密度超阈值，排队长度约 400 m'},
+               {n:'值班员核实', op:'王警官', t:'13:49:10', s:'done', note:'确认有效，因占道施工引发缓行'},
+               {n:'派单处置', op:'王警官 → 交管二大队', t:'13:50:02', s:'now', note:'铁骑前往疏导，信号配时已调整'} ] },
+  { id:'GJ-20260905-028', level:'major', type:'车辆违停', loc:'贵定连接线入口段', ago:26, mins:26, conf:84,
+    status:'pending', unread:false, coord:'107.2345°E · 26.5847°N', drone:'U-07', route:'贵定连接线', task:'RW-20260905-012',
+    found:'13:39:47',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'13:39:47', s:'done', note:'禁停区域机动车滞留超 5 分钟，置信度 84%'},
+               {n:'值班员核实', op:'王警官', t:'—', s:'now'} ] },
+  { id:'GJ-20260905-027', level:'minor', type:'行人闯入', loc:'厦蓉高速 K1380 独山段', ago:34, mins:34, conf:79,
+    status:'pending', unread:false, coord:'107.5478°E · 25.8296°N', drone:'U-02', route:'厦蓉高速独山段', task:'RW-20260905-006',
+    found:'13:31:26',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'13:31:26', s:'done', note:'行人进入高速隧道入口警戒区'},
+               {n:'值班员核实', op:'王警官', t:'—', s:'now'} ] },
+  { id:'GJ-20260905-026', level:'major', type:'交通事故', loc:'沪昆高速 K1726 福泉马场坪段', ago:47, mins:47, conf:93,
+    status:'done', unread:false, coord:'107.5028°E · 26.6864°N', drone:'U-03', route:'福泉马场坪段', task:'RW-20260905-007',
+    found:'13:18:40',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'13:18:40', s:'done'},
+               {n:'值班员核实', op:'王警官', t:'13:19:55', s:'done', note:'确认有效，轻微追尾'},
+               {n:'派单处置', op:'王警官 → 交管一大队', t:'13:21:03', s:'done'},
+               {n:'现场反馈', op:'交管一大队 · 李警官', t:'13:33:18', s:'done', note:'车辆已撤离，恢复通行'},
+               {n:'办结归档', op:'王警官', t:'13:35:02', s:'done'} ] },
+  { id:'GJ-20260905-025', level:'minor', type:'车辆违停', loc:'都匀城区石板街路段', ago:58, mins:58, conf:76,
+    status:'false', unread:false, coord:'107.5123°E · 26.2611°N', drone:'U-02', route:'都匀城区环线', task:'RW-20260905-006',
+    found:'13:07:15',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'13:07:15', s:'done'},
+               {n:'值班员核实', op:'王警官', t:'13:09:41', s:'done', note:'标记误报：树影遮挡导致误判'},
+               {n:'办结归档', op:'系统自动', t:'13:09:41', s:'done'} ] },
+  { id:'GJ-20260905-024', level:'minor', type:'道路拥堵', loc:'福泉服务区入口匝道', ago:66, mins:66, conf:71,
+    status:'done', unread:false, coord:'107.5336°E · 26.6720°N', drone:'U-05', route:'兰海高速福泉段', task:'RW-20260905-009',
+    found:'12:59:03',
+    timeline:[ {n:'AI 发现', op:'AI 识别引擎', t:'12:59:03', s:'done'},
+               {n:'值班员核实', op:'王警官', t:'13:00:22', s:'done', note:'货运高峰常态缓行，无需派单'},
+               {n:'办结归档', op:'王警官', t:'13:00:48', s:'done'} ] }
+];
+
+/* ================= 工具 ================= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+function toast(msg, warn){
+  const box = $('#toast-box');
+  const el = document.createElement('div');
+  el.className = 'toast' + (warn ? ' warn' : '');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(()=>{ el.classList.add('hide'); setTimeout(()=>el.remove(), 260); }, 3000);
+}
+function nowTime(){
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
+setInterval(()=>{ $('#top-clock').textContent = nowTime(); }, 1000);
+$('#top-clock').textContent = nowTime();
+
+/* ================= 状态 ================= */
+const state = { level:'all', kw:'', time:'all', selId:ALERTS[0].id, frame:0, playing:false, playTimer:null, speed:1 };
+let pendingBase = 12, falseCount = 4; /* 误报率 = falseCount / 47 */
+
+function filtered(){
+  return ALERTS.filter(a=>{
+    if(state.level !== 'all' && a.level !== state.level) return false;
+    if(state.kw){
+      const kw = state.kw.toLowerCase();
+      if(!(a.loc + a.type + a.id).toLowerCase().includes(kw)) return false;
+    }
+    if(state.time === '30m' && a.mins > 30) return false;
+    if(state.time === '1h' && a.mins > 60) return false;
+    return true;
+  }).sort((a,b)=> (b.unread - a.unread) || (a.mins - b.mins));
+}
+
+/* ================= 队列渲染 ================= */
+function agoText(m){ return m >= 60 ? Math.floor(m/60)+'小时前' : m+'分钟前'; }
+function renderCounts(){
+  $('#cnt-all').textContent = ALERTS.length;
+  $('#cnt-urgent').textContent = ALERTS.filter(a=>a.level==='urgent').length;
+  $('#cnt-major').textContent = ALERTS.filter(a=>a.level==='major').length;
+  $('#cnt-minor').textContent = ALERTS.filter(a=>a.level==='minor').length;
+  $('#bell-badge').textContent = ALERTS.filter(a=>a.unread).length;
+}
+function renderQueue(){
+  renderCounts();
+  const list = $('#queue-list');
+  const items = filtered();
+  if(!items.length){
+    list.innerHTML = '<div class="queue-empty">当前筛选条件下暂无告警线索</div>';
+    return;
+  }
+  list.innerHTML = items.map(a=>{
+    const lv = LEVEL[a.level];
+    const confColor = a.conf >= 90 ? 'var(--alert-red)' : a.conf >= 80 ? 'var(--warn-orange)' : 'var(--caution-yellow)';
+    const urgentOpen = a.level==='urgent' && a.status==='pending';
+    return '<button class="alert-card'+(a.id===state.selId?' sel':'')+(urgentOpen?' urgent-open':'')+'" '
+      + 'data-od-id="alert-card-'+a.id.slice(-3)+'" data-id="'+a.id+'">'
+      + (a.unread ? '<span class="unread-dot"></span>' : '')
+      + '<div class="ac-row1">'
+      +   '<span class="lv-chip lv-'+a.level+'">'+lv.name+'</span>'
+      +   '<span class="ac-type">'+ICONS[a.type]+a.type+'</span>'
+      +   '<span class="ac-time num">'+agoText(a.mins)+'</span>'
+      + '</div>'
+      + '<div class="ac-row2">'
+      +   '<span class="ac-loc">'+a.loc+'</span>'
+      +   '<span class="ac-conf">置信度 <b class="num" style="color:'+confColor+'">'+a.conf+'%</b></span>'
+      +   '<span class="st-tag st-'+a.status+'">'+STATUS[a.status]+'</span>'
+      + '</div>'
+      + (a.escalatedTimeout ? '<div class="ac-esc">▲ 超时未核实，已升级提醒</div>' : '')
+      + '</button>';
+  }).join('');
+  $$('#queue-list .alert-card').forEach(el=>{
+    el.addEventListener('click', ()=> selectAlert(el.dataset.id, true));
+  });
+}
+
+/* ================= 证据区 ================= */
+const FRAME_OFFSET = [0, 16, 34, 52];
+const FRAME_TIME = ['14:02:31','14:02:34','14:02:37','14:02:40'];
+function sceneSvg(a, frame, small){
+  const c = LEVEL[a.level].color;
+  const ox = FRAME_OFFSET[frame] * (small ? 0.4 : 1);
+  const bx = 300 + ox, by = 205 + ox*0.3, bw = small ? 74 : 148, bh = small ? 32 : 64;
+  const labelH = small ? 0 : 22;
+  return ''
+  + '<rect width="800" height="460" fill="#0d1f3a"/>'
+  + '<g stroke="#1E3A61" stroke-width="1" opacity="0.5">'
+  +   '<path d="M0 80 L800 60"/><path d="M0 380 L800 400"/><path d="M120 0 L100 460"/><path d="M680 0 L700 460"/>'
+  + '</g>'
+  /* 主路 */
+  + '<path d="M0 250 L800 230" stroke="#2c4a75" stroke-width="'+(small?14:34)+'"/>'
+  + '<path d="M0 250 L800 230" stroke="#4C9AFF" stroke-width="1.2" stroke-dasharray="12 10" opacity="0.7"/>'
+  + '<path d="M420 0 L400 460" stroke="#2c4a75" stroke-width="'+(small?10:26)+'"/>'
+  + '<path d="M420 0 L400 460" stroke="#4C9AFF" stroke-width="1" stroke-dasharray="10 8" opacity="0.5"/>'
+  /* 车辆 */
+  + '<g fill="#3a5websites" opacity="0"></g>'
+  + '<rect x="'+(bx+8)+'" y="'+(by+8)+'" width="'+(bw-16)+'" height="'+(bh-16)+'" rx="4" fill="#4C9AFF" opacity="0.55"/>'
+  + '<rect x="'+(bx+bw*0.4)+'" y="'+(by+bh+14)+'" width="'+(bw*0.42)+'" height="'+(bh*0.55)+'" rx="3" fill="#3DD9EB" opacity="0.4"/>'
+  + '<rect x="'+(bx-bw*0.7)+'" y="'+(by-bh*0.5)+'" width="'+(bw*0.45)+'" height="'+(bh*0.6)+'" rx="3" fill="#8FA3C4" opacity="0.3"/>'
+  /* 识别框 */
+  + '<g>'
+  +   '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="'+c+'" fill-opacity="0.12" stroke="'+c+'" stroke-width="'+(small?1.2:2)+'"/>'
+  +   (small ? '' :
+      '<rect x="'+bx+'" y="'+(by-labelH)+'" width="'+(a.type.length*13+72)+'" height="'+labelH+'" fill="'+c+'"/>'
+      + '<text x="'+(bx+8)+'" y="'+(by-labelH+15)+'" font-size="12" fill="#fff" font-weight="600">'+a.type+' · '+a.conf+'%</text>'
+      + '<path d="M'+bx+' '+by+' l14 0 M'+bx+' '+by+' l0 14" stroke="#fff" stroke-width="2.5"/>'
+      + '<path d="M'+(bx+bw)+' '+(by+bh)+' l-14 0 M'+(bx+bw)+' '+(by+bh)+' l0 -14" stroke="#fff" stroke-width="2.5"/>')
+  + '</g>'
+  + (small ? '' : '<text x="16" y="440" font-size="11" fill="#8FA3C4">风格化场景示意 · 非真实影像</text>');
+}
+function renderEvidence(){
+  const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
+  $('#ev-sub').textContent = a.id + ' · ' + a.type + ' · ' + a.loc;
+  $('#ev-scene').innerHTML = sceneSvg(a, state.frame, false);
+  $('#ev-frame-tag').textContent = '帧 '+(state.frame+1)+' / 4 · '+FRAME_TIME[state.frame];
+  $('#ev-task').textContent = a.task;
+  $('#ev-drone').textContent = a.drone;
+  $('#ev-route').textContent = a.route;
+  const wrap = $('#ev-frames');
+  wrap.innerHTML = [0,1,2,3].map(i=>
+    '<button class="frame-th'+(i===state.frame?' on':'')+'" data-frame="'+i+'" aria-label="第'+(i+1)+'帧">'
+    + '<svg viewBox="0 0 800 460" style="width:100%;height:auto">'+sceneSvg(a, i, true)+'</svg>'
+    + '<div class="cap num">'+FRAME_TIME[i]+'</div></button>').join('');
+  $$('#ev-frames .frame-th').forEach(el=>{
+    el.addEventListener('click', ()=>{ stopPlay(); state.frame = +el.dataset.frame; renderEvidence(); });
+  });
+}
+function stepFrame(d){ state.frame = (state.frame + d + 4) % 4; renderEvidence(); }
+function stopPlay(){
+  state.playing = false;
+  clearInterval(state.playTimer);
+  $('#ev-play-ico').innerHTML = '<path d="M7 4l13 8-13 8V4z"/>';
+}
+$('#ev-prev').addEventListener('click', ()=>{ stopPlay(); stepFrame(-1); });
+$('#ev-next').addEventListener('click', ()=>{ stopPlay(); stepFrame(1); });
+$('#ev-speed').addEventListener('change', e=>{
+  state.speed = +e.target.value;
+  if(state.playing){ clearInterval(state.playTimer); state.playTimer = setInterval(()=>stepFrame(1), 1200/state.speed); }
+});
+$('#ev-play').addEventListener('click', ()=>{
+  state.playing = !state.playing;
+  if(state.playing){
+    $('#ev-play-ico').innerHTML = '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>';
+    state.playTimer = setInterval(()=>stepFrame(1), 1200/state.speed);
+  } else stopPlay();
+});
+
+/* ================= 处置面板 ================= */
+function miniMapSvg(a){
+  const c = LEVEL[a.level].color;
+  return '<rect width="360" height="130" fill="#0d1f3a"/>'
+    + '<g stroke="#1E3A61" stroke-width="1.4" fill="none">'
+    + '<path d="M-10 40 L370 30"/><path d="M-10 90 L370 96"/><path d="M80 -10 L70 140"/><path d="M250 -10 L260 140"/></g>'
+    + '<path d="M-10 65 L370 58" stroke="#3DD9EB" stroke-width="1.4" stroke-dasharray="6 5" opacity="0.7" fill="none"/>'
+    + '<circle cx="180" cy="62" r="14" fill="'+c+'" fill-opacity="0.2"/>'
+    + '<circle cx="180" cy="62" r="5" fill="'+c+'"/>'
+    + '<circle cx="180" cy="62" r="5" fill="none" stroke="'+c+'" stroke-width="1.5">'
+    + '<animate attributeName="r" from="5" to="16" dur="1.2s" repeatCount="indefinite"/>'
+    + '<animate attributeName="opacity" from="0.9" to="0" dur="1.2s" repeatCount="indefinite"/></circle>'
+    + '<text x="192" y="58" font-size="10" fill="#EAF1FB">'+a.loc+'</text>'
+    + '<text x="10" y="122" font-size="9" fill="#8FA3C4">示意地图 · 非真实地理数据</text>';
+}
+function renderDetail(){
+  const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
+  const lv = LEVEL[a.level];
+  const confColor = a.conf >= 90 ? 'var(--alert-red)' : a.conf >= 80 ? 'var(--warn-orange)' : 'var(--caution-yellow)';
+  $('#detail-grid').innerHTML =
+      '<span class="k">告警编号</span><span class="v num">'+a.id+'</span>'
+    + '<span class="k">类型</span><span class="v"><span class="lv-chip lv-'+a.level+'" style="margin-right:6px">'+lv.name+'</span><b>'+a.type+'</b></span>'
+    + '<span class="k">置信度</span><span class="v"><span class="conf-meter"><span class="conf-bar"><span class="conf-fill" style="width:'+a.conf+'%;background:'+confColor+'"></span></span><b class="num" style="color:'+confColor+'">'+a.conf+'%</b></span></span>'
+    + '<span class="k">发现时间</span><span class="v num">2026-09-05 '+a.found+'</span>'
+    + '<span class="k">位置</span><span class="v">'+a.loc+'</span>'
+    + '<span class="k">所属任务</span><span class="v"><span class="num">'+a.task+'</span> · '+a.drone+' · '+a.route+'</span>'
+    + '<span class="k">当前状态</span><span class="v"><span class="st-tag st-'+a.status+'">'+STATUS[a.status]+'</span></span>';
+  $('#mini-map').innerHTML = miniMapSvg(a);
+  $('#detail-coord').textContent = '坐标 ' + a.coord;
+  /* 动作按钮可用态 */
+  const pending = a.status === 'pending';
+  $('#act-confirm').disabled = !pending;
+  $('#act-reassign').disabled = a.status === 'done' || a.status === 'false';
+  $('#act-false').disabled = a.status === 'done' || a.status === 'false';
+  $('#act-escalate').disabled = a.status === 'done' || a.status === 'false';
+}
+function renderTimeline(){
+  const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
+  $('#disp-timeline').innerHTML = a.timeline.map(n=>
+    '<div class="tl-node '+n.s+'">'
+    + '<div class="tl-name">'+n.n+'</div>'
+    + '<div class="tl-meta">'+n.op+' · <span class="num">'+n.t+'</span></div>'
+    + (n.note ? '<div class="tl-note">'+n.note+'</div>' : '')
+    + '</div>').join('');
+}
+function selectAlert(id, manual){
+  state.selId = id;
+  state.frame = 0; stopPlay();
+  const a = ALERTS.find(x=>x.id===id);
+  if(a && a.unread){ a.unread = false; }
+  renderQueue(); renderEvidence(); renderDetail(); renderTimeline();
+  if(manual){
+    const el = document.querySelector('#queue-list .alert-card[data-id="'+id+'"]');
+    if(el){
+      const list = $('#queue-list');
+      const top = el.offsetTop - list.offsetTop;
+      if(top < list.scrollTop || top + el.offsetHeight > list.scrollTop + list.clientHeight){
+        list.scrollTop = top - 8;
+      }
+    }
+  }
+}
+
+/* ================= 筛选 ================= */
+$$('.ltab').forEach(t=>t.addEventListener('click', ()=>{
+  $$('.ltab').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  state.level = t.dataset.level;
+  renderQueue();
+}));
+$('#queue-search').addEventListener('input', e=>{ state.kw = e.target.value.trim(); renderQueue(); });
+$('#queue-time').addEventListener('change', e=>{ state.time = e.target.value; renderQueue(); });
+$('#top-search-input').addEventListener('input', e=>{
+  $('#queue-search').value = e.target.value;
+  state.kw = e.target.value.trim(); renderQueue();
+});
+
+/* ================= 统计联动 ================= */
+function bumpStats(action){
+  if(action === 'resolved'){
+    pendingBase = Math.max(0, pendingBase - 1);
+    $('#stat-pending').textContent = pendingBase;
+  }
+  if(action === 'false'){
+    pendingBase = Math.max(0, pendingBase - 1);
+    $('#stat-pending').textContent = pendingBase;
+    falseCount += 1;
+    $('#stat-false-rate').innerHTML = (falseCount/47*100).toFixed(1) + '<span class="unit">%</span>';
+  }
+}
+
+/* ================= 处置动作 ================= */
+function currentAlert(){ return ALERTS.find(x=>x.id===state.selId); }
+function closeModal(id){ $('#'+id).classList.remove('show'); }
+$$('.modal-mask').forEach(m=>m.addEventListener('click', e=>{ if(e.target === m) m.classList.remove('show'); }));
+$$('[data-close]').forEach(b=>b.addEventListener('click', ()=>closeModal(b.dataset.close)));
+
+function pushNode(a, name, op, note){
+  a.timeline.forEach(n=>{ if(n.s === 'now'){ n.s = 'done'; if(n.t === '—') n.t = nowTime(); } });
+  a.timeline.push({ n:name, op:op, t:nowTime(), s:'now', note:note });
+}
+function doConfirm(){
+  const a = currentAlert();
+  if(!a || a.status !== 'pending') return;
+  a.status = 'doing';
+  const idx = a.timeline.findIndex(n=>n.s==='now');
+  if(idx >= 0){ a.timeline[idx].s = 'done'; a.timeline[idx].t = nowTime(); a.timeline[idx].note = '人工复核确认线索有效'; }
+  a.timeline.push({ n:'派单处置', op:'待派发', t:'—', s:'now' });
+  bumpStats('resolved');
+  renderQueue(); renderDetail(); renderTimeline();
+  toast('线索 ' + a.id + ' 已确认有效，进入派单处置');
+}
+$('#act-confirm').addEventListener('click', doConfirm);
+
+/* 转派 */
+$('#act-reassign').addEventListener('click', ()=>{
+  const a = currentAlert();
+  if(!a || a.status==='done' || a.status==='false') return;
+  $('#reassign-modal').classList.add('show');
+});
+$$('#reassign-body .radio-row').forEach(r=>r.addEventListener('click', ()=>{
+  $$('#reassign-body .radio-row').forEach(x=>x.classList.remove('on'));
+  r.classList.add('on');
+}));
+$('#reassign-ok').addEventListener('click', ()=>{
+  const a = currentAlert(); if(!a) return;
+  const dept = $('#reassign-body .radio-row.on').dataset.dept;
+  a.status = 'doing';
+  pushNode(a, '派单处置', '王警官 → ' + dept, '已生成处置工单并推送至移动终端');
+  bumpStats('resolved');
+  closeModal('reassign-modal');
+  renderQueue(); renderDetail(); renderTimeline();
+  toast('已转派至「' + dept + '」，工单同步下发');
+});
+
+/* 误报 */
+$('#act-false').addEventListener('click', ()=>{
+  const a = currentAlert();
+  if(!a || a.status==='done' || a.status==='false') return;
+  $('#false-report-modal').classList.add('show');
+});
+$$('#false-reasons .check-row').forEach(r=>r.addEventListener('click', ()=>{
+  r.classList.toggle('on');
+  $('#false-ok').disabled = !$$('#false-reasons .check-row.on').length;
+}));
+$('#false-ok').addEventListener('click', ()=>{
+  const a = currentAlert(); if(!a) return;
+  const reasons = $$('#false-reasons .check-row.on').map(x=>x.dataset.reason).join('、');
+  a.status = 'false';
+  pushNode(a, '值班员核实', '王警官', '标记误报：' + reasons);
+  a.timeline.push({ n:'办结归档', op:'系统自动', t:nowTime(), s:'now', note:'误报原因已回流至 AI 规则配置' });
+  bumpStats('false');
+  closeModal('false-report-modal');
+  renderQueue(); renderDetail(); renderTimeline();
+  toast('已标记误报（' + reasons + '），反馈回流模型优化');
+});
+
+/* 升级事件 */
+$('#act-escalate').addEventListener('click', ()=>{
+  const a = currentAlert();
+  if(!a || a.status==='done' || a.status==='false') return;
+  $('#esc-target').textContent = '线索：' + a.id + ' · ' + a.type + ' · ' + a.loc;
+  $('#escalate-confirm').classList.add('show');
+});
+$('#escalate-ok').addEventListener('click', ()=>{
+  const a = currentAlert(); if(!a) return;
+  a.status = 'doing'; a.escalated = true;
+  pushNode(a, '升级为事件', '王警官', '已同步指挥调度事件系统，事件单号 SJ-20260905-018');
+  bumpStats('resolved');
+  closeModal('escalate-confirm');
+  renderQueue(); renderDetail(); renderTimeline();
+  toast('已升级为事件并通知值班领导', true);
+});
+
+/* ================= 键盘流 ================= */
+document.addEventListener('keydown', e=>{
+  const tag = (e.target.tagName || '').toLowerCase();
+  if(tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  if(document.querySelector('.modal-mask.show')) return;
+  const items = filtered();
+  const idx = items.findIndex(a=>a.id===state.selId);
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    if(!items.length) return;
+    const next = e.key === 'ArrowDown' ? Math.min(idx+1, items.length-1) : Math.max(idx-1, 0);
+    if(items[next]) selectAlert(items[next].id, true);
+  } else if(e.key === 'Enter'){
+    e.preventDefault(); doConfirm();
+  } else if(e.key === 'e' || e.key === 'E'){
+    e.preventDefault();
+    const a = currentAlert();
+    if(a && a.status!=='done' && a.status!=='false') $('#reassign-modal').classList.add('show');
+  }
+});
+
+/* ================= 超时升级演示 ================= */
+setTimeout(()=>{
+  const a = ALERTS.find(x=>x.level==='urgent' && x.status==='pending' && !x.escalatedTimeout);
+  if(!a) return;
+  a.escalatedTimeout = true; a.unread = true; a.mins = Math.max(0, a.mins - 1);
+  renderQueue();
+  if(a.id !== state.selId) selectAlert(a.id, true); else renderQueue();
+  toast('紧急告警 ' + a.id + ' 超时未核实，已置顶并升级提醒值班领导', true);
+}, 30000);
+
+/* ================= 初始化 ================= */
+renderQueue(); renderEvidence(); renderDetail(); renderTimeline();
+</script>
+</body>
+</html>
