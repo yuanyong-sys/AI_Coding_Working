@@ -351,7 +351,7 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
         </div>
         <select class="select" id="f-status" aria-label="状态筛选">
           <option value="全部">全部状态</option>
-          <option>待下发</option><option>待执行</option><option>执行中</option><option>已完成</option><option>异常</option>
+          <option>待下发</option><option>待执行</option><option>执行中</option><option>已完成</option><option>异常</option><option>已终止</option>
         </select>
         <input class="input" id="f-search" type="text" placeholder="搜索任务名称 / 编号 / 航线" aria-label="搜索任务">
         <span class="spacer"></span>
@@ -488,6 +488,7 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
             <option value="">请选择航线</option>
             <option>滨江东线</option><option>老城环线</option><option>中山路往返线</option>
             <option>解放路东段</option><option>物流园环线</option><option>人民路沿线</option>
+            <option>演示禁飞区航线</option>
           </select>
           <div class="err-msg">请选择巡查航线</div>
         </div>
@@ -645,8 +646,8 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
 <script>
 'use strict';
 /* ================= 数据 ================= */
-const STATUS = ['待下发','待执行','执行中','已完成','异常'];
-const STATUS_CLS = {待下发:'pending', 待执行:'ready', 执行中:'running', 已完成:'done', 异常:'error'};
+const STATUS = ['待下发','待执行','执行中','已完成','异常','已终止'];
+const STATUS_CLS = {待下发:'pending', 待执行:'ready', 执行中:'running', 已完成:'done', 异常:'error', 已终止:'error'};
 const TYPE_CLS = {常态巡查:'tag-routine', 专项巡查:'tag-special', 应急:'tag-emerg'};
 const PRIO_CLS = {普通:'prio-normal', 重要:'prio-important', 紧急:'prio-urgent'};
 
@@ -685,6 +686,13 @@ const BUSY = {
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DRONE_BATTERY = {'警航-01':82,'警航-02':76,'警航-03':45,'警航-04':61,'警航-05':88,'警航-06':24};
+async function api(url, options = {}) {
+  const response = await fetch(url, {headers:{'content-type':'application/json'}, ...options});
+  const body = await response.json();
+  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : '请求失败');
+  return body;
+}
 
 /* ================= Toast ================= */
 function toast(msg, kind){
@@ -756,7 +764,7 @@ function cardHTML(t){
 
 function renderKanban(){
   const board = $('#kanban-board');
-  const keys = {待下发:'pending', 待执行:'ready', 执行中:'running', 已完成:'done', 异常:'error'};
+  const keys = {待下发:'pending', 待执行:'ready', 执行中:'running', 已完成:'done', 异常:'error', 已终止:'error'};
   board.innerHTML = STATUS.map(s => {
     const list = TASKS.filter(t => t.status === s && matchTask(t));
     const shown = list.slice(0, 4);
@@ -809,10 +817,10 @@ function renderTable(){
       if (t.status === '执行中') openMonitor(t.code);
       else toast(`${t.code} · ${t.name}：状态 ${t.status}，进度 ${t.progress}%`);
     } else if (b.dataset.act === 'issue'){
-      t.status = '待执行';
-      toast(`任务 ${t.code} 已下发，进入待执行队列`, 'ok');
-      checked.delete(t.code);
-      renderAll();
+      b.disabled = true; b.textContent = '发送中';
+      api(`/api/tasks/${t.code}/dispatch`, {method:'POST', body:JSON.stringify({simulateFailure:false})})
+        .then(() => { t.status = '待执行'; checked.delete(t.code); toast(`任务 ${t.code} 已下发，进入待执行队列`, 'ok'); renderAll(); })
+        .catch(() => { b.disabled = false; b.textContent = '重试'; toast(`任务 ${t.code} 下发失败，状态未改变，请重试`, 'err'); });
     } else if (b.dataset.act === 'stop'){
       confirmStop(t.code);
     }
@@ -830,12 +838,15 @@ $('#check-all').addEventListener('change', e => {
   if (e.target.checked) TASKS.filter(t => matchTask(t) && t.status === '待下发').forEach(t => checked.add(t.code));
   renderTable();
 });
-$('#btn-batch').addEventListener('click', () => {
-  let n = 0;
-  TASKS.forEach(t => { if (checked.has(t.code) && t.status === '待下发'){ t.status = '待执行'; n++; } });
-  checked.clear();
-  toast(`已批量下发 ${n} 项任务`, 'ok');
-  renderAll();
+$('#btn-batch').addEventListener('click', async () => {
+  const ids = [...checked];
+  $('#btn-batch').disabled = true; $('#btn-batch').textContent = '发送中…';
+  try {
+    const result = await api('/api/tasks/dispatch', {method:'POST', body:JSON.stringify({taskIds:ids})});
+    TASKS.forEach(t => { if (checked.has(t.code) && t.status === '待下发') t.status = '待执行'; });
+    checked.clear(); toast(`已批量下发 ${result.successCount} 项任务`, 'ok'); renderAll();
+  } catch (_) { toast('批量下发失败，任务状态未改变，可重试', 'err'); }
+  finally { $('#btn-batch').textContent = '批量下发'; renderBatchBar(); }
 });
 
 /* ================= 甘特 ================= */
@@ -907,11 +918,12 @@ function confirmStop(code){
   if (!t) return;
   openConfirm('确认终止任务？',
     `任务「${t.name}」（${t.code}）终止后无人机将立即执行返航，已采集数据自动归档。该操作不可撤销，且将同步生成一条处置记录。`,
-    '确认终止', () => {
-      TASKS = TASKS.filter(x => x.code !== code);
-      closeMonitor();
-      toast(`任务 ${t.code} 已终止，无人机执行返航，数据已归档`, 'err');
-      renderAll();
+    '确认终止', async () => {
+      try {
+        await api(`/api/tasks/${t.code}/transition`, {method:'POST',body:JSON.stringify({target:'TERMINATED'})});
+        t.status = '已终止'; closeMonitor();
+        toast(`任务 ${t.code} 已终止，无人机执行返航，数据已归档`, 'err'); renderAll();
+      } catch (_) { toast('终止失败，任务状态未改变', 'err'); }
     });
 }
 
@@ -1057,22 +1069,30 @@ $('#drawer-close').addEventListener('click', closeDrawer);
 $('#btn-cancel').addEventListener('click', closeDrawer);
 $('#drawer-mask').addEventListener('click', closeDrawer);
 $('#btn-prev').addEventListener('click', () => { if (curStep > 0) goStep(curStep - 1); });
-$('#btn-next').addEventListener('click', () => {
+$('#btn-next').addEventListener('click', async () => {
   if (curStep < 4){
     if (!validateStep(curStep)) return;
     goStep(curStep + 1);
   } else {
-    const seq = 29 + Math.floor(Math.random() * 40);
-    const nt = {
-      code:`RW-20260905-0${seq}`, name:draft.name, type:draft.type, drone:draft.drone,
-      route:draft.route, date:draft.date.slice(5), start:draft.start, end:draft.end,
-      status:'待下发', prio:draft.prio, owner:draft.owner, progress:0
-    };
-    (BUSY[draft.drone] = BUSY[draft.drone] || []).push([draft.start, draft.end, draft.name]);
-    TASKS.push(nt);
-    closeDrawer();
-    toast(`任务 ${nt.code} 创建成功，已进入「待下发」队列`, 'ok');
-    renderAll();
+    $('#btn-next').disabled = true; $('#btn-next').textContent = '校验并创建中…';
+    try {
+      const payload = {name:draft.name,date:draft.date,start:draft.start,end:draft.end,droneId:draft.drone,
+        battery:DRONE_BATTERY[draft.drone] || 0,route:draft.route,aiItems:draft.ai,type:draft.type,
+        priority:draft.prio,owner:draft.owner,area:draft.area,dock:draft.dock,backupDrone:draft.backup};
+      const validation = await api('/api/tasks/validate', {method:'POST',body:JSON.stringify(payload)});
+      if (!validation.canDispatch) {
+        showConflict(validation.blockers.map(x => `<div><b>${esc(x.message)}</b></div>`).join(''));
+        toast('存在阻断项，无法创建任务', 'err'); return;
+      }
+      const created = await api('/api/tasks', {method:'POST',body:JSON.stringify(payload)});
+      const nt = {code:created.id,name:draft.name,type:draft.type,drone:draft.drone,
+        route:draft.route,date:draft.date.slice(5),start:draft.start,end:draft.end,
+        status:'待下发',prio:draft.prio,owner:draft.owner,progress:0};
+      (BUSY[draft.drone] = BUSY[draft.drone] || []).push([draft.start, draft.end, draft.name]);
+      TASKS.push(nt); closeDrawer();
+      toast(`任务 ${nt.code} 创建成功，已进入「待下发」队列`, 'ok'); renderAll();
+    } catch (_) { toast('任务创建失败，请检查后重试', 'err'); }
+    finally { $('#btn-next').disabled = false; $('#btn-next').textContent = '确认下发'; }
   }
 });
 

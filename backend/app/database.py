@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -29,6 +30,16 @@ class Database:
 
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+            if self.engine.dialect.name == "sqlite":
+                columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(mission)"))).all()}
+                for name, kind in {
+                    "start_time": "VARCHAR", "end_time": "VARCHAR", "drone_id": "VARCHAR",
+                    "route": "VARCHAR", "ai_items": "TEXT",
+                    "mission_date": "VARCHAR", "mission_type": "VARCHAR", "priority": "VARCHAR",
+                    "owner": "VARCHAR", "area": "VARCHAR", "dock": "VARCHAR", "backup_drone": "VARCHAR",
+                }.items():
+                    if name not in columns:
+                        await connection.execute(text(f"ALTER TABLE mission ADD COLUMN {name} {kind}"))
 
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self.sessions() as session:

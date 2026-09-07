@@ -148,6 +148,17 @@ export async function browserEndToEnd() {
       }
     }
 
+    await navigate(cdp, `${baseUrl}/prototype/dispatch-tasks.html`);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('[data-od-id=\"view-switch\"] button'), b => b.textContent.trim())"), ["看板", "列表", "甘特"]);
+    await evaluate(cdp, "document.querySelector('#btn-new').click(); document.querySelector('#f-name').value='AC03 浏览器巡检'; document.querySelector('#f-date').value='2026-09-08'; document.querySelector('#f-start').value='15:00'; document.querySelector('#f-end').value='16:00'; document.querySelector('#btn-next').click()");
+    await waitFor(cdp, "document.querySelector('.step-pane.on').dataset.step === '1'");
+    await evaluate(cdp, "document.querySelector('#btn-prev').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#f-name').value"), "AC03 浏览器巡检");
+    const browserValidation = await evaluate(cdp, `(async()=>await (await fetch('/api/tasks/validate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'AC03',date:'2026-09-08',start:'10:00',end:'09:00',droneId:'U-08',battery:100,route:'演示禁飞区航线',aiItems:[]})})).json())()`);
+    assert.ok(browserValidation.blockers.some(item => item.code === "AIRSPACE_CONFLICT"));
+    assert.ok(browserValidation.blockers.some(item => item.code === "TIME_INVALID"));
+    assert.ok(browserValidation.blockers.some(item => item.code === "AI_REQUIRED"));
+
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })

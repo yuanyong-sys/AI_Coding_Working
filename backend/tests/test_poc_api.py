@@ -34,7 +34,7 @@ async def test_business_change_survives_new_app_instance(tmp_path: Path):
     first = create_app(database_url=database_url, serve_frontend=False)
     async with first.router.lifespan_context(first):
         async with AsyncClient(transport=ASGITransport(app=first), base_url="http://test") as client:
-            changed = await client.patch("/api/tasks/RW-20260905-012", json={"status": "DISPATCHED"})
+            changed = await client.patch("/api/tasks/RW-20260905-012", json={"status": "PENDING_EXECUTION"})
             assert changed.status_code == 200
 
     second = create_app(database_url=database_url, serve_frontend=False)
@@ -42,7 +42,7 @@ async def test_business_change_survives_new_app_instance(tmp_path: Path):
         async with AsyncClient(transport=ASGITransport(app=second), base_url="http://test") as client:
             state = (await client.get("/api/state")).json()
             task = next(item for item in state["tasks"] if item["id"] == "RW-20260905-012")
-            assert task["status"] == "DISPATCHED"
+            assert task["status"] == "PENDING_EXECUTION"
 
 
 @pytest.mark.asyncio
@@ -77,6 +77,7 @@ async def test_legacy_json_is_imported_once_with_changes_and_audit(tmp_path: Pat
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             state = (await client.get("/api/state")).json()
             assert state["tasks"][0]["name"] == "保留任务"
+            assert state["tasks"][0]["status"] == "PENDING_EXECUTION"
             assert len((await client.get("/api/audit")).json()["audit"]) == 1
 
 
@@ -90,3 +91,75 @@ async def test_unknown_api_returns_json_404(tmp_path: Path):
             assert response.status_code == 404
             assert response.json()["detail"] == "API_NOT_FOUND"
     assert database_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_task_validation_reports_all_blockers(client: AsyncClient):
+    response = await client.post("/api/tasks/validate", json={
+        "name": "冲突任务", "date": "2026-09-08", "start": "10:00", "end": "09:00", "droneId": "U-08",
+        "battery": 18, "route": "演示禁飞区航线", "aiItems": []
+    })
+    assert response.status_code == 200
+    codes = {item["code"] for item in response.json()["blockers"]}
+    assert codes == {"TIME_INVALID", "LOW_BATTERY", "AIRSPACE_CONFLICT", "AI_REQUIRED"}
+    assert response.json()["canDispatch"] is False
+
+
+@pytest.mark.asyncio
+async def test_create_dispatch_failure_retry_and_batch(client: AsyncClient):
+    created = await client.post("/api/tasks", json={
+        "name": "AC03 合法巡检", "date": "2026-09-08", "start": "15:00", "end": "16:00", "droneId": "U-01",
+        "battery": 82, "route": "贵北高速巡检线", "aiItems": ["交通事故"]
+    })
+    assert created.status_code == 201
+    task = created.json()
+    assert task["status"] == "PENDING_DISPATCH"
+
+    failed = await client.post(f"/api/tasks/{task['id']}/dispatch", json={"simulateFailure": True})
+    assert failed.status_code == 503
+    state = (await client.get("/api/state")).json()
+    assert next(item for item in state["tasks"] if item["id"] == task["id"])["status"] == "PENDING_DISPATCH"
+
+    retried = await client.post(f"/api/tasks/{task['id']}/dispatch", json={"simulateFailure": False})
+    assert retried.status_code == 200
+    assert retried.json()["status"] == "PENDING_EXECUTION"
+
+    batch = await client.post("/api/tasks/dispatch", json={"taskIds": ["RW-20260905-007", "RW-20260905-012"]})
+    assert batch.status_code == 200
+    assert batch.json()["successCount"] == 2
+
+    missing = await client.post("/api/tasks/dispatch", json={"taskIds": ["TYPO-MISSING"]})
+    assert missing.status_code == 200
+    assert missing.json() == {"successCount": 0, "failedCount": 1, "failedIds": ["TYPO-MISSING"]}
+
+
+@pytest.mark.asyncio
+async def test_task_fields_conflicts_and_state_machine_are_server_owned(client: AsyncClient):
+    low_battery = await client.post("/api/tasks/validate", json={
+        "name": "伪造电量", "date": "2026-09-08", "start": "15:00", "end": "16:00", "droneId": "U-08",
+        "battery": 100, "route": "贵北高速巡检线", "aiItems": ["交通事故"]
+    })
+    assert "LOW_BATTERY" in {item["code"] for item in low_battery.json()["blockers"]}
+
+    first = await client.post("/api/tasks", json={
+        "name": "第一任务", "date": "2026-09-08", "start": "15:00", "end": "16:00", "droneId": "U-01",
+        "battery": 1, "route": "贵北高速巡检线", "aiItems": ["交通事故"]
+    })
+    assert first.status_code == 201
+    stored = first.json()
+    assert stored["droneId"] == "U-01"
+    assert stored["route"] == "贵北高速巡检线"
+    assert stored["aiItems"] == ["交通事故"]
+
+    overlap = await client.post("/api/tasks/validate", json={
+        "name": "重叠任务", "date": "2026-09-08", "start": "15:30", "end": "16:30", "droneId": "警航-01",
+        "battery": 100, "route": "人民路沿线", "aiItems": ["车辆违停"]
+    })
+    assert "SCHEDULE_CONFLICT" in {item["code"] for item in overlap.json()["blockers"]}
+
+    invalid = await client.post(f"/api/tasks/{stored['id']}/transition", json={"target": "COMPLETED"})
+    assert invalid.status_code == 409
+    for target in ["PENDING_EXECUTION", "RUNNING", "TERMINATED"]:
+        changed = await client.post(f"/api/tasks/{stored['id']}/transition", json={"target": target})
+        assert changed.status_code == 200
+        assert changed.json()["status"] == target

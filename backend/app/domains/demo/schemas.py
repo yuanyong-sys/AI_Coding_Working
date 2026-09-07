@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from typing import Any
+from datetime import date as Date
+from datetime import time as Time
 
 from pydantic import BaseModel, ConfigDict
 
@@ -14,6 +18,37 @@ class MissionPatch(BaseModel):
     status: str | None = None
     progress: int | None = None
     overdue: bool | None = None
+
+
+class MissionDraft(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    start: Time
+    end: Time
+    droneId: str
+    battery: int
+    route: str
+    aiItems: list[str]
+    date: Date
+    type: str | None = None
+    priority: str | None = None
+    owner: str | None = None
+    area: str | None = None
+    dock: str | None = None
+    backupDrone: str | None = None
+
+
+class DispatchRequest(BaseModel):
+    simulateFailure: bool = False
+
+
+class BatchDispatchRequest(BaseModel):
+    taskIds: list[str]
+
+
+class TransitionRequest(BaseModel):
+    target: str
 
 
 class DemoState(BaseModel):
