@@ -82,9 +82,11 @@ async def test_legacy_json_is_imported_once_with_changes_and_audit(tmp_path: Pat
 
 @pytest.mark.asyncio
 async def test_unknown_api_returns_json_404(tmp_path: Path):
-    app = create_app(database_url=f"sqlite+aiosqlite:///{tmp_path / 'api.db'}")
+    database_path = tmp_path / "missing" / "nested" / "api.db"
+    app = create_app(database_url=f"sqlite+aiosqlite:///{database_path}")
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/misspelled")
             assert response.status_code == 404
             assert response.json()["detail"] == "API_NOT_FOUND"
+    assert database_path.exists()
