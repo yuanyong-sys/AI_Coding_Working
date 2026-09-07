@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,6 +7,7 @@ import path from "node:path";
 import { createPocServer } from "../backend/src/server.mjs";
 
 const defaultChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const visualBaselinePath = new URL("./fixtures/screen-overview-1920x1080.png", import.meta.url);
 
 async function waitForDevToolsPort(directory) {
   const filename = path.join(directory, "DevToolsActivePort");
@@ -71,6 +72,22 @@ async function waitFor(cdp, expression) {
   throw new Error(`Browser condition timed out: ${expression}`);
 }
 
+async function compareScreenshots(cdp, actualBase64, expectedBase64) {
+  return evaluate(cdp, `(async()=>{
+    const load = src => new Promise((resolve,reject) => { const image=new Image(); image.onload=()=>resolve(image); image.onerror=reject; image.src=src; });
+    const [actual,expected] = await Promise.all([
+      load('data:image/png;base64,${actualBase64}'), load('data:image/png;base64,${expectedBase64}')
+    ]);
+    if(actual.width!==expected.width || actual.height!==expected.height) return {sizeMismatch:true,actual:[actual.width,actual.height],expected:[expected.width,expected.height]};
+    const canvas=document.createElement('canvas'); canvas.width=actual.width; canvas.height=actual.height;
+    const context=canvas.getContext('2d',{willReadFrequently:true}); context.drawImage(actual,0,0); const a=context.getImageData(0,0,canvas.width,canvas.height).data;
+    context.clearRect(0,0,canvas.width,canvas.height); context.drawImage(expected,0,0); const b=context.getImageData(0,0,canvas.width,canvas.height).data;
+    let total=0,changed=0;
+    for(let i=0;i<a.length;i+=4){ const delta=Math.max(Math.abs(a[i]-b[i]),Math.abs(a[i+1]-b[i+1]),Math.abs(a[i+2]-b[i+2])); total+=delta; if(delta>24) changed++; }
+    return {sizeMismatch:false,meanDelta:total/(a.length/4),changedRatio:changed/(a.length/4)};
+  })()`);
+}
+
 export async function browserEndToEnd() {
   const chromePath = process.env.CHROME_PATH ?? defaultChrome;
   await access(chromePath);
@@ -79,6 +96,7 @@ export async function browserEndToEnd() {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   const chrome = spawn(chromePath, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${directory}`, "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
+  const chromeExited = new Promise((resolve) => chrome.once("exit", resolve));
 
   let cdp;
   try {
@@ -103,9 +121,15 @@ export async function browserEndToEnd() {
       assert.equal(await evaluate(cdp, "document.querySelector('.badge').textContent"), "POC 演示数据");
     }
 
+    const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
+    await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })
+    });
     await cdp.command("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
     await navigate(cdp, `${baseUrl}/screen-overview.html`);
     await waitFor(cdp, "document.querySelectorAll('.fleet-row').length >= 7");
+    assert.equal(await evaluate(cdp, "document.querySelector('.task-name').childNodes[0].textContent"), injectionText);
+    assert.equal(await evaluate(cdp, "Boolean(document.querySelector('#stored-xss')) || Boolean(window.__storedXss)"), false);
     assert.deepEqual(await evaluate(cdp, `(() => {
       const columns = Array.from(document.querySelectorAll('.col'));
       return {
@@ -127,8 +151,11 @@ export async function browserEndToEnd() {
     const travelled = Math.hypot(secondPosition[0] - firstPosition[0], secondPosition[1] - firstPosition[1]);
     assert.ok(travelled > 0.5 && travelled < 10, `expected slow simulated flight, travelled ${travelled}px in one second`);
 
+    const dayTrend = await evaluate(cdp, "document.querySelector('#trend-chart polyline').getAttribute('points')");
     await evaluate(cdp, "document.querySelector('[data-dim=week]').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#a1-title').textContent"), "本周巡检概览");
+    assert.equal(await evaluate(cdp, "document.querySelector('#trend-title').textContent"), "近 7 周任务数 vs 告警数");
+    assert.notEqual(await evaluate(cdp, "document.querySelector('#trend-chart polyline').getAttribute('points')"), dayTrend);
     await evaluate(cdp, "document.querySelector('.fleet-row').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
     await evaluate(cdp, "document.querySelector('.layer-ctrl').click()");
@@ -150,11 +177,28 @@ export async function browserEndToEnd() {
     await evaluate(cdp, "document.querySelector('#tour-lock').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#tour-lock').getAttribute('aria-pressed')"), "true");
     assert.equal(await evaluate(cdp, "document.querySelector('#stage').dataset.tourState"), "locked");
+
+    await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
+    await navigate(cdp, `${baseUrl}/screen-overview.html?visual-test=1`);
+    await waitFor(cdp, "document.querySelectorAll('.fleet-row').length === 8");
+    const screenshot = await cdp.command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    const screenshotBuffer = Buffer.from(screenshot.data, "base64");
+    assert.deepEqual([screenshotBuffer.readUInt32BE(16), screenshotBuffer.readUInt32BE(20)], [1920, 1080]);
+    if (process.env.UPDATE_VISUAL_BASELINE === "1") {
+      await mkdir(new URL("./fixtures/", import.meta.url), { recursive: true });
+      await writeFile(visualBaselinePath, screenshotBuffer);
+    } else {
+      const baseline = await readFile(visualBaselinePath);
+      const difference = await compareScreenshots(cdp, screenshot.data, baseline.toString("base64"));
+      assert.equal(difference.sizeMismatch, false, JSON.stringify(difference));
+      assert.ok(difference.meanDelta < 3 && difference.changedRatio < 0.08, `visual difference exceeded threshold: ${JSON.stringify(difference)}`);
+    }
   } finally {
     cdp?.close();
     chrome.kill("SIGTERM");
+    await Promise.race([chromeExited, new Promise((resolve) => setTimeout(resolve, 3000))]);
     server.close();
     server.closeAllConnections();
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
 }

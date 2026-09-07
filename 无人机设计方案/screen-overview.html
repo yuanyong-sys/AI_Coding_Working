@@ -251,6 +251,7 @@ svg.gis g[tabindex]:focus-visible{outline:2px solid var(--blue-400);outline-offs
   .dot.alarm,.alert-item.urgent,.alert-item.flash{animation:none}
   .toast,.toast.hide{animation:none}
 }
+.visual-test *{animation:none!important;transition:none!important}
 </style>
 </head>
 <body data-page="overview" data-api="/api/state">
@@ -466,7 +467,7 @@ svg.gis g[tabindex]:focus-visible{outline:2px solid var(--blue-400);outline-offs
 
       <!-- B4 近7日趋势 -->
       <section class="panel" style="flex:1" data-od-id="panel-trend">
-        <div class="panel-head"><span class="panel-title">近 7 日任务数 vs 告警数</span></div>
+        <div class="panel-head"><span class="panel-title" id="trend-title">近 7 日任务数 vs 告警数</span></div>
         <div class="panel-body">
           <div class="trend-wrap">
             <div class="trend-legend">
@@ -494,6 +495,8 @@ svg.gis g[tabindex]:focus-visible{outline:2px solid var(--blue-400);outline-offs
 const AMAP_KEY = "";          // 高德开放平台 Web 端(JS API) Key
 const AMAP_SECRET = "";       // 安全密钥 securityJsCode
 const MAP_CENTER = [107.52, 26.26]; // 黔南州中心（都匀市）经纬度
+const VISUAL_TEST = new URLSearchParams(location.search).has("visual-test");
+if(VISUAL_TEST) document.documentElement.classList.add("visual-test");
 
 /* ---- 示例业务数据 ---- */
 const DATA = {
@@ -556,6 +559,11 @@ const DATA = {
     tasks:  [12,15,13,18,16,19,18],
     alerts: [4,6,5,8,6,9,7]
   },
+  chartDimensions: {
+    day: { rose:[8,6,4,2,2,1], labels:["09-01","09-02","09-03","09-04","09-05","09-06","09-07"], tasks:[12,15,13,18,16,19,18], alerts:[4,6,5,8,6,9,7], title:"近 7 日任务数 vs 告警数" },
+    week:{ rose:[48,36,25,14,12,6], labels:["第1周","第2周","第3周","第4周","第5周","第6周","本周"], tasks:[76,82,79,91,88,96,93], alerts:[31,38,34,46,41,52,47], title:"近 7 周任务数 vs 告警数" },
+    month:{ rose:[196,151,108,67,52,24], labels:["03月","04月","05月","06月","07月","08月","09月"], tasks:[436,468,451,498,512,527,542], alerts:[571,603,582,619,596,663,628], title:"近 7 月任务数 vs 告警数" }
+  },
   ticker: [
     "<b class=\"num\">U-04</b> 完成兰海高速 K1582 事故现场多角度取证，证据包已归档",
     "<b>惠水服务区周边</b> 早高峰巡查完成，秩序良好，违停劝导 <b class=\"num\">3</b> 起",
@@ -568,6 +576,8 @@ const DATA = {
 const NS = "http://www.w3.org/2000/svg";
 const $ = id => document.getElementById(id);
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[character]);
+const boundedNumber = (value, fallback, min, max) => Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : fallback;
 
 /* ---- 舞台等比缩放 ---- */
 function fit(){
@@ -581,7 +591,8 @@ function tickClock(){
   const d = new Date(), p = n => String(n).padStart(2,"0");
   $("clock").textContent = p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
 }
-setInterval(tickClock, 1000); tickClock();
+if(VISUAL_TEST){ $("clock").textContent = "14:32:00"; }
+else { setInterval(tickClock, 1000); tickClock(); }
 
 /* ---- Toast ---- */
 function toast(msg){
@@ -615,6 +626,7 @@ document.querySelectorAll(".dim-switch button").forEach(btn => {
     btn.classList.add("on");
     btn.setAttribute("aria-selected","true");
     renderStats(btn.dataset.dim);
+    renderChartsForDimension(btn.dataset.dim);
   });
 });
 
@@ -625,10 +637,10 @@ function renderFleet(){
     return;
   }
   $("fleet-list").innerHTML = DATA.fleet.map((d,i) =>
-    '<button class="fleet-row" data-i="'+i+'" data-od-id="fleet-'+d.id.toLowerCase()+'">'+
+    '<button class="fleet-row" data-i="'+i+'" data-od-id="fleet-'+i+'">'+
       '<span class="dot '+d.status+'"></span>'+
-      '<span class="fleet-id num">'+d.id+'</span>'+
-      '<span class="fleet-task">'+d.task+'</span>'+
+      '<span class="fleet-id num">'+escapeHtml(d.id)+'</span>'+
+      '<span class="fleet-task">'+escapeHtml(d.task)+'</span>'+
       '<span class="batt"><span class="batt-bar"><span class="batt-fill'+(d.batt<50?" low":"")+
       '" style="width:'+d.batt+'%"></span></span><span class="batt-num num">'+d.batt+'%</span></span>'+
     '</button>').join("");
@@ -644,7 +656,7 @@ function renderTasks(){
   }
   $("task-list").innerHTML = DATA.tasks.map(t =>
     '<div class="task-row'+(t.overdue?" overdue":"")+'">'+
-      '<div class="task-meta"><span class="task-name">'+t.name+
+      '<div class="task-meta"><span class="task-name">'+escapeHtml(t.name)+
       (t.overdue?'<span class="overdue-tag">超时</span>':"")+'</span>'+
       '<span class="task-pct num">'+t.pct+'%</span></div>'+
       '<div class="task-bar"><div class="task-fill" style="width:'+t.pct+'%"></div></div>'+
@@ -679,7 +691,7 @@ function renderMapPoints(){
     g.innerHTML =
       '<circle class="drone-hl" cx="'+d.x+'" cy="'+d.y+'" r="9" fill="none" stroke="'+col+'" stroke-width="1.6"/>'+
       '<circle cx="'+d.x+'" cy="'+d.y+'" r="5" fill="'+col+'" stroke="#0B1B33" stroke-width="2"/>'+
-      '<text class="map-label-bright" x="'+(d.x+12)+'" y="'+(d.y+4)+'">'+d.id+'</text>';
+      '<text class="map-label-bright" x="'+(d.x+12)+'" y="'+(d.y+4)+'">'+escapeHtml(d.id)+'</text>';
     g.addEventListener("click", () => selectDrone(i, true));
     g.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectDrone(i, true); } });
     droneEls[i] = g;
@@ -691,7 +703,7 @@ function renderMapPoints(){
 function showInfo(title, rows, drillHref, thumbText){
   $("info-title").textContent = title;
   $("info-rows").innerHTML = rows.map(r =>
-    '<div class="info-row"><span class="k">'+r[0]+'</span><span class="v">'+r[1]+'</span></div>').join("");
+    '<div class="info-row"><span class="k">'+escapeHtml(r[0])+'</span><span class="v">'+escapeHtml(r[1])+'</span></div>').join("");
   $("info-thumb").lastChild.textContent = " " + thumbText;
   $("info-drill").setAttribute("href", drillHref);
   $("info-card").classList.add("show");
@@ -739,9 +751,9 @@ function renderAlerts(){
   $("alert-list").innerHTML = DATA.alerts.map((a,i) =>
     '<button class="alert-item'+(a.level==="red"?" urgent":"")+(i===0?" flash":"")+'" data-i="'+i+'" data-od-id="alert-item-'+i+'">'+
       '<span class="alert-level lv-'+a.level+'">'+DATA.levelText[a.level]+'</span>'+
-      '<span class="alert-main"><span class="alert-type">'+a.type+'</span>'+
-      '<span class="alert-loc">'+a.loc+'</span></span>'+
-      '<span class="alert-time num">'+a.time+'</span>'+
+      '<span class="alert-main"><span class="alert-type">'+escapeHtml(a.type)+'</span>'+
+      '<span class="alert-loc">'+escapeHtml(a.loc)+'</span></span>'+
+      '<span class="alert-time num">'+escapeHtml(a.time)+'</span>'+
     '</button>').join("");
   document.querySelectorAll(".alert-item").forEach(el =>
     el.addEventListener("click", () => selectAlert(+el.dataset.i, true)));
@@ -830,6 +842,14 @@ function renderTrend(){
       svg.appendChild(dot);
     });
   });
+}
+
+function renderChartsForDimension(dim){
+  const series = DATA.chartDimensions[dim];
+  DATA.rose.forEach((item,index) => { item.value = series.rose[index]; });
+  DATA.trend = {labels:[...series.labels],tasks:[...series.tasks],alerts:[...series.alerts]};
+  $("trend-title").textContent = series.title;
+  renderRose(); renderTrend();
 }
 
 /* ---- 底部播报条 ---- */
@@ -1095,17 +1115,21 @@ async function hydrateSharedState(){
   const state = await response.json();
   const statusMap = {ONLINE:"online",BUSY:"busy",ALARM:"alarm",OFFLINE:"offline"};
   const levelMap = {EMERGENCY:"red",IMPORTANT:"orange",INFO:"yellow"};
-  DATA.fleet = state.drones.map(d => ({id:d.id,status:statusMap[d.status]||"offline",task:d.task||"机库待命",batt:d.battery,x:d.x,y:d.y}));
-  DATA.tasks = state.tasks.slice(0,5).map(t => ({name:t.name,pct:t.progress,overdue:Boolean(t.overdue)}));
-  DATA.alerts = state.alerts.map(a => ({id:a.id,level:levelMap[a.level]||"yellow",type:a.type,loc:a.location,time:a.time,x:a.x,y:a.y}));
+  DATA.fleet = state.drones.map((d,index) => ({id:String(d.id),status:statusMap[d.status]||"offline",task:String(d.task||"机库待命"),
+    batt:boundedNumber(d.battery,0,0,100),x:boundedNumber(d.x,120+index*80,0,940),y:boundedNumber(d.y,180+index*70,0,944)}));
+  DATA.tasks = state.tasks.slice(0,5).map(t => ({name:String(t.name),pct:boundedNumber(t.progress,0,0,100),overdue:Boolean(t.overdue)}));
+  DATA.alerts = state.alerts.map((a,index) => ({id:String(a.id),level:levelMap[a.level]||"yellow",type:String(a.type),loc:String(a.location),time:String(a.time),
+    x:boundedNumber(a.x,180+index*90,0,940),y:boundedNumber(a.y,180+index*70,0,944)}));
   document.querySelector(".poc-badge").title = "数据快照 " + state.snapshotVersion;
 }
 async function init(){
   try{ await hydrateSharedState(); }
   catch(error){ toast(error.message + "，已使用页面内置回退数据"); }
-  renderStats("day"); renderFleet(); renderTasks(); renderAlerts(); renderRose(); renderTrend(); renderTicker(); renderMapPoints();
-  initFlightSim(); armAutoTour();
-  if(AMAP_KEY){ initAMap(); } else { initRasterTiles(); }
+  renderStats("day"); renderFleet(); renderTasks(); renderAlerts(); renderChartsForDimension("day"); renderTicker(); renderMapPoints();
+  if(!VISUAL_TEST){
+    initFlightSim(); armAutoTour();
+    if(AMAP_KEY){ initAMap(); } else { initRasterTiles(); }
+  }
 }
 init();
 </script>
