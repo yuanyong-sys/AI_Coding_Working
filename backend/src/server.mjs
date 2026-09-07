@@ -4,10 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PocStore, businessState } from "./store.mjs";
+import { pageFilenames, renderPage } from "../../frontend/page-shell.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const frontendRoot = path.join(projectRoot, "frontend");
-const pageNames = new Set(["index.html", "screen-overview.html", "dispatch-tasks.html", "alert-workbench.html", "stats-ledger.html"]);
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -62,7 +62,11 @@ export function createPocServer({ databasePath = process.env.POC_DATABASE_PATH ?
       }
       if (request.method === "GET" && url.pathname === "/") return serveFile(response, "index.html");
       const filename = url.pathname.slice(1);
-      if (request.method === "GET" && (pageNames.has(filename) || filename === "app.js" || filename === "styles.css")) {
+      if (request.method === "GET" && pageFilenames.has(filename)) {
+        response.writeHead(200, { "content-type": contentTypes[".html"] });
+        return response.end(renderPage(filename));
+      }
+      if (request.method === "GET" && (filename === "index.html" || filename === "app.js" || filename === "styles.css")) {
         return serveFile(response, filename);
       }
       return sendJson(response, 404, { error: "NOT_FOUND" });

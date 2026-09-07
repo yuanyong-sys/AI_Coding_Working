@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node backend/src/server.mjs",
     "test": "node tests/run.mjs",
-    "typecheck": "node --check backend/src/server.mjs && node --check backend/src/store.mjs && node --check frontend/app.js"
+    "typecheck": "node --check backend/src/server.mjs && node --check backend/src/store.mjs && node --check frontend/page-shell.mjs && node --check frontend/app.js"
   },
   "engines": {
     "node": ">=22"

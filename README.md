@@ -4,7 +4,7 @@
 
 ## 运行
 
-要求 Node.js 22 或更高版本，无需安装第三方依赖。
+要求 Node.js 22 或更高版本，运行应用无需安装第三方依赖。完整测试使用本机 Google Chrome；其他安装位置可通过 `CHROME_PATH` 指定。
 
 ```bash
 npm start
