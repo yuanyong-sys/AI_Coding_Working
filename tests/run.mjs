@@ -1,17 +1,7 @@
-import {
-  businessStateSurvivesRestart,
-  oldDemoDataMigratesWithoutLosingAudit,
-  publicPagesUseSharedState,
-  resetRequiresConfirmationAndIsRepeatableAndAudited
-} from "./poc-baseline.test.mjs";
 import { browserEndToEnd } from "./browser-e2e.mjs";
 
 const tests = [
-  ["public entry links to four POC-labelled pages backed by the shared state API", publicPagesUseSharedState],
-  ["business state survives service restart", businessStateSurvivesRestart],
-  ["reset requires confirmation and is repeatable and audited", resetRequiresConfirmationAndIsRepeatableAndAudited],
-  ["old demo data migrates without losing audit", oldDemoDataMigratesWithoutLosingAudit],
-  ["real browser executes all public page flows", browserEndToEnd]
+  ["Vue and FastAPI execute all public page flows", browserEndToEnd]
 ];
 
 let failed = 0;

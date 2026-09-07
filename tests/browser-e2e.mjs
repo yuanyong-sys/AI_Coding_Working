@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-
-import { createPocServer } from "../backend/src/server.mjs";
 
 const defaultChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const visualBaselinePath = new URL("./fixtures/screen-overview-1920x1080.png", import.meta.url);
@@ -21,6 +20,24 @@ async function waitForDevToolsPort(directory) {
     }
   }
   throw new Error("Chrome DevTools did not become ready");
+}
+
+async function availablePort() {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+async function waitForApi(baseUrl) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    try {
+      if ((await fetch(`${baseUrl}/api/state`)).ok) return;
+    } catch (_error) { /* FastAPI is still starting. */ }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("FastAPI did not become ready");
 }
 
 async function connectCdp(webSocketUrl) {
@@ -92,9 +109,14 @@ export async function browserEndToEnd() {
   const chromePath = process.env.CHROME_PATH ?? defaultChrome;
   await access(chromePath);
   const directory = await mkdtemp(path.join(tmpdir(), "drone-poc-browser-"));
-  const server = createPocServer({ databasePath: path.join(directory, "poc.json") });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const appPort = await availablePort();
+  const baseUrl = `http://127.0.0.1:${appPort}`;
+  const backend = spawn(path.resolve("backend/.venv/bin/python"), ["backend/start.py"], {
+    cwd: path.resolve("."), stdio: "ignore",
+    env: { ...process.env, PORT: String(appPort), DRONE_POC_DATABASE_URL: `sqlite+aiosqlite:///${path.join(directory, "poc.db")}` }
+  });
+  const backendExited = new Promise((resolve) => backend.once("exit", resolve));
+  await waitForApi(baseUrl);
   const chrome = spawn(chromePath, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${directory}`, "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
   const chromeExited = new Promise((resolve) => chrome.once("exit", resolve));
 
@@ -117,8 +139,13 @@ export async function browserEndToEnd() {
 
     for (const page of ["screen-overview", "dispatch-tasks", "alert-workbench", "stats-ledger"]) {
       await navigate(cdp, `${baseUrl}/${page}.html`);
-      await waitFor(cdp, page === "screen-overview" ? "document.querySelectorAll('.fleet-row').length > 0" : "document.querySelectorAll('#content article').length > 0");
-      assert.equal(await evaluate(cdp, "document.querySelector('.badge').textContent"), "POC 演示数据");
+      if (page === "screen-overview") {
+        await waitFor(cdp, "Boolean(document.querySelector('iframe[title=\"低空态势一张图\"]'))");
+        assert.match(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), /^\/prototype\/screen-overview\.html/);
+      } else {
+        await waitFor(cdp, "Boolean(document.querySelector('.poc-badge'))");
+        assert.equal(await evaluate(cdp, "document.querySelector('.poc-badge').textContent"), "POC 演示数据");
+      }
     }
 
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
@@ -126,7 +153,7 @@ export async function browserEndToEnd() {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })
     });
     await cdp.command("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
-    await navigate(cdp, `${baseUrl}/screen-overview.html`);
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
     await waitFor(cdp, "document.querySelectorAll('.fleet-row').length >= 7");
     assert.equal(await evaluate(cdp, "document.querySelector('.task-name').childNodes[0].textContent"), injectionText);
     assert.equal(await evaluate(cdp, "Boolean(document.querySelector('#stored-xss')) || Boolean(window.__storedXss)"), false);
@@ -179,7 +206,7 @@ export async function browserEndToEnd() {
     assert.equal(await evaluate(cdp, "document.querySelector('#stage').dataset.tourState"), "locked");
 
     await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
-    await navigate(cdp, `${baseUrl}/screen-overview.html?visual-test=1`);
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html?visual-test=1`);
     await waitFor(cdp, "document.querySelectorAll('.fleet-row').length === 8");
     const screenshot = await cdp.command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     const screenshotBuffer = Buffer.from(screenshot.data, "base64");
@@ -197,8 +224,8 @@ export async function browserEndToEnd() {
     cdp?.close();
     chrome.kill("SIGTERM");
     await Promise.race([chromeExited, new Promise((resolve) => setTimeout(resolve, 3000))]);
-    server.close();
-    server.closeAllConnections();
+    backend.kill("SIGTERM");
+    await Promise.race([backendExited, new Promise((resolve) => setTimeout(resolve, 3000))]);
     await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
 }

@@ -1,0 +1,1 @@
+"""POC demo lifecycle domain."""
