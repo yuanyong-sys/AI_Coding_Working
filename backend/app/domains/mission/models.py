@@ -24,4 +24,5 @@ class Mission(Base):
     area: Mapped[str | None] = mapped_column(String, nullable=True)
     dock: Mapped[str | None] = mapped_column(String, nullable=True)
     backup_drone: Mapped[str | None] = mapped_column(String, nullable=True)
+    control_state: Mapped[str | None] = mapped_column(String, nullable=True)
     demo: Mapped[bool] = mapped_column(Boolean, default=True)

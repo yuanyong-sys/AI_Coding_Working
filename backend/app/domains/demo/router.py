@@ -6,7 +6,9 @@ from app.domains.audit.models import Audit
 from app.domains.demo import service
 from app.domains.demo.schemas import (
     BatchDispatchRequest,
+    AnomalyRequest,
     Confirmation,
+    ControlRequest,
     DemoState,
     DispatchRequest,
     MissionDraft,
@@ -47,6 +49,54 @@ async def patch_mission(
     return service.serialize_mission(mission)
 
 
+@router.get("/tasks/{mission_id}/monitor")
+async def monitor_mission(mission_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+    mission = await service.get_transitionable_mission(session, mission_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if mission.status != "RUNNING":
+        raise HTTPException(status_code=409, detail="MISSION_NOT_RUNNING")
+    return service.monitor_snapshot(mission)
+
+
+@router.post("/tasks/{mission_id}/control")
+async def control_mission(
+    mission_id: str, request: ControlRequest, session: AsyncSession = Depends(get_session)
+) -> dict:
+    mission = await service.get_transitionable_mission(session, mission_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if mission.status != "RUNNING":
+        raise HTTPException(status_code=409, detail="MISSION_NOT_RUNNING")
+    command = request.command.upper()
+    if command not in {"HOVER", "RETURN"}:
+        raise HTTPException(status_code=422, detail="UNSUPPORTED_CONTROL")
+    result = "FAILED" if request.simulateFailure else "SUCCESS"
+    mission.control_state = command if result == "SUCCESS" else mission.control_state
+    await service.record_audit(
+        session, action=f"MISSION_CONTROL_{command}", mission_id=mission.id,
+        result=result, detail="模拟飞控指令",
+    )
+    if request.simulateFailure:
+        raise HTTPException(status_code=503, detail="SIMULATED_CONTROL_FAILURE")
+    return {"missionId": mission.id, "command": command, "result": result, "simulated": True}
+
+
+@router.post("/tasks/{mission_id}/anomaly")
+async def mission_anomaly(
+    mission_id: str, request: AnomalyRequest, session: AsyncSession = Depends(get_session)
+) -> dict:
+    mission = await service.get_transitionable_mission(session, mission_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if mission.status != "RUNNING":
+        raise HTTPException(status_code=409, detail="MISSION_NOT_RUNNING")
+    kind = request.kind.upper()
+    if kind not in {"LINK_LOSS", "LOW_BATTERY"}:
+        raise HTTPException(status_code=422, detail="UNSUPPORTED_ANOMALY")
+    return await service.handle_mission_anomaly(session, mission, kind)
+
+
 @router.post("/tasks/validate")
 async def validate_mission(draft: MissionDraft, session: AsyncSession = Depends(get_session)) -> dict:
     return await service.validate_mission(session, draft)
@@ -70,9 +120,12 @@ async def transition_mission(
         raise HTTPException(status_code=404, detail="NOT_FOUND")
     if not service.can_transition(mission.status, request.target):
         raise HTTPException(status_code=409, detail="INVALID_STATE_TRANSITION")
+    previous = mission.status
     mission.status = request.target
-    await session.commit()
-    await session.refresh(mission)
+    await service.record_audit(
+        session, action="MISSION_STATUS_CHANGED", mission_id=mission.id,
+        result="SUCCESS", detail=f"{previous}->{request.target}",
+    )
     return service.serialize_mission(mission)
 
 
@@ -91,10 +144,16 @@ async def dispatch_mission(
     if mission.status != "PENDING_DISPATCH":
         raise HTTPException(status_code=409, detail="INVALID_STATE")
     if request.simulateFailure:
+        await service.record_audit(
+            session, action="MISSION_DISPATCH", mission_id=mission.id,
+            result="FAILED", detail="模拟下发失败",
+        )
         raise HTTPException(status_code=503, detail="SIMULATED_DISPATCH_FAILURE")
     mission.status = "PENDING_EXECUTION"
-    await session.commit()
-    await session.refresh(mission)
+    await service.record_audit(
+        session, action="MISSION_DISPATCH", mission_id=mission.id,
+        result="SUCCESS", detail="PENDING_DISPATCH->PENDING_EXECUTION",
+    )
     return service.serialize_mission(mission)
 
 

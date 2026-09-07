@@ -140,7 +140,7 @@ async def read_state(session: AsyncSession) -> dict:
         "simulationClock": "2026-09-05T14:32:00+08:00",
         "drones": [_row(item) for item in drones],
         "tasks": [serialize_mission(item) for item in tasks],
-        "alerts": [_row(item) for item in alerts],
+        "alerts": [serialize_alert(item) for item in alerts],
         "ledgers": [_ledger_row(item) for item in ledgers],
         "audit": [serialize_audit(item) for item in audit],
     }
@@ -168,7 +168,17 @@ def _ledger_row(item: Ledger) -> dict:
 
 
 def serialize_audit(item: Audit) -> dict:
-    return {"id": f"AUDIT-{item.id:04d}", "action": item.action, "snapshotVersion": item.snapshot_version, "occurredAt": item.occurred_at.isoformat()}
+    return {
+        "id": f"AUDIT-{item.id:04d}", "action": item.action,
+        "snapshotVersion": item.snapshot_version, "occurredAt": item.occurred_at.isoformat(),
+        "subjectId": item.subject_id, "result": item.result, "detail": item.detail,
+    }
+
+
+def serialize_alert(item: Alert) -> dict:
+    row = _row(item)
+    row["missionId"] = row.pop("mission_id")
+    return row
 
 
 DRONE_ALIASES = {f"警航-{index:02d}": f"U-{index:02d}" for index in range(1, 9)}
@@ -252,6 +262,11 @@ async def batch_dispatch(session: AsyncSession, mission_ids: list[str]) -> dict:
     eligible = [item for item in missions if item.status in {"PENDING", "PENDING_DISPATCH"}]
     for mission in eligible:
         mission.status = "PENDING_EXECUTION"
+        session.add(Audit(
+            action="MISSION_DISPATCH", snapshot_version=SNAPSHOT_VERSION,
+            occurred_at=datetime.now(timezone.utc), subject_id=mission.id,
+            result="SUCCESS", detail="批量模拟下发",
+        ))
     await session.commit()
     eligible_ids = {item.id for item in eligible}
     failed_ids = [mission_id for mission_id in mission_ids if mission_id not in eligible_ids]
@@ -282,3 +297,72 @@ async def get_transitionable_mission(session: AsyncSession, mission_id: str) -> 
         mission = Mission(id=mission_id, name=PROTOTYPE_PENDING.get(mission_id, mission_id), status=PROTOTYPE_STATES[mission_id], progress=0, overdue=False)
         session.add(mission)
     return mission
+
+
+def monitor_snapshot(mission: Mission) -> dict:
+    seed = sum(ord(char) for char in mission.id)
+    return {
+        "missionId": mission.id,
+        "status": mission.status,
+        "video": {"mode": "SIMULATED", "label": "视频流占位"},
+        "telemetry": {
+            "altitudeM": 100 + seed % 40,
+            "speedMps": round(8 + seed % 50 / 10, 1),
+            "batteryPct": 90 - seed % 28,
+            "signalDbm": -60 - seed % 15,
+        },
+        "trajectory": [[20, 130], [72, 106], [136, 79], [204, 50]],
+        "controlState": mission.control_state,
+        "simulated": True,
+    }
+
+
+async def record_audit(
+    session: AsyncSession, *, action: str, mission_id: str, result: str, detail: str
+) -> Audit:
+    entry = Audit(
+        action=action,
+        snapshot_version=SNAPSHOT_VERSION,
+        occurred_at=datetime.now(timezone.utc),
+        subject_id=mission_id,
+        result=result,
+        detail=detail,
+    )
+    session.add(entry)
+    await session.commit()
+    await session.refresh(entry)
+    return entry
+
+
+async def handle_mission_anomaly(session: AsyncSession, mission: Mission, kind: str) -> dict:
+    existing = await session.scalar(select(Alert).where(Alert.mission_id == mission.id))
+    if existing is None:
+        existing = Alert(
+            id=f"GJ-AUTO-{mission.id}",
+            type="图传断链" if kind == "LINK_LOSS" else "低电量",
+            level="IMPORTANT",
+            status="PENDING_VERIFICATION",
+            location=mission.route or mission.name,
+            time=datetime.now().strftime("%H:%M"),
+            x=470,
+            y=420,
+            mission_id=mission.id,
+        )
+        session.add(existing)
+    if mission.backup_drone and mission.drone_id != mission.backup_drone:
+        mission.drone_id = DRONE_ALIASES.get(mission.backup_drone, mission.backup_drone)
+        mission.control_state = "AUTO_BACKUP_SWITCH"
+        outcome = "BACKUP_SWITCHED"
+        action = "MISSION_AUTO_BACKUP_SWITCH"
+    elif mission.control_state == "AUTO_BACKUP_SWITCH":
+        outcome = "BACKUP_SWITCHED"
+        action = "MISSION_ANOMALY_REPEATED"
+    else:
+        mission.status = "ABNORMAL"
+        outcome = "ABNORMAL"
+        action = "MISSION_MARKED_ABNORMAL"
+    await record_audit(
+        session, action=action, mission_id=mission.id, result="SUCCESS", detail=kind,
+    )
+    await session.refresh(existing)
+    return {"outcome": outcome, "mission": serialize_mission(mission), "alert": serialize_alert(existing)}

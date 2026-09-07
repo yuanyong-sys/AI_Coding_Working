@@ -16,3 +16,4 @@ class Alert(Base):
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     demo: Mapped[bool] = mapped_column(Boolean, default=True)
+    mission_id: Mapped[str | None] = mapped_column(String, nullable=True)

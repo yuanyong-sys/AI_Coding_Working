@@ -13,6 +13,9 @@ class Audit(Base):
     action: Mapped[str] = mapped_column(String)
     snapshot_version: Mapped[str] = mapped_column(String)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    subject_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    result: Mapped[str | None] = mapped_column(String, nullable=True)
+    detail: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SystemMeta(Base):

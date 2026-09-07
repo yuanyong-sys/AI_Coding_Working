@@ -51,6 +51,15 @@ class TransitionRequest(BaseModel):
     target: str
 
 
+class ControlRequest(BaseModel):
+    command: str
+    simulateFailure: bool = False
+
+
+class AnomalyRequest(BaseModel):
+    kind: str
+
+
 class DemoState(BaseModel):
     snapshotVersion: str
     schemaVersion: int

@@ -621,6 +621,9 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
     <div class="mm-foot">
       <button class="btn btn-outline" id="mm-hover-btn">悬停</button>
       <button class="btn btn-outline" id="mm-return-btn">返航</button>
+      <button class="btn btn-outline" id="mm-link-loss-btn">模拟断链</button>
+      <button class="btn btn-outline" id="mm-low-battery-btn">模拟低电</button>
+      <button class="btn btn-outline" id="mm-fail-next" aria-pressed="false">下次指令模拟失败</button>
       <button class="btn btn-danger" id="mm-stop-btn">终止任务</button>
     </div>
   </div>
@@ -943,6 +946,13 @@ function openMonitor(code){
   $('#mm-sig').innerHTML = (-60 - seed % 15) + '<span class="u">dBm</span>';
   $('#monitor-mask').classList.add('open');
   $('#mm-stop-btn').dataset.code = code;
+  $$('#mm-hover-btn,#mm-return-btn,#mm-link-loss-btn,#mm-low-battery-btn').forEach(button => button.dataset.code = code);
+  api(`/api/tasks/${code}/monitor`).then(data => {
+    $('#mm-alt').innerHTML = data.telemetry.altitudeM + '<span class="u">m</span>';
+    $('#mm-spd').innerHTML = data.telemetry.speedMps + '<span class="u">m/s</span>';
+    $('#mm-batt').innerHTML = data.telemetry.batteryPct + '<span class="u">%</span>';
+    $('#mm-sig').innerHTML = data.telemetry.signalDbm + '<span class="u">dBm</span>';
+  }).catch(() => toast('模拟监控数据加载失败，可关闭后重试', 'err'));
   clearInterval(monitorTimer);
   monitorTimer = setInterval(() => {
     const alt = $('#mm-alt'); if (!alt) return;
@@ -953,8 +963,43 @@ function openMonitor(code){
 function closeMonitor(){ $('#monitor-mask').classList.remove('open'); clearInterval(monitorTimer); }
 $('#monitor-close').addEventListener('click', closeMonitor);
 $('#monitor-mask').addEventListener('click', e => { if (e.target.id === 'monitor-mask') closeMonitor(); });
-$('#mm-hover-btn').addEventListener('click', () => toast('已下发悬停指令，无人机保持当前位置悬停'));
-$('#mm-return-btn').addEventListener('click', () => toast('已下发返航指令，无人机沿安全航线返航', 'ok'));
+async function sendControl(button, command, successText){
+  const original = button.textContent; button.disabled = true; button.textContent = '发送中…';
+  const failureToggle = $('#mm-fail-next');
+  const simulateFailure = failureToggle.getAttribute('aria-pressed') === 'true';
+  failureToggle.setAttribute('aria-pressed', 'false'); failureToggle.classList.remove('on');
+  try {
+    await api(`/api/tasks/${button.dataset.code}/control`, {method:'POST',body:JSON.stringify({command,simulateFailure})});
+    button.textContent = '成功'; toast(successText, 'ok');
+  } catch (_) { button.textContent = '失败·重试'; toast(`${original}指令发送失败，可重试`, 'err'); }
+  finally { button.disabled = false; setTimeout(() => { if (button.textContent === '成功') button.textContent = original; }, 1200); }
+}
+$('#mm-fail-next').addEventListener('click', e => {
+  const pressed = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', String(pressed));
+  e.currentTarget.classList.toggle('on', pressed);
+  toast(pressed ? '下一条模拟飞控指令将返回失败' : '已取消失败演示', 'warn');
+});
+$('#mm-hover-btn').addEventListener('click', e => sendControl(e.currentTarget, 'HOVER', '模拟悬停指令已成功执行'));
+$('#mm-return-btn').addEventListener('click', e => sendControl(e.currentTarget, 'RETURN', '模拟返航指令已成功执行'));
+async function simulateAnomaly(button, kind){
+  const original = button.textContent; button.disabled = true; button.textContent = '处理中…';
+  try {
+    const result = await api(`/api/tasks/${button.dataset.code}/anomaly`, {method:'POST',body:JSON.stringify({kind})});
+    const task = TASKS.find(item => item.code === button.dataset.code);
+    if (result.outcome === 'BACKUP_SWITCHED') {
+      if (task) task.drone = result.mission.droneId;
+      toast(`已自动切换备用机 ${result.mission.droneId} 续飞，并生成关联告警`, 'ok');
+    } else {
+      if (task) task.status = '异常';
+      toast('无可用备用机，任务已进入异常并生成关联告警', 'err');
+    }
+    renderAll(); button.textContent = '完成';
+  } catch (_) { button.textContent = '失败·重试'; toast('异常演示失败，可重试', 'err'); }
+  finally { button.disabled = false; setTimeout(() => { if (button.textContent === '完成') button.textContent = original; }, 1200); }
+}
+$('#mm-link-loss-btn').addEventListener('click', e => simulateAnomaly(e.currentTarget, 'LINK_LOSS'));
+$('#mm-low-battery-btn').addEventListener('click', e => simulateAnomaly(e.currentTarget, 'LOW_BATTERY'));
 $('#mm-stop-btn').addEventListener('click', e => confirmStop(e.currentTarget.dataset.code));
 
 /* ================= 新建任务抽屉 ================= */

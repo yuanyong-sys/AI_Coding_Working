@@ -158,6 +158,29 @@ export async function browserEndToEnd() {
     assert.ok(browserValidation.blockers.some(item => item.code === "AIRSPACE_CONFLICT"));
     assert.ok(browserValidation.blockers.some(item => item.code === "TIME_INVALID"));
     assert.ok(browserValidation.blockers.some(item => item.code === "AI_REQUIRED"));
+    const seededMissionStatus = await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.tasks.find(t=>t.id==='RW-20260905-012')?.status})()`);
+    assert.equal(seededMissionStatus, "RUNNING");
+    await evaluate(cdp, "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); document.querySelector('.k-card.clickable').click()");
+    await waitFor(cdp, "document.querySelector('#monitor-mask').classList.contains('open')");
+    assert.equal(await evaluate(cdp, "document.querySelector('.video-box').textContent.includes('视频流占位')"), true);
+    assert.equal(await evaluate(cdp, "['mm-alt','mm-spd','mm-batt','mm-sig'].every(id => Boolean(document.getElementById(id).textContent.trim()))"), true);
+    assert.equal(await evaluate(cdp, "Array.from(document.querySelectorAll('.mm-foot button')).some(b => b.textContent.includes('切换备用机'))"), false);
+    await evaluate(cdp, "document.querySelector('#mm-hover-btn').click()");
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const hoverFeedback = await evaluate(cdp, "Array.from(document.querySelectorAll('.toast'),t=>t.textContent)");
+    assert.ok(hoverFeedback.some(text => text.includes('模拟悬停指令已成功执行')), JSON.stringify(hoverFeedback));
+    await evaluate(cdp, "document.querySelector('#mm-fail-next').click(); document.querySelector('#mm-return-btn').click()");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('返航指令发送失败'))");
+    await evaluate(cdp, "document.querySelector('#mm-link-loss-btn').click()");
+    await waitFor(cdp, "document.querySelector('#mm-link-loss-btn').textContent === '完成'");
+    const taskSideAlert = await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.alerts.find(a=>a.missionId==='RW-20260905-012')})()`);
+    assert.equal(taskSideAlert.type, "图传断链");
+    await evaluate(cdp, "document.querySelector('#monitor-close').click(); document.querySelector('.k-card.clickable').click(); document.querySelector('#mm-stop-btn').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#confirm-mask').classList.contains('open')"), true);
+    await evaluate(cdp, "document.querySelector('#cf-cancel').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#confirm-mask').classList.contains('open')"), false);
+    await evaluate(cdp, "document.querySelector('#mm-stop-btn').click(); document.querySelector('#cf-ok').click()");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.k-head')).some(h=>h.textContent.includes('已终止') && h.textContent.match(/1/))");
 
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {

@@ -34,14 +34,14 @@ async def test_business_change_survives_new_app_instance(tmp_path: Path):
     first = create_app(database_url=database_url, serve_frontend=False)
     async with first.router.lifespan_context(first):
         async with AsyncClient(transport=ASGITransport(app=first), base_url="http://test") as client:
-            changed = await client.patch("/api/tasks/RW-20260905-012", json={"status": "PENDING_EXECUTION"})
+            changed = await client.patch("/api/tasks/RW-20260905-007", json={"status": "PENDING_EXECUTION"})
             assert changed.status_code == 200
 
     second = create_app(database_url=database_url, serve_frontend=False)
     async with second.router.lifespan_context(second):
         async with AsyncClient(transport=ASGITransport(app=second), base_url="http://test") as client:
             state = (await client.get("/api/state")).json()
-            task = next(item for item in state["tasks"] if item["id"] == "RW-20260905-012")
+            task = next(item for item in state["tasks"] if item["id"] == "RW-20260905-007")
             assert task["status"] == "PENDING_EXECUTION"
 
 
@@ -124,7 +124,7 @@ async def test_create_dispatch_failure_retry_and_batch(client: AsyncClient):
     assert retried.status_code == 200
     assert retried.json()["status"] == "PENDING_EXECUTION"
 
-    batch = await client.post("/api/tasks/dispatch", json={"taskIds": ["RW-20260905-007", "RW-20260905-012"]})
+    batch = await client.post("/api/tasks/dispatch", json={"taskIds": ["RW-20260905-007", "RW-20260905-018"]})
     assert batch.status_code == 200
     assert batch.json()["successCount"] == 2
 
@@ -163,3 +163,64 @@ async def test_task_fields_conflicts_and_state_machine_are_server_owned(client: 
         changed = await client.post(f"/api/tasks/{stored['id']}/transition", json={"target": target})
         assert changed.status_code == 200
         assert changed.json()["status"] == target
+
+
+@pytest.mark.asyncio
+async def test_running_mission_monitor_and_controls_are_audited(client: AsyncClient):
+    seeded_control = await client.post("/api/tasks/RW-20260905-012/control", json={"command": "HOVER"})
+    assert seeded_control.status_code == 200
+    for target in ["PENDING_EXECUTION", "RUNNING"]:
+        changed = await client.post("/api/tasks/RW-20260905-020/transition", json={"target": target})
+        assert changed.status_code == 200
+
+    monitor = await client.get("/api/tasks/RW-20260905-020/monitor")
+    assert monitor.status_code == 200
+    assert monitor.json()["video"] == {"mode": "SIMULATED", "label": "视频流占位"}
+    assert set(monitor.json()["telemetry"]) == {"altitudeM", "speedMps", "batteryPct", "signalDbm"}
+    assert len(monitor.json()["trajectory"]) >= 3
+
+    sent = await client.post("/api/tasks/RW-20260905-020/control", json={"command": "HOVER"})
+    assert sent.status_code == 200
+    assert sent.json()["result"] == "SUCCESS"
+    assert sent.json()["simulated"] is True
+
+    failed = await client.post(
+        "/api/tasks/RW-20260905-020/control",
+        json={"command": "RETURN", "simulateFailure": True},
+    )
+    assert failed.status_code == 503
+    audit = (await client.get("/api/audit")).json()["audit"]
+    assert [(item["action"], item["result"]) for item in audit[-2:]] == [
+        ("MISSION_CONTROL_HOVER", "SUCCESS"),
+        ("MISSION_CONTROL_RETURN", "FAILED"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_anomaly_auto_switches_backup_or_marks_abnormal_with_unique_alert(client: AsyncClient):
+    created = (await client.post("/api/tasks", json={
+        "name": "备用机续飞", "date": "2026-09-09", "start": "15:00", "end": "16:00",
+        "droneId": "U-01", "battery": 82, "route": "贵北高速巡检线",
+        "aiItems": ["交通事故"], "backupDrone": "U-02",
+    })).json()
+    for target in ["PENDING_EXECUTION", "RUNNING"]:
+        await client.post(f"/api/tasks/{created['id']}/transition", json={"target": target})
+
+    switched = await client.post(f"/api/tasks/{created['id']}/anomaly", json={"kind": "LINK_LOSS"})
+    assert switched.status_code == 200
+    assert switched.json()["mission"]["status"] == "RUNNING"
+    assert switched.json()["mission"]["droneId"] == "U-02"
+    assert switched.json()["outcome"] == "BACKUP_SWITCHED"
+    alert_id = switched.json()["alert"]["id"]
+
+    repeated = await client.post(f"/api/tasks/{created['id']}/anomaly", json={"kind": "LOW_BATTERY"})
+    assert repeated.json()["alert"]["id"] == alert_id
+    state = (await client.get("/api/state")).json()
+    assert len([item for item in state["alerts"] if item.get("missionId") == created["id"]]) == 1
+
+    abnormal = await client.post("/api/tasks/RW-20260905-015/anomaly", json={"kind": "LINK_LOSS"})
+    assert abnormal.json()["outcome"] == "ABNORMAL"
+    assert abnormal.json()["mission"]["status"] == "ABNORMAL"
+    audit = (await client.get("/api/audit")).json()["audit"]
+    assert any(item["action"] == "MISSION_AUTO_BACKUP_SWITCH" for item in audit)
+    assert any(item["action"] == "MISSION_MARKED_ABNORMAL" for item in audit)

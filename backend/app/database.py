@@ -37,9 +37,17 @@ class Database:
                     "route": "VARCHAR", "ai_items": "TEXT",
                     "mission_date": "VARCHAR", "mission_type": "VARCHAR", "priority": "VARCHAR",
                     "owner": "VARCHAR", "area": "VARCHAR", "dock": "VARCHAR", "backup_drone": "VARCHAR",
+                    "control_state": "VARCHAR",
                 }.items():
                     if name not in columns:
                         await connection.execute(text(f"ALTER TABLE mission ADD COLUMN {name} {kind}"))
+                audit_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(audit)"))).all()}
+                for name in ("subject_id", "result", "detail"):
+                    if name not in audit_columns:
+                        await connection.execute(text(f"ALTER TABLE audit ADD COLUMN {name} VARCHAR"))
+                alert_columns = {row[1] for row in (await connection.execute(text("PRAGMA table_info(alert)"))).all()}
+                if "mission_id" not in alert_columns:
+                    await connection.execute(text("ALTER TABLE alert ADD COLUMN mission_id VARCHAR"))
 
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self.sessions() as session:

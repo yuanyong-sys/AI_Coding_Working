@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -26,7 +27,8 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await database.create_schema()
         async with database.sessions() as session:
-            migration_source = legacy_json if legacy_json is not None else (settings.legacy_json if database_url is None else None)
+            uses_default_database = database_url is None and "DRONE_POC_DATABASE_URL" not in os.environ
+            migration_source = legacy_json if legacy_json is not None else (settings.legacy_json if uses_default_database else None)
             await ensure_seeded(session, legacy_json=migration_source)
         yield
         await database.close()
