@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>低空态势一张图 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --bg:#0B1B33; --surface:#12294A; --fg:#EAF1FB; --muted:#8FA3C4; --border:rgba(76,154,255,0.25);
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit}
+a{color:var(--blue-400); text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--blue-400); outline-offset:2px; border-radius:2px}
+
+/* ===== 舞台等比缩放 ===== */
+#viewport{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+#stage{width:1920px;height:1080px;flex:none;transform-origin:center center;display:flex;flex-direction:column;background:var(--bg);position:relative}
+
+/* ===== 顶部标题栏 88px ===== */
+.topbar{height:88px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:relative;
+  background:linear-gradient(180deg, color-mix(in srgb,var(--navy-700) 55%, transparent), transparent);
+  border-bottom:1px solid var(--border)}
+.topbar .side{display:flex;align-items:center;gap:20px;min-width:480px}
+.topbar .side.right{justify-content:flex-end}
+.platform-title{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:32px;font-weight:700;line-height:1.3;letter-spacing:6px;color:var(--fg);white-space:nowrap}
+.platform-title em{font-style:normal;color:var(--blue-400)}
+.back-link{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);padding:8px 10px;border-radius:4px}
+.back-link:hover{color:var(--fg);background:color-mix(in srgb,var(--blue-400) 12%, transparent);text-decoration:none}
+.back-link:active{background:color-mix(in srgb,var(--blue-400) 20%, transparent)}
+.meta-item{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--muted)}
+.meta-item .num{color:var(--fg);font-size:17px}
+.meta-item svg{flex:none}
+.dim-switch{display:flex;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.dim-switch button{height:32px;padding:0 14px;font-size:13px;color:var(--muted);background:transparent;transition:background .15s,color .15s}
+.dim-switch button:hover{color:var(--fg);background:color-mix(in srgb,var(--blue-400) 14%, transparent)}
+.dim-switch button:active{background:color-mix(in srgb,var(--blue-400) 22%, transparent)}
+.dim-switch button.on{background:var(--blue-600);color:#fff}
+.fs-btn{display:flex;align-items:center;gap:6px;height:36px;padding:0 12px;font-size:13px;color:var(--muted);
+  border:1px solid var(--border);border-radius:4px;transition:all .15s}
+.fs-btn:hover{color:var(--fg);background:color-mix(in srgb,var(--blue-400) 14%, transparent)}
+.fs-btn:active{transform:scale(.97)}
+.poc-badge{display:inline-flex;align-items:center;height:30px;padding:0 10px;border:1px solid var(--info-cyan);border-radius:4px;
+  color:var(--info-cyan);background:color-mix(in srgb,var(--info-cyan) 10%, transparent);font-size:12px;font-weight:600;white-space:nowrap}
+.control-btn[aria-pressed="true"]{color:#fff;background:var(--blue-600);border-color:var(--blue-400)}
+
+/* ===== 三栏主区 ===== */
+.main{flex:1;display:flex;gap:12px;padding:12px 12px 0;min-height:0}
+.col{width:350px;flex:none;display:flex;flex-direction:column;gap:12px;min-height:0}
+/* 350px 侧栏文字在等比例缩小值上统一放大 25%，兼顾信息密度与可读性。 */
+.col .panel-title{font-size:14px}
+.col .panel-more{font-size:11px}
+.col .stat-label{font-size:12px}
+.col .stat-value{font-size:33px}
+.col .stat-value .unit{font-size:12.5px}
+.col .stat-delta{font-size:11px}
+.col .fleet-id{font-size:12.5px}
+.col .fleet-task,.col .batt-num{font-size:11px}
+.col .task-meta{font-size:12px}
+.col .overdue-tag{font-size:10px}
+.col .alert-level,.col .alert-loc,.col .alert-time{font-size:11px}
+.col .alert-type{font-size:12px}
+.col .rose-legend,.col .trend-legend{font-size:11px}
+.col svg text{font-size:91%}
+.panel{background:color-mix(in srgb,var(--navy-800) 92%, transparent);
+  border:1px solid var(--border);border-radius:6px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel-head{flex:none;display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px}
+.panel-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;line-height:1.4;color:var(--fg)}
+.panel-title::before{content:"";width:4px;height:14px;background:var(--blue-400);border-radius:1px}
+.panel-more{font-size:12px;color:var(--muted);padding:4px 6px;border-radius:3px}
+.panel-more:hover{color:var(--fg);background:color-mix(in srgb,var(--blue-400) 12%, transparent);text-decoration:none}
+.panel-more:active{background:color-mix(in srgb,var(--blue-400) 20%, transparent)}
+.panel-body{flex:1;padding:0 14px 12px;min-height:0}
+
+/* A1 指标卡 2×2 */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;height:100%}
+.stat-card{background:color-mix(in srgb,var(--navy-700) 45%, transparent);border:1px solid var(--border);
+  border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.stat-label{font-size:13px;color:var(--muted)}
+.stat-value{font-size:36px;font-weight:700;color:var(--fg);line-height:1.1}
+.stat-value .unit{font-size:14px;font-weight:400;color:var(--muted);margin-left:4px}
+.stat-delta{font-size:12px;display:flex;align-items:center;gap:4px}
+.stat-delta.good{color:var(--safe-green)}
+.stat-delta.bad{color:var(--alert-red)}
+.stat-delta .base{color:var(--muted)}
+
+/* A2 机队列表 */
+.fleet-list{display:flex;flex-direction:column;gap:6px;overflow:auto;height:100%}
+.fleet-row{display:grid;grid-template-columns:14px 64px 1fr 92px;align-items:center;gap:10px;
+  padding:8px 10px;border-radius:5px;border:1px solid transparent;cursor:pointer;transition:background .15s,border-color .15s;text-align:left;width:100%}
+.fleet-row:hover{background:color-mix(in srgb,var(--blue-400) 10%, transparent)}
+.fleet-row:active{background:color-mix(in srgb,var(--blue-400) 18%, transparent)}
+.fleet-row.active{background:color-mix(in srgb,var(--blue-600) 24%, transparent);border-color:var(--blue-400)}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.dot.online{background:var(--safe-green)}
+.dot.busy{background:var(--blue-400)}
+.dot.alarm{background:var(--alert-red);animation:breathe 1s ease-in-out infinite}
+.dot.offline{background:var(--muted);opacity:.4}
+.fleet-id{font-size:14px;font-weight:600}
+.fleet-task{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.batt{display:flex;align-items:center;gap:6px}
+.batt-bar{flex:1;height:5px;border-radius:3px;background:color-mix(in srgb,var(--navy-900) 70%, transparent);overflow:hidden}
+.batt-fill{height:100%;border-radius:3px;background:var(--safe-green)}
+.batt-fill.low{background:var(--warn-orange)}
+.batt-num{font-size:12px;color:var(--muted);width:34px;text-align:right}
+
+/* A3 任务进度 */
+.task-list{display:flex;flex-direction:column;gap:12px;height:100%;justify-content:center}
+.task-row{display:flex;flex-direction:column;gap:5px}
+.task-meta{display:flex;justify-content:space-between;font-size:13px}
+.task-name{color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-pct{color:var(--blue-400);font-weight:600}
+.task-row.overdue .task-pct{color:var(--warn-orange)}
+.task-row.overdue .task-fill{background:var(--warn-orange)}
+.task-bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--navy-900) 70%, transparent);overflow:hidden}
+.task-fill{height:100%;border-radius:3px;background:var(--blue-400)}
+.overdue-tag{font-size:11px;color:var(--warn-orange);border:1px solid color-mix(in srgb,var(--warn-orange) 55%, transparent);border-radius:3px;padding:0 4px;margin-left:6px}
+
+/* ===== 中央地图区 ===== */
+.map-wrap{flex:1;position:relative;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--navy-900)}
+.map-wrap svg.gis{position:absolute;inset:0;width:100%;height:100%}
+#amap-container{position:absolute;inset:0;display:none;background:var(--navy-900);overflow:hidden}
+#amap-container.show{display:block}
+.amap-tile{position:absolute;width:256px;height:256px;pointer-events:none;user-select:none;
+  filter:grayscale(1) invert(0.92) brightness(0.9) contrast(1.08)}
+#amap-container::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:color-mix(in srgb,var(--navy-900) 34%, transparent)}
+.layer-ctrl{position:absolute;top:14px;left:14px;z-index:5;background:color-mix(in srgb,var(--navy-800) 92%, transparent);
+  border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.layer-ctrl h4{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:1px}
+.layer-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);cursor:pointer;min-height:24px}
+.layer-item input{position:absolute;opacity:0;pointer-events:none}
+.layer-item:hover .switch{background:color-mix(in srgb,var(--blue-400) 35%, var(--navy-700))}
+.layer-item:active .switch{filter:brightness(1.15)}
+.layer-item input:checked:hover + .switch{background:color-mix(in srgb,var(--blue-600) 80%, var(--blue-400))}
+.switch{width:32px;height:18px;border-radius:9px;background:var(--navy-700);position:relative;flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:all .15s}
+.layer-item input:checked + .switch{background:var(--blue-600)}
+.layer-item input:checked + .switch::after{left:16px;background:#fff}
+.layer-item input:focus-visible + .switch{outline:2px solid var(--blue-400);outline-offset:2px}
+.legend{position:absolute;left:14px;bottom:14px;z-index:5;background:color-mix(in srgb,var(--navy-800) 92%, transparent);
+  border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.legend-row{display:flex;align-items:center;gap:8px}
+.legend i{width:14px;height:8px;flex:none;display:inline-block}
+.map-note{position:absolute;right:14px;bottom:14px;z-index:5;font-size:12px;color:var(--muted);
+  background:color-mix(in srgb,var(--navy-800) 80%, transparent);border:1px solid var(--border);border-radius:4px;padding:4px 8px}
+
+/* M4 信息卡 */
+.info-card{position:absolute;top:14px;right:14px;z-index:6;width:300px;background:color-mix(in srgb,var(--navy-800) 96%, transparent);
+  border:1px solid var(--blue-400);border-radius:6px;padding:14px;display:none}
+.info-card.show{display:block}
+.info-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.info-title{font-size:15px;font-weight:600;line-height:1.4}
+.info-close{color:var(--muted);width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center}
+.info-close:hover{color:var(--fg);background:color-mix(in srgb,var(--blue-400) 14%, transparent)}
+.info-close:active{background:color-mix(in srgb,var(--blue-400) 22%, transparent)}
+.info-thumb{height:88px;border-radius:4px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--navy-700) 55%, transparent);border:1px dashed var(--border);color:var(--muted);font-size:12px;gap:6px}
+.info-row{display:flex;font-size:13px;line-height:2}
+.info-row .k{width:72px;color:var(--muted);flex:none}
+.info-row .v{color:var(--fg)}
+.drill-link{display:inline-flex;align-items:center;gap:4px;margin-top:10px;font-size:13px;font-weight:600}
+
+/* B1 告警流 */
+.alert-list{display:flex;flex-direction:column;gap:8px;overflow:hidden;height:100%}
+.alert-item{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;
+  padding:8px 10px;border-radius:5px;border:1px solid var(--border);
+  background:color-mix(in srgb,var(--navy-700) 35%, transparent);cursor:pointer;transition:background .15s;width:100%;text-align:left}
+.alert-item:hover{background:color-mix(in srgb,var(--blue-400) 10%, transparent)}
+.alert-item:active{background:color-mix(in srgb,var(--blue-400) 18%, transparent)}
+.alert-item.urgent{border-color:var(--alert-red);animation:borderBreathe 1s ease-in-out infinite}
+.alert-item.flash{animation:flashNew 3s ease-out forwards}
+.alert-level{height:24px;border-radius:3px;font-size:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+.lv-red{background:var(--alert-red)} .lv-orange{background:var(--warn-orange)} .lv-yellow{background:var(--caution-yellow);color:var(--navy-900)}
+.alert-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.alert-type{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.alert-loc{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alert-time{font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* B2 玫瑰图 */
+.rose-wrap{display:flex;align-items:center;height:100%;gap:8px}
+.rose-wrap svg{flex:none}
+.rose-legend{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:12px}
+.rose-legend .rl{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.rose-legend .rl i{width:10px;height:10px;border-radius:2px;flex:none}
+.rose-legend .rl b{color:var(--fg);font-weight:600;margin-left:auto}
+
+/* B4 趋势 */
+.trend-wrap{height:100%;display:flex;flex-direction:column}
+.trend-legend{display:flex;gap:16px;font-size:12px;color:var(--muted);padding:2px 0 6px}
+.trend-legend i{width:14px;height:3px;display:inline-block;vertical-align:middle;margin-right:5px;border-radius:2px}
+
+/* 底部播报条 */
+.ticker{flex:none;height:44px;margin:12px;border:1px solid var(--border);border-radius:6px;
+  background:color-mix(in srgb,var(--navy-800) 92%, transparent);display:flex;align-items:center;overflow:hidden}
+.ticker-label{flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;font-size:13px;font-weight:600;color:var(--info-cyan);
+  border-right:1px solid var(--border);height:100%}
+.ticker-viewport{flex:1;overflow:hidden}
+.ticker-track{display:flex;gap:64px;white-space:nowrap;animation:marquee 28s linear infinite;width:max-content}
+.ticker-track span{font-size:13px;color:var(--muted)}
+.ticker-track b{color:var(--fg);font-weight:600}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* 动画 */
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes borderBreathe{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--alert-red) 55%, transparent)}50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--alert-red) 12%, transparent)}}
+@keyframes flashNew{0%{background:color-mix(in srgb,var(--blue-600) 45%, transparent)}100%{background:color-mix(in srgb,var(--navy-700) 35%, transparent)}}
+.pulse-ring{transform-box:fill-box;transform-origin:center;animation:pulse 1s ease-out infinite}
+@keyframes pulse{0%{transform:scale(.35);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+.drone-hl{transform-box:fill-box;transform-origin:center;animation:pulse 1.4s ease-out infinite}
+
+/* Toast */
+#toast-box{position:fixed;top:20px;right:20px;z-index:99;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--navy-800);border:1px solid var(--blue-400);border-left:4px solid var(--blue-400);color:var(--fg);
+  border-radius:6px;padding:10px 16px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);
+  animation:toastIn .2s ease-out;max-width:320px}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateX(20px)}}
+
+/* SVG 图层通用 */
+.map-label{font-size:12px;fill:var(--muted)}
+.map-label-bright{font-size:12px;fill:var(--fg);font-weight:600}
+
+/* 空态占位 */
+.empty-tip{display:flex;align-items:center;justify-content:center;height:100%;min-height:48px;
+  color:var(--muted);font-size:13px;border:1px dashed var(--border);border-radius:5px;padding:8px}
+
+/* 地图 SVG 可聚焦点位 */
+svg.gis g[tabindex]{outline:none}
+svg.gis g[tabindex]:focus-visible{outline:2px solid var(--blue-400);outline-offset:3px}
+
+/* 降级动画：尊重系统减弱动态效果设置 */
+@media (prefers-reduced-motion: reduce){
+  .ticker-track{animation:none}
+  .pulse-ring,.drone-hl{animation:none;opacity:0}
+  .dot.alarm,.alert-item.urgent,.alert-item.flash{animation:none}
+  .toast,.toast.hide{animation:none}
+}
+</style>
+</head>
+<body data-page="overview" data-api="/api/state">
+<div id="viewport">
+<div id="stage" data-od-id="screen-stage" data-flight-speed="0.35" data-idle-tour-ms="60000" data-tour-state="idle">
+
+  <!-- ===== 顶部标题栏 ===== -->
+  <header class="topbar" data-od-id="screen-topbar">
+    <div class="side">
+      <a class="back-link" href="index.html" data-od-id="back-to-index">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        返回概览
+      </a>
+      <span class="poc-badge badge">POC 演示数据</span>
+      <div class="dim-switch" data-od-id="dim-switch" role="tablist" aria-label="时间维度">
+        <button class="on" data-dim="day" role="tab" aria-selected="true">今日</button>
+        <button data-dim="week" role="tab" aria-selected="false">本周</button>
+        <button data-dim="month" role="tab" aria-selected="false">本月</button>
+      </div>
+    </div>
+    <h1 class="platform-title">无人机<em>低空智慧调度</em>平台</h1>
+    <div class="side right">
+      <span class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span class="num" id="clock">--:--:--</span>
+      </span>
+      <span class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+        晴 <span class="num">26°C</span>
+      </span>
+      <span class="meta-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+        值班：王警官
+      </span>
+      <button class="fs-btn control-btn" id="mute-btn" aria-pressed="false" aria-label="静音告警提示音">声音</button>
+      <button class="fs-btn control-btn" id="tour-lock" aria-pressed="false" aria-label="锁定当前视角">锁定</button>
+      <button class="fs-btn" id="fs-btn" data-od-id="fullscreen-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        全屏
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== 巡查成果播报条 ===== -->
+  <div class="ticker" data-od-id="result-ticker">
+    <span class="ticker-label">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-7-7 18-2.5-7.5L3 11z"/></svg>
+      巡查成果播报
+    </span>
+    <div class="ticker-viewport">
+      <div class="ticker-track" id="ticker-track"></div>
+    </div>
+  </div>
+
+  <!-- ===== 三栏主区 ===== -->
+  <div class="main">
+
+    <!-- 左栏 -->
+    <div class="col" data-od-id="left-col">
+      <!-- A1 今日巡检概览 -->
+      <section class="panel" style="flex:0 0 262px" data-od-id="panel-daily-stats">
+        <div class="panel-head">
+          <span class="panel-title" id="a1-title">今日巡检概览</span>
+          <span class="panel-more" style="cursor:default">示例数据</span>
+        </div>
+        <div class="panel-body">
+          <div class="stat-grid" id="stat-grid"></div>
+        </div>
+      </section>
+
+      <!-- A2 机队状态 -->
+      <section class="panel" style="flex:0 0 300px" data-od-id="panel-fleet">
+        <div class="panel-head">
+          <span class="panel-title">机队状态</span>
+          <a class="panel-more" href="dispatch-tasks.html">更多</a>
+        </div>
+        <div class="panel-body">
+          <div class="fleet-list" id="fleet-list"></div>
+        </div>
+      </section>
+
+      <!-- A3 任务执行进度 -->
+      <section class="panel" style="flex:1" data-od-id="panel-task-progress">
+        <div class="panel-head">
+          <span class="panel-title">任务执行进度 Top5</span>
+          <a class="panel-more" href="dispatch-tasks.html">更多</a>
+        </div>
+        <div class="panel-body">
+          <div class="task-list" id="task-list"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 中央地图区 -->
+    <div class="map-wrap" data-od-id="map-area">
+      <div id="amap-container" role="img" aria-label="高德地图底图"></div>
+      <svg class="gis" viewBox="0 0 940 944" preserveAspectRatio="xMidYMid slice" role="img" aria-label="黔南州低空态势示意图（风格化示例地图）">
+        <defs>
+          <radialGradient id="mapGlow" cx="50%" cy="42%" r="75%">
+            <stop offset="0%" style="stop-color:var(--navy-800)"/>
+            <stop offset="100%" style="stop-color:var(--navy-900)"/>
+          </radialGradient>
+        </defs>
+        <rect id="map-bg-rect" width="940" height="944" fill="url(#mapGlow)"/>
+
+        <!-- 路网图层 -->
+        <g id="layer-roads" stroke="var(--navy-700)" stroke-width="1.4" fill="none" opacity="0.95">
+          <path d="M-20 220 L960 180"/><path d="M-20 430 L960 400"/>
+          <path d="M-20 660 L960 640"/><path d="M-20 850 L960 830"/>
+          <path d="M140 -20 L110 964"/><path d="M380 -20 L360 964"/>
+          <path d="M620 -20 L610 964"/><path d="M820 -20 L840 964"/>
+          <path d="M-20 320 C200 300 420 340 960 290" stroke-width="2.4" style="stroke:var(--blue-400)" opacity=".5"/>
+          <path d="M480 -20 C500 300 460 640 490 964" stroke-width="2.4" style="stroke:var(--blue-400)" opacity=".5"/>
+          <path d="M-20 540 C300 560 640 520 960 555" stroke-width="1.8" style="stroke:var(--navy-700)"/>
+        </g>
+        <g id="layer-road-names">
+          <text class="map-label" x="500" y="300" transform="rotate(-3 500 300)">贵北高速</text>
+          <text class="map-label" x="492" y="180" transform="rotate(88 492 180)">沪昆高速</text>
+          <text class="map-label" x="700" y="545">厦蓉高速</text>
+          <text class="map-label" x="150" y="415" transform="rotate(-2 150 415)">兰海高速</text>
+        </g>
+
+        <!-- 重点区域围栏图层 -->
+        <g id="layer-fences" fill="none" stroke-width="1.6" stroke-dasharray="7 5">
+          <rect x="560" y="110" width="270" height="180" rx="8" style="stroke:var(--info-cyan)"/>
+          <rect x="120" y="470" width="240" height="200" rx="8" style="stroke:var(--info-cyan)"/>
+          <rect x="620" y="640" width="240" height="180" rx="8" style="stroke:var(--info-cyan)"/>
+          <text class="map-label" x="576" y="132" style="fill:var(--info-cyan)">都匀城区段</text>
+          <text class="map-label" x="136" y="492" style="fill:var(--info-cyan)">福泉贵定段</text>
+          <text class="map-label" x="636" y="662" style="fill:var(--info-cyan)">独山荔波段</text>
+        </g>
+
+        <!-- 任务航线图层 -->
+        <g id="layer-routes" fill="none" stroke-width="2" stroke-dasharray="10 6" opacity="0.9">
+          <path style="stroke:var(--info-cyan)" d="M120 700 C260 620 340 460 470 420 C600 380 700 300 810 210"/>
+          <path style="stroke:var(--info-cyan)" d="M180 240 C320 300 420 420 540 560 C640 680 720 720 800 760"/>
+          <circle cx="120" cy="700" r="4" style="fill:var(--info-cyan)"/>
+          <circle cx="180" cy="240" r="4" style="fill:var(--info-cyan)"/>
+        </g>
+
+        <!-- 告警点位图层 -->
+        <g id="layer-alerts"></g>
+
+        <!-- 无人机点位图层 -->
+        <g id="layer-drones"></g>
+      </svg>
+
+      <!-- M2 图层控制 -->
+      <div class="layer-ctrl" data-od-id="layer-control">
+        <h4>图层控制</h4>
+        <label class="layer-item"><input type="checkbox" checked data-layer="layer-drones"><span class="switch"></span>无人机</label>
+        <label class="layer-item"><input type="checkbox" checked data-layer="layer-routes"><span class="switch"></span>任务航线</label>
+        <label class="layer-item"><input type="checkbox" checked data-layer="layer-alerts"><span class="switch"></span>告警点位</label>
+        <label class="layer-item"><input type="checkbox" checked data-layer="layer-fences"><span class="switch"></span>重点区域围栏</label>
+        <label class="layer-item"><input type="checkbox" checked data-layer="layer-roads"><span class="switch"></span>道路路网</label>
+      </div>
+
+      <!-- M3 图例 -->
+      <div class="legend" data-od-id="map-legend">
+        <div class="legend-row"><i style="background:var(--safe-green);border-radius:50%"></i>无人机在线</div>
+        <div class="legend-row"><i style="background:var(--blue-400);border-radius:50%"></i>任务中</div>
+        <div class="legend-row"><i style="background:var(--alert-red);border-radius:50%"></i>紧急告警</div>
+        <div class="legend-row"><i style="background:var(--warn-orange);border-radius:50%"></i>重要告警</div>
+        <div class="legend-row"><i style="background:var(--caution-yellow);border-radius:50%"></i>提示告警</div>
+        <div class="legend-row"><i style="background:transparent;border-top:2px dashed var(--info-cyan);height:0"></i>任务航线</div>
+      </div>
+
+      <!-- M4 信息卡 -->
+      <div class="info-card" id="info-card" data-od-id="map-info-card" role="dialog" aria-modal="false" aria-labelledby="info-title">
+        <div class="info-head">
+          <span class="info-title" id="info-title">—</span>
+          <button class="info-close" id="info-close" aria-label="关闭信息卡">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div class="info-thumb" id="info-thumb">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 4-4 5 5"/></svg>
+          AI 抓图占位（示例）
+        </div>
+        <div id="info-rows"></div>
+        <a class="drill-link" id="info-drill" href="alert-workbench.html">
+          下钻处置
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+
+      <div class="map-note">风格化示意图 · 非真实地理数据</div>
+    </div>
+
+    <!-- 右栏 -->
+    <div class="col" data-od-id="right-col">
+      <!-- B1 实时告警流 -->
+      <section class="panel" style="flex:0 0 300px" data-od-id="panel-alert-stream">
+        <div class="panel-head">
+          <span class="panel-title">实时告警流</span>
+          <a class="panel-more" href="alert-workbench.html">进入工作台</a>
+        </div>
+        <div class="panel-body">
+          <div class="alert-list" id="alert-list" role="log" aria-live="polite" aria-label="实时告警流"></div>
+        </div>
+      </section>
+
+      <!-- B2 告警类型分布 -->
+      <section class="panel" style="flex:0 0 196px" data-od-id="panel-alert-rose">
+        <div class="panel-head"><span class="panel-title">告警类型分布</span></div>
+        <div class="panel-body">
+          <div class="rose-wrap">
+            <svg id="rose-chart" width="168" height="168" viewBox="0 0 168 168" role="img" aria-label="告警类型玫瑰图"></svg>
+            <div class="rose-legend" id="rose-legend"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B4 近7日趋势 -->
+      <section class="panel" style="flex:1" data-od-id="panel-trend">
+        <div class="panel-head"><span class="panel-title">近 7 日任务数 vs 告警数</span></div>
+        <div class="panel-body">
+          <div class="trend-wrap">
+            <div class="trend-legend">
+              <span><i style="background:var(--blue-400)"></i>任务数</span>
+              <span><i style="background:var(--warn-orange)"></i>告警数</span>
+            </div>
+            <svg id="trend-chart" width="100%" height="100%" viewBox="0 0 440 150" preserveAspectRatio="none" role="img" aria-label="近7日任务与告警趋势图"></svg>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+
+<script>
+/* ============================================================
+   低空态势一张图 · 数据与交互
+   全部为前端示例数据；接入真实接口时替换 DATA 即可
+   ============================================================ */
+
+/* ---- 高德底图配置：填入 Web 端(JS API) key 后自动启用真实高德底图 ---- */
+const AMAP_KEY = "";          // 高德开放平台 Web 端(JS API) Key
+const AMAP_SECRET = "";       // 安全密钥 securityJsCode
+const MAP_CENTER = [107.52, 26.26]; // 黔南州中心（都匀市）经纬度
+
+/* ---- 示例业务数据 ---- */
+const DATA = {
+  stats: {
+    day:   { title:"今日巡检概览", cards:[
+      {label:"巡检任务", value:18, unit:"架次", delta:"+2", dir:"up", base:"较昨日"},
+      {label:"飞行时长", value:42.5, unit:"小时", delta:"+3.2h", dir:"up", base:"较昨日"},
+      {label:"覆盖里程", value:386, unit:"km", delta:"+41", dir:"up", base:"较昨日"},
+      {label:"发现告警", value:23, unit:"起", delta:"+5", dir:"up", base:"较昨日"}]},
+    week:  { title:"本周巡检概览", cards:[
+      {label:"巡检任务", value:126, unit:"架次", delta:"+9", dir:"up", base:"较上周"},
+      {label:"飞行时长", value:298, unit:"小时", delta:"+22h", dir:"up", base:"较上周"},
+      {label:"覆盖里程", value:2704, unit:"km", delta:"+183", dir:"up", base:"较上周"},
+      {label:"发现告警", value:151, unit:"起", delta:"-12", dir:"down", base:"较上周"}]},
+    month: { title:"本月巡检概览", cards:[
+      {label:"巡检任务", value:542, unit:"架次", delta:"+47", dir:"up", base:"较上月"},
+      {label:"飞行时长", value:1286, unit:"小时", delta:"+96h", dir:"up", base:"较上月"},
+      {label:"覆盖里程", value:11430, unit:"km", delta:"+802", dir:"up", base:"较上月"},
+      {label:"发现告警", value:628, unit:"起", delta:"-35", dir:"down", base:"较上月"}]}
+  },
+  fleet: [
+    {id:"U-01", status:"online", task:"贵北高速惠水段航线巡检", batt:82, x:300, y:300},
+    {id:"U-02", status:"online", task:"惠水服务区周边巡查",   batt:76, x:500, y:180},
+    {id:"U-03", status:"busy",   task:"福泉马场坪段夜间巡查",   batt:45, x:700, y:700},
+    {id:"U-04", status:"alarm",  task:"交通事故现场跟拍",     batt:61, x:470, y:420},
+    {id:"U-05", status:"online", task:"独山段秩序巡查",       batt:88, x:650, y:520},
+    {id:"U-06", status:"offline",task:"机库待命",             batt:100,x:150, y:800},
+    {id:"U-07", status:"online", task:"贵定段连接线隐患排查", batt:69, x:820, y:330},
+    {id:"U-08", status:"busy",   task:"三都荔波段秩序巡查",   batt:34, x:240, y:560}
+  ],
+  statusText: { online:"在线", busy:"任务中", alarm:"告警处置中", offline:"离线" },
+  tasks: [
+    {name:"惠水服务区周边巡查", pct:82},
+    {name:"贵北高速惠水段航线巡检", pct:68},
+    {name:"三都荔波段秩序巡查", pct:57},
+    {name:"福泉马场坪段夜间巡查", pct:45, overdue:true},
+    {name:"贵定段连接线隐患排查", pct:31, overdue:true}
+  ],
+  alerts: [
+    {level:"red",    type:"交通事故", loc:"兰海高速 K1582 都匀段",   time:"14:32", x:470, y:420},
+    {level:"orange", type:"烟雾火情", loc:"荔波互通匝道",         time:"14:18", x:720, y:690},
+    {level:"orange", type:"车辆违停", loc:"贵定连接线应急车道",       time:"13:56", x:210, y:540},
+    {level:"yellow", type:"行人闯入", loc:"厦蓉高速 K1380 桩号",       time:"13:40", x:830, y:320},
+    {level:"yellow", type:"道路积水", loc:"沪昆高速交汇桥下",         time:"12:52", x:660, y:530},
+    {level:"orange", type:"车辆违停", loc:"福泉服务区入口",     time:"11:47", x:640, y:250},
+    {level:"yellow", type:"行人聚集", loc:"惠水服务区停车区",         time:"08:15", x:500, y:150}
+  ],
+  levelText: { red:"紧急", orange:"重要", yellow:"提示" },
+  rose: [
+    {label:"交通事故", value:8, color:"#E5484D"},
+    {label:"车辆违停", value:6, color:"#F76B15"},
+    {label:"行人闯入", value:4, color:"#F5A623"},
+    {label:"烟雾火情", value:2, color:"#3DD9EB"},
+    {label:"道路积水", value:2, color:"#4C9AFF"},
+    {label:"其他",     value:1, color:"#8FA3C4"}
+  ],
+  trend: {
+    labels: (() => { const a=[]; for(let i=6;i>=0;i--){ const d=new Date(Date.now()-i*864e5);
+      a.push(String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")); } return a; })(),
+    tasks:  [12,15,13,18,16,19,18],
+    alerts: [4,6,5,8,6,9,7]
+  },
+  ticker: [
+    "<b class=\"num\">U-04</b> 完成兰海高速 K1582 事故现场多角度取证，证据包已归档",
+    "<b>惠水服务区周边</b> 早高峰巡查完成，秩序良好，违停劝导 <b class=\"num\">3</b> 起",
+    "<b>荔波互通</b> 烟雾告警经核实为施工扬尘误报，已标记并复训 AI 样本",
+    "<b>本周</b> 累计巡查里程 <b class=\"num\">2,704 km</b>，重点路段覆盖率 <b class=\"num\">87%</b>",
+    "<b>贵定连接线</b> 隐患排查发现护栏破损 <b class=\"num\">1</b> 处，已推送养护单位"
+  ]
+};
+
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---- 舞台等比缩放 ---- */
+function fit(){
+  const s = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  $("stage").style.transform = "scale("+s+")";
+}
+window.addEventListener("resize", fit); fit();
+
+/* ---- 时钟 ---- */
+function tickClock(){
+  const d = new Date(), p = n => String(n).padStart(2,"0");
+  $("clock").textContent = p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ---- Toast ---- */
+function toast(msg){
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  $("toast-box").appendChild(el);
+  setTimeout(()=>{ el.classList.add("hide"); setTimeout(()=>el.remove(), 300); }, 2600);
+}
+
+/* ---- A1 指标卡 ---- */
+function renderStats(dim){
+  const d = DATA.stats[dim];
+  $("a1-title").textContent = d.title;
+  $("stat-grid").innerHTML = d.cards.map(c =>{
+    /* 告警类指标上升为不利（红），业务规模类指标上升为正常（绿） */
+    const favorable = c.label.indexOf("告警") >= 0 ? c.dir === "down" : c.dir === "up";
+    return '<div class="stat-card">'+
+      '<span class="stat-label">'+c.label+'</span>'+
+      '<span class="stat-value num">'+c.value+'<span class="unit">'+c.unit+'</span></span>'+
+      '<span class="stat-delta '+(favorable?"good":"bad")+'">'+(c.dir==="up"?"▲":"▼")+' '+c.delta+
+      ' <span class="base">'+c.base+'</span></span>'+
+    '</div>';}).join("");
+}
+
+/* ---- 时间维度切换 ---- */
+document.querySelectorAll(".dim-switch button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".dim-switch button").forEach(b => {
+      b.classList.remove("on"); b.setAttribute("aria-selected","false");
+    });
+    btn.classList.add("on");
+    btn.setAttribute("aria-selected","true");
+    renderStats(btn.dataset.dim);
+  });
+});
+
+/* ---- A2 机队状态 ---- */
+function renderFleet(){
+  if(!DATA.fleet.length){
+    $("fleet-list").innerHTML = '<div class="empty-tip">暂无无人机接入</div>';
+    return;
+  }
+  $("fleet-list").innerHTML = DATA.fleet.map((d,i) =>
+    '<button class="fleet-row" data-i="'+i+'" data-od-id="fleet-'+d.id.toLowerCase()+'">'+
+      '<span class="dot '+d.status+'"></span>'+
+      '<span class="fleet-id num">'+d.id+'</span>'+
+      '<span class="fleet-task">'+d.task+'</span>'+
+      '<span class="batt"><span class="batt-bar"><span class="batt-fill'+(d.batt<50?" low":"")+
+      '" style="width:'+d.batt+'%"></span></span><span class="batt-num num">'+d.batt+'%</span></span>'+
+    '</button>').join("");
+  document.querySelectorAll(".fleet-row").forEach(row =>
+    row.addEventListener("click", () => selectDrone(+row.dataset.i, true)));
+}
+
+/* ---- A3 任务进度 ---- */
+function renderTasks(){
+  if(!DATA.tasks.length){
+    $("task-list").innerHTML = '<div class="empty-tip">暂无执行中任务</div>';
+    return;
+  }
+  $("task-list").innerHTML = DATA.tasks.map(t =>
+    '<div class="task-row'+(t.overdue?" overdue":"")+'">'+
+      '<div class="task-meta"><span class="task-name">'+t.name+
+      (t.overdue?'<span class="overdue-tag">超时</span>':"")+'</span>'+
+      '<span class="task-pct num">'+t.pct+'%</span></div>'+
+      '<div class="task-bar"><div class="task-fill" style="width:'+t.pct+'%"></div></div>'+
+    '</div>').join("");
+}
+
+/* ---- 地图点位（SVG 回退图层） ---- */
+const droneEls = {}; /* fleet 索引 -> SVG <g>，用于模拟飞行位移 */
+function renderMapPoints(){
+  const gA = $("layer-alerts"), gD = $("layer-drones");
+  gA.innerHTML = ""; gD.innerHTML = "";
+  DATA.alerts.forEach((a,i) => {
+    const col = a.level==="red" ? cssVar("--alert-red") : a.level==="orange" ? cssVar("--warn-orange") : cssVar("--caution-yellow");
+    const g = document.createElementNS(NS,"g");
+    g.setAttribute("cursor","pointer"); g.setAttribute("data-i", i);
+    g.setAttribute("tabindex","0"); g.setAttribute("role","button");
+    g.setAttribute("aria-label", DATA.levelText[a.level]+"告警："+a.type+"，"+a.loc);
+    g.innerHTML =
+      '<circle class="pulse-ring" cx="'+a.x+'" cy="'+a.y+'" r="10" fill="'+col+'" opacity=".55"/>'+
+      '<circle cx="'+a.x+'" cy="'+a.y+'" r="6.5" fill="'+col+'" stroke="#0B1B33" stroke-width="2"/>';
+    g.addEventListener("click", () => selectAlert(i, true));
+    g.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectAlert(i, true); } });
+    gA.appendChild(g);
+  });
+  DATA.fleet.forEach((d,i) => {
+    if(d.status==="offline") return;
+    const col = d.status==="alarm" ? cssVar("--alert-red") : d.status==="busy" ? cssVar("--blue-400") : cssVar("--safe-green");
+    const g = document.createElementNS(NS,"g");
+    g.setAttribute("cursor","pointer"); g.setAttribute("data-i", i);
+    g.setAttribute("tabindex","0"); g.setAttribute("role","button");
+    g.setAttribute("aria-label", "无人机 "+d.id+"，"+DATA.statusText[d.status]);
+    g.innerHTML =
+      '<circle class="drone-hl" cx="'+d.x+'" cy="'+d.y+'" r="9" fill="none" stroke="'+col+'" stroke-width="1.6"/>'+
+      '<circle cx="'+d.x+'" cy="'+d.y+'" r="5" fill="'+col+'" stroke="#0B1B33" stroke-width="2"/>'+
+      '<text class="map-label-bright" x="'+(d.x+12)+'" y="'+(d.y+4)+'">'+d.id+'</text>';
+    g.addEventListener("click", () => selectDrone(i, true));
+    g.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectDrone(i, true); } });
+    droneEls[i] = g;
+    gD.appendChild(g);
+  });
+}
+
+/* ---- M4 信息卡 ---- */
+function showInfo(title, rows, drillHref, thumbText){
+  $("info-title").textContent = title;
+  $("info-rows").innerHTML = rows.map(r =>
+    '<div class="info-row"><span class="k">'+r[0]+'</span><span class="v">'+r[1]+'</span></div>').join("");
+  $("info-thumb").lastChild.textContent = " " + thumbText;
+  $("info-drill").setAttribute("href", drillHref);
+  $("info-card").classList.add("show");
+}
+let lastMapPointSelection = 0;
+function closeMapInfo(){
+  $("info-card").classList.remove("show");
+  document.querySelectorAll(".fleet-row").forEach(row => row.classList.remove("active"));
+}
+$("info-close").addEventListener("click", closeMapInfo);
+document.querySelector(".map-wrap").addEventListener("click", event => {
+  if(event.target.closest(".info-card,.layer-ctrl,.legend,#layer-drones g,#layer-alerts g")) return;
+  /* 高德点位回调与地图容器点击可能属于同一次操作，避免刚打开就被关闭。 */
+  if(performance.now() - lastMapPointSelection < 80) return;
+  closeMapInfo();
+});
+
+function selectDrone(i, pan){
+  lastMapPointSelection = performance.now();
+  const d = DATA.fleet[i];
+  document.querySelectorAll(".fleet-row").forEach(r => r.classList.toggle("active", +r.dataset.i===i));
+  showInfo("无人机 " + d.id,
+    [["当前状态", DATA.statusText[d.status]], ["执行任务", d.task],
+     ["剩余电量", d.batt + "%"], ["回传链路", d.status==="offline" ? "未连接" : "5G 专网 · 正常"]],
+    "dispatch-tasks.html", "实时回传画面（示例）");
+  if(pan && amap && amapDroneMarkers[i]) amap.setCenter(amapDroneMarkers[i].getCenter());
+}
+function selectAlert(i, pan){
+  lastMapPointSelection = performance.now();
+  const a = DATA.alerts[i];
+  showInfo(DATA.levelText[a.level] + "告警 · " + a.type,
+    [["告警级别", DATA.levelText[a.level]], ["事件类型", a.type],
+     ["发生位置", a.loc], ["捕获时间", a.time], ["处置状态", "待签收"]],
+    "alert-workbench.html", "AI 抓图（示例）");
+  if(pan && amap && amapOverlays.alerts[i]) amap.setCenter(amapOverlays.alerts[i].getCenter());
+  if(a.level==="red") toast("紧急告警：" + a.type + " · " + a.loc);
+}
+
+/* ---- B1 实时告警流 ---- */
+function renderAlerts(){
+  if(!DATA.alerts.length){
+    $("alert-list").innerHTML = '<div class="empty-tip">暂无告警</div>';
+    return;
+  }
+  $("alert-list").innerHTML = DATA.alerts.map((a,i) =>
+    '<button class="alert-item'+(a.level==="red"?" urgent":"")+(i===0?" flash":"")+'" data-i="'+i+'" data-od-id="alert-item-'+i+'">'+
+      '<span class="alert-level lv-'+a.level+'">'+DATA.levelText[a.level]+'</span>'+
+      '<span class="alert-main"><span class="alert-type">'+a.type+'</span>'+
+      '<span class="alert-loc">'+a.loc+'</span></span>'+
+      '<span class="alert-time num">'+a.time+'</span>'+
+    '</button>').join("");
+  document.querySelectorAll(".alert-item").forEach(el =>
+    el.addEventListener("click", () => selectAlert(+el.dataset.i, true)));
+}
+
+/* ---- B2 告警类型玫瑰图（填充扇形） ---- */
+function renderRose(){
+  const svg = $("rose-chart"); svg.innerHTML = "";
+  if(!DATA.rose.length){
+    $("rose-legend").innerHTML = "";
+    const tx = document.createElementNS(NS,"text");
+    tx.setAttribute("x",84); tx.setAttribute("y",88);
+    tx.setAttribute("text-anchor","middle"); tx.setAttribute("class","map-label");
+    tx.textContent = "暂无数据"; svg.appendChild(tx);
+    return;
+  }
+  const cx=84, cy=84, maxR=70, n=DATA.rose.length;
+  const maxV = Math.max(...DATA.rose.map(d=>d.value), 1);
+  DATA.rose.forEach((d,i) => {
+    const a0 = -Math.PI/2 + i*2*Math.PI/n + 0.04, a1 = -Math.PI/2 + (i+1)*2*Math.PI/n - 0.04;
+    const r = 16 + (d.value/maxV)*(maxR-16);
+    const x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0), x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+    const p = document.createElementNS(NS,"path");
+    p.setAttribute("d", "M"+cx+","+cy+" L"+x0.toFixed(1)+","+y0.toFixed(1)+
+      " A"+r+","+r+" 0 0 1 "+x1.toFixed(1)+","+y1.toFixed(1)+" Z");
+    p.setAttribute("fill", d.color); p.setAttribute("fill-opacity","0.85");
+    svg.appendChild(p);
+  });
+  const c = document.createElementNS(NS,"circle");
+  c.setAttribute("cx",cx); c.setAttribute("cy",cy); c.setAttribute("r",10);
+  c.setAttribute("fill", cssVar("--navy-800")); c.setAttribute("stroke", cssVar("--border"));
+  svg.appendChild(c);
+  $("rose-legend").innerHTML = DATA.rose.map(d =>
+    '<span class="rl"><i style="background:'+d.color+'"></i>'+d.label+'<b class="num">'+d.value+'</b></span>').join("");
+}
+
+/* ---- B4 近7日趋势（折线+面积填充） ---- */
+function renderTrend(){
+  const svg = $("trend-chart"); svg.innerHTML = "";
+  const t=DATA.trend;
+  if(!t.labels.length || (!t.tasks.length && !t.alerts.length)){
+    const tx=document.createElementNS(NS,"text");
+    tx.setAttribute("x",220); tx.setAttribute("y",80);
+    tx.setAttribute("text-anchor","middle"); tx.setAttribute("class","map-label");
+    tx.textContent="暂无趋势数据"; svg.appendChild(tx);
+    return;
+  }
+  const W=440, H=150, padL=30, padR=10, padT=12, padB=22;
+  const iw=W-padL-padR, ih=H-padT-padB;
+  const maxV=Math.max(...t.tasks, ...t.alerts, 1)+2;
+  const X = i => padL + iw*i/(t.labels.length-1);
+  const Y = v => padT + ih*(1-v/maxV);
+  [0, maxV/2, maxV].forEach(v => {
+    const ln=document.createElementNS(NS,"line");
+    ln.setAttribute("x1",padL); ln.setAttribute("x2",W-padR);
+    ln.setAttribute("y1",Y(v)); ln.setAttribute("y2",Y(v));
+    ln.setAttribute("stroke",cssVar("--border")); ln.setAttribute("stroke-dasharray","3 4");
+    svg.appendChild(ln);
+    const tx=document.createElementNS(NS,"text");
+    tx.setAttribute("x",4); tx.setAttribute("y",Y(v)+4);
+    tx.setAttribute("class","map-label num"); tx.textContent=Math.round(v);
+    svg.appendChild(tx);
+  });
+  t.labels.forEach((lb,i) => {
+    const tx=document.createElementNS(NS,"text");
+    tx.setAttribute("x",X(i)); tx.setAttribute("y",H-6);
+    tx.setAttribute("text-anchor","middle"); tx.setAttribute("class","map-label num");
+    tx.textContent=lb; svg.appendChild(tx);
+  });
+  const area=document.createElementNS(NS,"path");
+  area.setAttribute("d", "M"+X(0)+","+Y(t.tasks[0])+" "+
+    t.tasks.map((v,i)=>"L"+X(i)+","+Y(v)).join(" ")+
+    " L"+X(t.tasks.length-1)+","+Y(0)+" L"+X(0)+","+Y(0)+" Z");
+  area.setAttribute("fill", cssVar("--blue-400")); area.setAttribute("fill-opacity","0.14");
+  svg.appendChild(area);
+  [[t.tasks, cssVar("--blue-400"), 2.4],[t.alerts, cssVar("--warn-orange"), 2]].forEach(([arr,col,wd]) => {
+    const pl=document.createElementNS(NS,"polyline");
+    pl.setAttribute("points", arr.map((v,i)=>X(i)+","+Y(v)).join(" "));
+    pl.setAttribute("fill","none"); pl.setAttribute("stroke",col);
+    pl.setAttribute("stroke-width",wd); pl.setAttribute("stroke-linejoin","round");
+    svg.appendChild(pl);
+    arr.forEach((v,i) => {
+      const dot=document.createElementNS(NS,"circle");
+      dot.setAttribute("cx",X(i)); dot.setAttribute("cy",Y(v)); dot.setAttribute("r",3);
+      dot.setAttribute("fill",col); dot.setAttribute("stroke",cssVar("--navy-900"));
+      svg.appendChild(dot);
+    });
+  });
+}
+
+/* ---- 底部播报条 ---- */
+function renderTicker(){
+  const track = $("ticker-track");
+  if(!DATA.ticker.length){
+    track.style.animation = "none";
+    track.innerHTML = '<span>暂无巡查成果播报</span>';
+    return;
+  }
+  const items = DATA.ticker.map(t => "<span>"+t+"</span>").join("");
+  track.innerHTML = items + items; /* 双份内容保证无缝滚动 */
+  /* 第二份仅为视觉循环副本，对读屏器隐藏避免重复播报 */
+  const half = track.children.length/2;
+  for(let i=half; i<track.children.length; i++) track.children[i].setAttribute("aria-hidden","true");
+}
+
+/* ---- 图层控制 ---- */
+document.querySelectorAll(".layer-item input").forEach(input => {
+  input.addEventListener("change", () => {
+    const on = input.checked, layer = input.dataset.layer;
+    if(amap){
+      (amapOverlays[layer]||[]).forEach(o => on ? o.show() : o.hide());
+      if(layer==="layer-roads" && amapRoadBase) on ? amapRoadBase.show() : amapRoadBase.hide();
+    } else {
+      const g = $(layer); if(g) g.style.display = on ? "" : "none";
+    }
+  });
+});
+
+/* ---- 全屏 ---- */
+$("fs-btn").addEventListener("click", () => {
+  if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); }
+  else { document.exitFullscreen(); }
+});
+document.addEventListener("fullscreenchange", () => {
+  $("fs-btn").lastChild.textContent = document.fullscreenElement ? " 退出全屏" : " 全屏";
+});
+
+/* ---- 高德栅格瓦片底图（无 Key 时的默认真实底图） ---- */
+function lngLatToTilePixel(lng, lat, z){
+  const n = Math.pow(2, z), rad = lat*Math.PI/180;
+  return [(lng+180)/360*n*256, (1-Math.log(Math.tan(rad)+1/Math.cos(rad))/Math.PI)/2*n*256];
+}
+function initRasterTiles(){
+  const host = $("amap-container"), wrap = host.parentElement;
+  const W = wrap.clientWidth, H = wrap.clientHeight; /* host 初始 display:none，量父容器 */
+  if(!W || !H){ setTimeout(initRasterTiles, 300); return; }
+  const Z = 9, TILE = 256, max = Math.pow(2, Z) - 1;
+  const [cx, cy] = lngLatToTilePixel(MAP_CENTER[0], MAP_CENTER[1], Z);
+  const x0 = cx - W/2, y0 = cy - H/2;
+  let shown = false, settled = 0;
+  const tiles = [];
+  for(let tx = Math.floor(x0/TILE); tx <= Math.floor((x0+W)/TILE); tx++){
+    for(let ty = Math.floor(y0/TILE); ty <= Math.floor((y0+H)/TILE); ty++){
+      if(tx<0 || ty<0 || tx>max || ty>max) continue;
+      tiles.push([tx, ty]);
+    }
+  }
+  tiles.forEach(([tx, ty]) => {
+      const img = document.createElement("img");
+      img.className = "amap-tile"; img.alt = ""; img.draggable = false;
+      img.referrerPolicy = "no-referrer";
+      img.src = "https://webrd0"+((tx+ty)%4+1)+".is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x="+tx+"&y="+ty+"&z="+Z;
+      img.style.left = (tx*TILE - x0)+"px";
+      img.style.top  = (ty*TILE - y0)+"px";
+      /* 全部瓦片就绪/失败且无一成功时，明确标注底图加载失败并保留风格化示意图 */
+      const settle = () => {
+        if(++settled === tiles.length && !shown){
+          const note = document.querySelector(".map-note");
+          if(note) note.textContent = "高德瓦片底图加载失败 · 已回退为风格化示意图（非真实地理数据）";
+        }
+      };
+      img.onerror = () => { img.remove(); settle(); };
+      img.onload = () => {
+        settle();
+        if(shown) return; shown = true;
+        host.classList.add("show");
+        /* 隐藏示意底图与示意路网，保留围栏/航线/告警/无人机业务覆盖层 */
+        const bg = $("map-bg-rect"); if(bg) bg.style.display = "none";
+        ["layer-roads","layer-road-names"].forEach(id => { const g = $(id); if(g) g.style.display = "none"; });
+        const roadInput = document.querySelector('input[data-layer="layer-roads"]');
+        if(roadInput){ roadInput.checked = false; roadInput.disabled = true;
+          roadInput.closest(".layer-item").style.opacity = ".45";
+          roadInput.closest(".layer-item").title = "路网已由高德底图提供"; }
+        document.querySelector(".map-note").textContent = "底图 © 高德地图（栅格瓦片 · 演示用途）· 业务点位为示例数据";
+      };
+      host.appendChild(img);
+  });
+}
+
+/* ---- 高德 JS API 底图（配置 Key 后启用矢量底图） ---- */
+let amap = null, amapRoadBase = null;
+const amapDroneMarkers = {}; /* fleet 索引 -> CircleMarker，用于模拟飞行同步 */
+const amapOverlays = { "layer-drones":[], "layer-alerts":[], "layer-routes":[], "layer-fences":[], "layer-roads":[] };
+function offsetLngLat(lng, lat, dx, dy){ return [lng + dx/95, lat + dy/111]; } /* 约 1km 单位偏移 */
+function initAMap(){
+  if(!AMAP_KEY) return;
+  window._AMapSecurityConfig = { securityJsCode: AMAP_SECRET };
+  const s = document.createElement("script");
+  s.src = "https://webapi.amap.com/maps?v=2.0&key=" + encodeURIComponent(AMAP_KEY);
+  s.onload = () => {
+    try{
+      amap = new AMap.Map("amap-container", {
+        mapStyle:"amap://styles/darkblue", viewMode:"2D",
+        zoom:9, center:MAP_CENTER, zooms:[7,13]
+      });
+      $("amap-container").style.display = "block";
+      document.querySelector(".map-wrap svg.gis").style.display = "none";
+      document.querySelector(".map-note").textContent = "底图 © 高德地图 · 示例业务数据";
+      /* 重点区域围栏 */
+      [[0.4,0.6],[ -0.7,-0.3],[0.5,-0.7]].forEach((o,i) => {
+        const c = offsetLngLat(MAP_CENTER[0], MAP_CENTER[1], o[0], o[1]);
+        const poly = new AMap.Polygon({
+          path:[[c[0]-0.014,c[1]-0.010],[c[0]+0.014,c[1]-0.010],[c[0]+0.014,c[1]+0.010],[c[0]-0.014,c[1]+0.010]],
+          strokeColor:"#3DD9EB", strokeWeight:1.6, strokeStyle:"dashed",
+          fillColor:"#3DD9EB", fillOpacity:0.06, zIndex:6
+        });
+        poly.setMap(amap); amapOverlays["layer-fences"].push(poly);
+      });
+      /* 任务航线 */
+      [[[-1.2,-1.0],[-0.2,0.1],[0.9,0.9]],[[-1.0,1.0],[0.1,-0.2],[1.0,-1.1]]].forEach(path => {
+        const pl = new AMap.Polyline({
+          path:path.map(p => offsetLngLat(MAP_CENTER[0],MAP_CENTER[1],p[0],p[1])),
+          strokeColor:"#3DD9EB", strokeWeight:2, strokeStyle:"dashed", zIndex:7
+        });
+        pl.setMap(amap); amapOverlays["layer-routes"].push(pl);
+      });
+      /* 告警点位 */
+      const lvColor = { red:"#E5484D", orange:"#F76B15", yellow:"#F5A623" };
+      DATA.alerts.forEach((a,i) => {
+        const pos = offsetLngLat(MAP_CENTER[0], MAP_CENTER[1], (a.x-470)/300, (420-a.y)/300);
+        const m = new AMap.CircleMarker({ center:pos, radius:7, strokeColor:"#0B1B33",
+          strokeWeight:2, fillColor:lvColor[a.level], fillOpacity:1, zIndex:9 });
+        m.on("click", () => selectAlert(i, false));
+        m.setMap(amap); amapOverlays["layer-alerts"].push(m);
+      });
+      /* 无人机点位 */
+      DATA.fleet.forEach((d,i) => {
+        if(d.status==="offline") return;
+        const pos = offsetLngLat(MAP_CENTER[0], MAP_CENTER[1], (d.x-470)/300, (420-d.y)/300);
+        const col = d.status==="alarm" ? "#E5484D" : d.status==="busy" ? "#4C9AFF" : "#30A46C";
+        const m = new AMap.CircleMarker({ center:pos, radius:6, strokeColor:"#0B1B33",
+          strokeWeight:2, fillColor:col, fillOpacity:1, zIndex:10 });
+        m.on("click", () => selectDrone(i, false));
+        m.setMap(amap); amapOverlays["layer-drones"].push(m); amapDroneMarkers[i] = m;
+      });
+    }catch(e){ /* 加载失败时保留风格化示意图回退 */ }
+  };
+  s.onerror = () => toast("高德底图加载失败，已切换为风格化示意图");
+  document.head.appendChild(s);
+}
+
+/* ---- 无人机安全区域内模拟飞行 ---- */
+const FENCE_RECTS = [ /* 与 layer-fences 围栏一致的安全区域 */
+  {x:560, y:110, w:270, h:180}, /* 都匀城区段 */
+  {x:120, y:470, w:240, h:200}, /* 福泉贵定段 */
+  {x:620, y:640, w:240, h:180}  /* 独山荔波段 */
+];
+function svgToLngLat(x, y){ return offsetLngLat(MAP_CENTER[0], MAP_CENTER[1], (x-470)/300, (420-y)/300); }
+const FLIGHT_SPEED_FACTOR = 0.35; /* 演示飞行降至原速度的 35%，避免点位移动过快 */
+function initFlightSim(){
+  const plan = [];
+  DATA.fleet.forEach((d, i) => {
+    if(d.status === "offline") return;
+    d.ox = d.x; d.oy = d.y; /* 记录初始坐标用于 SVG 位移 */
+    if(d.status === "alarm"){ /* 告警处置中：绕事件点盘旋跟拍 */
+      plan.push({ i, mode:"orbit", cx:d.x, cy:d.y, r:22, a:Math.random()*Math.PI*2 });
+      return;
+    }
+    /* 在线/任务中：分配最近的安全区域，在围栏内巡航 */
+    let best = 0, bd = Infinity;
+    FENCE_RECTS.forEach((f, fi) => {
+      const dx = d.x-(f.x+f.w/2), dy = d.y-(f.y+f.h/2), dd = dx*dx+dy*dy;
+      if(dd < bd){ bd = dd; best = fi; }
+    });
+    const f = FENCE_RECTS[best], pad = 18;
+    plan.push({ i, mode:"roam", f, pad, sp:14+Math.random()*8,
+      tx:f.x+pad+Math.random()*(f.w-2*pad), ty:f.y+pad+Math.random()*(f.h-2*pad) });
+  });
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let last = performance.now();
+  (function tick(now){
+    const dt = Math.min((now-last)/1000, 0.1); last = now;
+    plan.forEach(p => {
+      const d = DATA.fleet[p.i];
+      if(p.mode === "orbit"){
+        p.a += dt*0.9*FLIGHT_SPEED_FACTOR;
+        d.x = p.cx + Math.cos(p.a)*p.r; d.y = p.cy + Math.sin(p.a)*p.r*0.7;
+      }else{
+        const dx = p.tx-d.x, dy = p.ty-d.y, dist = Math.hypot(dx, dy);
+        if(dist < 4){ /* 到达航点后选取围栏内下一航点 */
+          p.tx = p.f.x+p.pad+Math.random()*(p.f.w-2*p.pad);
+          p.ty = p.f.y+p.pad+Math.random()*(p.f.h-2*p.pad);
+        }else{
+          d.x += dx/dist*p.sp*dt*FLIGHT_SPEED_FACTOR; d.y += dy/dist*p.sp*dt*FLIGHT_SPEED_FACTOR;
+        }
+      }
+      const g = droneEls[p.i];
+      if(g) g.setAttribute("transform", "translate("+(d.x-d.ox).toFixed(1)+","+(d.y-d.oy).toFixed(1)+")");
+      const m = amapDroneMarkers[p.i];
+      if(m) m.setCenter(svgToLngLat(d.x, d.y));
+    });
+    requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+/* ---- 紧急告警声音与无操作轮巡 ---- */
+const IDLE_TOUR_MS = 60000;
+let alertMuted = false, tourLocked = false, tourTimer = 0, tourCycle = 0, tourIndex = 0;
+function playAlertTone(){
+  if(alertMuted || !window.AudioContext) return;
+  try{
+    const ctx = new AudioContext(), oscillator = ctx.createOscillator(), gain = ctx.createGain();
+    oscillator.frequency.value = 880; gain.gain.value = 0.035;
+    oscillator.connect(gain); gain.connect(ctx.destination); oscillator.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22);
+    oscillator.stop(ctx.currentTime + 0.22); oscillator.onended = () => ctx.close();
+  }catch(_error){ /* 浏览器禁止自动播放时保持可视告警，不制造播放成功假象 */ }
+}
+function stopAutoTour(){
+  clearInterval(tourCycle); tourCycle = 0; $("stage").dataset.tourState = tourLocked ? "locked" : "idle";
+}
+function showNextTourTarget(){
+  const availableDrones = DATA.fleet.map((drone,index)=>({drone,index})).filter(item=>item.drone.status!=="offline");
+  const targets = [
+    ...availableDrones.map(item=>()=>selectDrone(item.index,true)),
+    ...DATA.alerts.map((_alert,index)=>()=>selectAlert(index,true))
+  ];
+  if(!targets.length) return;
+  targets[tourIndex++ % targets.length]();
+}
+function startAutoTour(){
+  if(tourLocked) return;
+  $("stage").dataset.tourState = "running"; showNextTourTarget();
+  tourCycle = setInterval(showNextTourTarget, 8000);
+}
+function armAutoTour(){
+  clearTimeout(tourTimer); stopAutoTour();
+  if(!tourLocked) tourTimer = setTimeout(startAutoTour, IDLE_TOUR_MS);
+}
+$("mute-btn").addEventListener("click", () => {
+  alertMuted = !alertMuted; $("mute-btn").setAttribute("aria-pressed", String(alertMuted));
+  $("mute-btn").textContent = alertMuted ? "已静音" : "声音";
+});
+$("tour-lock").addEventListener("click", () => {
+  tourLocked = !tourLocked; $("tour-lock").setAttribute("aria-pressed", String(tourLocked));
+  $("tour-lock").textContent = tourLocked ? "已锁定" : "锁定";
+  armAutoTour();
+});
+["pointerdown","keydown","wheel"].forEach(type => document.addEventListener(type, event => {
+  if(event.isTrusted) armAutoTour();
+}, {passive:true}));
+window.addEventListener("poc:new-emergency-alert", event => {
+  const alert = {...event.detail, level:"red"};
+  DATA.alerts.unshift(alert); renderAlerts(); renderMapPoints(); selectAlert(0,true); playAlertTone();
+});
+
+/* ---- 统一持久化演示数据 ---- */
+async function hydrateSharedState(){
+  const response = await fetch("/api/state", {cache:"no-store"});
+  if(!response.ok) throw new Error("共享演示数据加载失败");
+  const state = await response.json();
+  const statusMap = {ONLINE:"online",BUSY:"busy",ALARM:"alarm",OFFLINE:"offline"};
+  const levelMap = {EMERGENCY:"red",IMPORTANT:"orange",INFO:"yellow"};
+  DATA.fleet = state.drones.map(d => ({id:d.id,status:statusMap[d.status]||"offline",task:d.task||"机库待命",batt:d.battery,x:d.x,y:d.y}));
+  DATA.tasks = state.tasks.slice(0,5).map(t => ({name:t.name,pct:t.progress,overdue:Boolean(t.overdue)}));
+  DATA.alerts = state.alerts.map(a => ({id:a.id,level:levelMap[a.level]||"yellow",type:a.type,loc:a.location,time:a.time,x:a.x,y:a.y}));
+  document.querySelector(".poc-badge").title = "数据快照 " + state.snapshotVersion;
+}
+async function init(){
+  try{ await hydrateSharedState(); }
+  catch(error){ toast(error.message + "，已使用页面内置回退数据"); }
+  renderStats("day"); renderFleet(); renderTasks(); renderAlerts(); renderRose(); renderTrend(); renderTicker(); renderMapPoints();
+  initFlightSim(); armAutoTour();
+  if(AMAP_KEY){ initAMap(); } else { initRasterTiles(); }
+}
+init();
+</script>
+</body>
+</html>

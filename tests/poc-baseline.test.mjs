@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createPocServer } from "../backend/src/server.mjs";
@@ -91,6 +91,24 @@ export async function resetRequiresConfirmationAndIsRepeatableAndAudited() {
 
   const stored = JSON.parse(await readFile(path.join(directory, "poc.json"), "utf8"));
   assert.equal(stored.audit.length, 2);
+  await close(server);
+  await rm(directory, { recursive: true, force: true });
+}
+
+export async function oldDemoDataMigratesWithoutLosingAudit() {
+  const directory = await mkdtemp(path.join(tmpdir(), "drone-poc-migrate-"));
+  const databasePath = path.join(directory, "poc.json");
+  await writeFile(databasePath, JSON.stringify({
+    snapshotVersion: "POC-DEMO-V1",
+    drones: [{ id: "OLD" }], tasks: [], alerts: [], ledgers: [],
+    audit: [{ id: "AUDIT-0001", action: "DEMO_RESET" }]
+  }));
+  const { baseUrl, server } = await startPoc(databasePath);
+  const state = await (await fetch(`${baseUrl}/api/state`)).json();
+  assert.equal(state.schemaVersion, 2);
+  assert.equal(state.drones.length, 8);
+  assert.equal(state.alerts[0].location, "兰海高速 K1582 都匀段");
+  assert.equal(state.audit[0].id, "AUDIT-0001");
   await close(server);
   await rm(directory, { recursive: true, force: true });
 }

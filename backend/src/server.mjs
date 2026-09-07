@@ -8,6 +8,7 @@ import { pageFilenames, renderPage } from "../../frontend/page-shell.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const frontendRoot = path.join(projectRoot, "frontend");
+const designRoot = path.join(projectRoot, "无人机设计方案");
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -62,6 +63,11 @@ export function createPocServer({ databasePath = process.env.POC_DATABASE_PATH ?
       }
       if (request.method === "GET" && url.pathname === "/") return serveFile(response, "index.html");
       const filename = url.pathname.slice(1);
+      if (request.method === "GET" && filename === "screen-overview.html") {
+        const body = await readFile(path.join(designRoot, filename));
+        response.writeHead(200, { "content-type": contentTypes[".html"] });
+        return response.end(body);
+      }
       if (request.method === "GET" && pageFilenames.has(filename)) {
         response.writeHead(200, { "content-type": contentTypes[".html"] });
         return response.end(renderPage(filename));
