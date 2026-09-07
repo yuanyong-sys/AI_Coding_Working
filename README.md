@@ -1,91 +1,29 @@
 # 无人机低空智慧调度平台 POC
 
-当前首条可运行链路展示贵阳市观山湖区的低空运行态势：模拟无人机遥测进入 FastAPI 和 SQLite 后，由 Vue 3 态势总览通过 MapLibre 直接叠加在本地 PMTiles 底图上。
+本仓库交付一个完全本地运行的演示基线。所有页面和数据均明确标识为 **POC 演示数据**，不连接真实无人机、飞控或生产系统。
 
-## 环境
+## 运行
 
-- Node.js 24+
-- pnpm 10+
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/)
-
-## 安装
+要求 Node.js 22 或更高版本，无需安装第三方依赖。
 
 ```bash
-pnpm install
-uv sync --directory apps/api
+npm start
 ```
 
-## 启动
+打开 <http://127.0.0.1:8765/>。可通过 `PORT` 修改端口，通过 `POC_DATABASE_PATH` 修改本地持久化文件位置。
+
+## 验证
 
 ```bash
-LOW_ALTITUDE_DEMO_PASSWORD='请替换为本地演示密码' \
-LOW_ALTITUDE_INFERENCE_TOKEN='请替换为本地推理令牌' \
-pnpm dev
+npm test
+npm run typecheck
 ```
 
-该命令同时启动 API 与 Web；按 `Ctrl+C` 会一并关闭。打开 <http://127.0.0.1:5173>。Web 开发服务器将 `/api` 代理到本地 API；地图从同源的 `guanshanhu.pmtiles` 读取，不需要公网或独立瓦片服务。
+测试覆盖四个公开页面、统一状态接口、跨服务重启持久化，以及标准快照恢复的确认、幂等性和审计。
 
-平台会初始化一个本地演示账号，使用由 `LOW_ALTITUDE_DEMO_PASSWORD` 注入的密码：
+## HTTP 接口
 
-- `platform-operator`：平台操作员，可在领导驾驶舱与业务操作台之间切换并演示全部 POC 能力
-
-密码不会写入源码，数据库中仅保存加盐哈希。若未设置环境变量，API 会在启动日志中生成并显示本次初始化密码。登录会话有效期为 8 小时，仅通过 HttpOnly、SameSite=Strict Cookie 保存。
-
-## 固定视频推理
-
-保持平台运行，在另一个终端使用与平台相同的本地推理令牌执行：
-
-```bash
-LOW_ALTITUDE_INFERENCE_TOKEN='请替换为本地推理令牌' pnpm infer:demo
-```
-
-该命令启动独立推理进程，读取仓库内固定预录视频、通过 FFmpeg 抽取关键帧，并以确定性画面亮度模型生成一条“疑似烟火”AI异常线索。截图作为研判材料写入 `apps/api/var/clue-materials/frames/`，业务数据库只保存受控相对引用；结构化推理结果同时保存在 `apps/api/var/inference-results/latest.json`。使用 `platform-operator` 登录后，可在“AI异常线索研判”专题视图查看类型、置信度、来源时间、位置、评测来源和模型版本。
-
-固定评测集覆盖疑似交通事故、疑似烟火、人员聚集和无异常负样本，并在清单中记录每段材料的预期结果。平台使用 `local-inference-token` 启动后运行：
-
-```bash
-LOW_ALTITUDE_INFERENCE_TOKEN='请使用平台启动时的本地推理令牌' pnpm evaluate:ai
-```
-
-评测报告写入 `apps/api/var/evaluation/latest.json`，包含正样本正确检出率、无异常负样本误报数量、推理耗时、线索展示就绪延迟、模型版本、评测集版本和逐材料结果。线索展示就绪延迟从推理完成计至平台确认该线索已持久化且可供专题界面查询，可用于重复运行与比较。推理进程无心跳、心跳超时或提交无效结果时，“AI异常线索研判”专题视图会明确显示推理降级；降级不会生成伪线索，既有线索仍可查看和研判。
-
-运行推理需要本机可执行的 `ffmpeg`。推理结果仅为待复核线索，不代表确认事件。
-
-提交一条模拟遥测：
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/telemetry/batches \
-  -H 'Content-Type: application/json' \
-  -d '{"events":[{"event_id":"demo-001","sortie_id":"GSH-DEMO-SORTIE-001","drone_id":"UAV-GSH-01","longitude":106.6282,"latitude":26.6467,"altitude_m":86,"heading_deg":125,"speed_mps":12.4,"flight_state":"flying","source_time":"2026-09-03T06:32:08Z","source_type":"simulated"}]}'
-```
-
-登录后，总览会自动刷新并显示该无人机及“模拟数据”标识。
-
-运行可重复的正常飞行场景：
-
-```bash
-pnpm simulate
-```
-
-模拟器按固定来源时间提交 20 架已接入无人机，其中主无人机形成 6 个连续遥测点。重复执行使用相同事件标识，平台按幂等成功处理且不会产生重复航迹；总览通过可恢复的 WebSocket 增量链路持续展示航迹、飞行状态、核心指标和数据时效。
-
-平台操作员可从“空间规则”入口编辑禁飞区或电子围栏草稿，设置 WGS-84 水平范围、高度和有效期，再发布不可变版本。当前生效版本会以不同颜色叠加在地图上。平台操作员也可从“航前规则校验”提交带高度和时间的计划航线；结果只表达规则判断，并在地图定位命中位置，不代表审批或飞行许可。
-
-飞行中的无人机持续 2 秒进入禁飞区或超出电子围栏后生成越界告警，持续恢复合规 2 秒后结束；水平边界 5 米范围内作为缓冲区，不累计触发或恢复时长，遥测间隔超过 5 秒会中断连续性。可通过 `LOW_ALTITUDE_INCURSION_DURATION_SECONDS`、`LOW_ALTITUDE_INCURSION_MAX_GAP_SECONDS` 和 `LOW_ALTITUDE_INCURSION_BOUNDARY_BUFFER_M` 调整阈值。越界告警保留命中时的规则版本快照，仅表达空间规则命中事实，不作违规认定，也不输出飞行控制指令。
-
-## 质量门禁
-
-```bash
-pnpm format:check
-pnpm lint
-pnpm test
-pnpm test:e2e
-pnpm --filter @low-altitude/web build
-```
-
-浏览器测试会自动启动临时 API 与 Web 服务，并使用本机 Chrome 验证完整链路。
-
-## 本地地图
-
-地图包的覆盖范围、版本、来源和重新生成方法见 `apps/web/public/maps/README.md`。该底图只用于 POC 技术验证，不得用于导航、执法或监管判断。
+- `GET /api/state`：读取无人机、任务、告警、台账和审计的统一状态。
+- `GET /api/audit`：读取本地审计记录。
+- `PATCH /api/{drones|tasks|alerts|ledgers}/{id}`：更新演示业务对象。
+- `POST /api/demo/reset`：请求体必须包含 `{ "confirmed": true }`，恢复 `POC-DEMO-V1` 标准快照并写入审计。

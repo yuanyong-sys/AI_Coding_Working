@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>无人机低空智慧调度平台</title><link rel="stylesheet" href="/styles.css"></head>
+<body><header><span class="badge">POC 演示数据</span><h1>无人机低空智慧调度平台</h1><button id="reset" type="button">一键恢复演示数据</button></header><main class="entry-grid">
+<a href="/screen-overview.html"><b>态势一张图</b><span>指挥中心只读监看</span></a>
+<a href="/dispatch-tasks.html"><b>任务调度</b><span>任务创建、下发与监控</span></a>
+<a href="/alert-workbench.html"><b>告警线索处置</b><span>核实、转派与办结</span></a>
+<a href="/stats-ledger.html"><b>巡检台账统计</b><span>统计分析与报表导出</span></a>
+</main><p id="message" role="status"></p><dialog id="reset-dialog" aria-labelledby="reset-title"><h2 id="reset-title">恢复标准演示数据？</h2><p>当前业务演示状态将被 POC-DEMO-V1 覆盖，恢复动作会写入审计。</p><form method="dialog"><button value="cancel" type="submit">取消</button><button id="confirm-reset" value="confirm" type="submit">确认恢复</button></form></dialog><script type="module" src="/app.js"></script></body></html>

@@ -1,19 +1,14 @@
 {
-  "name": "low-altitude-situation-poc",
+  "name": "drone-low-altitude-poc",
+  "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.23.0",
+  "type": "module",
   "scripts": {
-    "dev": "concurrently --kill-others --names API,WEB --prefix-colors cyan,green \"uv run --directory apps/api uvicorn --app-dir src low_altitude_poc_api.app:create_app --factory --host 127.0.0.1 --port 8000\" \"pnpm --filter @low-altitude/web dev\"",
-    "format:check": "pnpm --filter @low-altitude/web format:check && uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache ruff format --check",
-    "lint": "pnpm typecheck && uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache ruff check",
-    "simulate": "python3 tools/run_simulator.py",
-    "infer:demo": "PYTHONPATH=src uv run --directory apps/api python -m low_altitude_poc_api.inference_worker --video ../../tools/fixtures/suspected-fire.mp4 --source-time 2026-09-03T06:30:05Z --longitude 106.6282 --latitude 26.6467 --api-url http://127.0.0.1:8000",
-    "evaluate:ai": "PYTHONPATH=src uv run --directory apps/api python -m low_altitude_poc_api.evaluation_runner --manifest ../../tools/evaluation/v1/manifest.json --api-url http://127.0.0.1:8000 --token $LOW_ALTITUDE_INFERENCE_TOKEN",
-    "test": "uv run --directory apps/api --cache-dir /private/tmp/low-altitude-uv-cache pytest",
-    "test:e2e": "pnpm --filter @low-altitude/web test:e2e",
-    "typecheck": "pnpm --filter @low-altitude/web typecheck"
+    "start": "node backend/src/server.mjs",
+    "test": "node tests/run.mjs",
+    "typecheck": "node --check backend/src/server.mjs && node --check backend/src/store.mjs && node --check frontend/app.js"
   },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
+  "engines": {
+    "node": ">=22"
   }
 }
