@@ -13,11 +13,14 @@ import { formatAnomalyType, formatClueSource, type AIClue } from "@/ai-clues";
 const props = defineProps<{
   drones: DroneSnapshot[];
   spatialRules: SpatialRuleVersion[];
+  leadership?: boolean;
   validationPosition?: PlannedRoutePoint;
   incursionAlert?: IncursionAlert | null;
   aiClue?: AIClue | null;
 }>();
+const emit = defineEmits<{ selectDrone: [drone: DroneSnapshot] }>();
 const mapContainer = ref<HTMLElement>();
+const viewMode = ref<"2d" | "3d">("3d");
 const markers: Marker[] = [];
 let map: Map | undefined;
 let preflightMarker: Marker | undefined;
@@ -92,7 +95,7 @@ function renderMarkers() {
   if (!map) return;
   for (const marker of markers.splice(0)) marker.remove();
   for (const drone of props.drones) {
-    const element = document.createElement("div");
+    const element = document.createElement(props.leadership ? "button" : "div");
     const flightStateLabel =
       flightStateLabels[drone.flight_state] ?? drone.flight_state;
     element.className = `drone-marker drone-marker--${drone.source_type}`;
@@ -102,11 +105,20 @@ function renderMarkers() {
     element.dataset.testid = `drone-marker-${drone.drone_id}`;
     element.dataset.position = `${drone.longitude},${drone.latitude}`;
     element.dataset.flightState = drone.flight_state;
-    element.setAttribute("role", "img");
-    element.setAttribute(
-      "aria-label",
-      `${drone.drone_id}，${flightStateLabel}，高度 ${drone.altitude_m} 米，${drone.source_type === "simulated" ? "模拟数据" : "真实数据"}`,
-    );
+    if (props.leadership) {
+      (element as HTMLButtonElement).type = "button";
+      element.setAttribute(
+        "aria-label",
+        `查看巡检无人机 ${drone.drone_id} 设备信息`,
+      );
+      element.addEventListener("click", () => emit("selectDrone", drone));
+    } else {
+      element.setAttribute("role", "img");
+      element.setAttribute(
+        "aria-label",
+        `${drone.drone_id}，${flightStateLabel}，高度 ${drone.altitude_m} 米，${drone.source_type === "simulated" ? "模拟数据" : "真实数据"}`,
+      );
+    }
     const pulse = document.createElement("span");
     pulse.className = "drone-marker__pulse";
     const body = document.createElement("span");
@@ -122,6 +134,98 @@ function renderMarkers() {
       new maplibregl.Marker({ element, anchor: "center" })
         .setLngLat([drone.longitude, drone.latitude])
         .addTo(map),
+    );
+  }
+}
+
+const buildingSites = [
+  [106.613, 26.658, 0.0022, 0.0013, 120],
+  [106.617, 26.655, 0.0018, 0.0015, 86],
+  [106.622, 26.653, 0.0025, 0.0012, 155],
+  [106.631, 26.651, 0.002, 0.0016, 110],
+  [106.637, 26.648, 0.0024, 0.0014, 178],
+  [106.643, 26.644, 0.0017, 0.0012, 94],
+  [106.648, 26.641, 0.0026, 0.0015, 138],
+] as const;
+
+function renderLeadershipBuildings() {
+  if (!map || !props.leadership) return;
+  const buildings: FeatureCollection<Polygon> = {
+    type: "FeatureCollection",
+    features: buildingSites.map(([lon, lat, width, depth, height]) => ({
+      type: "Feature",
+      properties: { height },
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [lon - width, lat - depth],
+            [lon + width, lat - depth],
+            [lon + width, lat + depth],
+            [lon - width, lat + depth],
+            [lon - width, lat - depth],
+          ],
+        ],
+      },
+    })),
+  };
+  map.addSource("leadership-buildings", { type: "geojson", data: buildings });
+  map.addLayer({
+    id: "leadership-buildings",
+    type: "fill-extrusion",
+    source: "leadership-buildings",
+    paint: {
+      "fill-extrusion-color": [
+        "interpolate",
+        ["linear"],
+        ["get", "height"],
+        80,
+        "#17464d",
+        180,
+        "#55c9c8",
+      ],
+      "fill-extrusion-height": ["get", "height"],
+      "fill-extrusion-base": 0,
+      "fill-extrusion-opacity": 0.78,
+    },
+  });
+}
+
+function toggleViewMode() {
+  if (!map || !props.leadership) return;
+  viewMode.value = viewMode.value === "3d" ? "2d" : "3d";
+  const threeDimensional = viewMode.value === "3d";
+  map.easeTo({
+    pitch: threeDimensional ? 52 : 0,
+    bearing: threeDimensional ? -13 : 0,
+    duration: 500,
+  });
+  if (map.getLayer("leadership-buildings")) {
+    map.setPaintProperty(
+      "leadership-buildings",
+      "fill-extrusion-height",
+      threeDimensional ? ["get", "height"] : 0,
+    );
+  }
+}
+
+function syncCameraState() {
+  if (!map || !mapContainer.value || !props.leadership) return;
+  const center = map.getCenter();
+  mapContainer.value.dataset.camera = [
+    center.lng.toFixed(5),
+    center.lat.toFixed(5),
+    map.getZoom().toFixed(2),
+    map.getPitch().toFixed(1),
+    map.getBearing().toFixed(1),
+  ].join(",");
+  const threeDimensional = map.getPitch() > 1;
+  viewMode.value = threeDimensional ? "3d" : "2d";
+  if (map.getLayer("leadership-buildings")) {
+    map.setPaintProperty(
+      "leadership-buildings",
+      "fill-extrusion-height",
+      threeDimensional ? ["get", "height"] : 0,
     );
   }
 }
@@ -288,7 +392,10 @@ onMounted(() => {
   map = new maplibregl.Map({
     container: mapContainer.value,
     center: [106.6282, 26.6467],
-    zoom: 12.2,
+    zoom: props.leadership ? 12.8 : 12.2,
+    pitch: props.leadership ? 52 : 0,
+    bearing: props.leadership ? -13 : 0,
+    maxPitch: 75,
     attributionControl: false,
     style: {
       version: 8,
@@ -314,7 +421,12 @@ onMounted(() => {
     new maplibregl.NavigationControl({ showCompass: true }),
     "bottom-right",
   );
-  map.on("load", renderSituation);
+  map.on("load", () => {
+    renderLeadershipBuildings();
+    renderSituation();
+    syncCameraState();
+  });
+  map.on("move", syncCameraState);
 });
 
 watch(
@@ -344,16 +456,33 @@ onBeforeUnmount(() => {
   <section
     ref="mapContainer"
     class="situation-map"
-    data-testid="situation-map"
+    :data-testid="leadership ? 'leadership-map' : 'situation-map'"
+    :data-view-mode="leadership ? viewMode : undefined"
     data-center="106.6282,26.6467"
     :data-track-points="trackPointCount"
     :data-spatial-rule-count="spatialRules.length"
-    aria-label="贵阳市观山湖区低空运行地图"
+    :aria-label="
+      leadership
+        ? '贵阳市观山湖区三维巡查态势地图'
+        : '贵阳市观山湖区低空运行地图'
+    "
   >
-    <div class="map-coordinate" aria-hidden="true">
+    <button
+      v-if="leadership"
+      type="button"
+      class="map-view-toggle"
+      :aria-label="viewMode === '3d' ? '切换为二维视图' : '切换为三维视图'"
+      :aria-pressed="viewMode === '3d'"
+      @click="toggleViewMode"
+    >
+      {{ viewMode === "3d" ? "三维视图" : "二维视图" }}
+    </button>
+    <div v-if="!leadership" class="map-coordinate" aria-hidden="true">
       观山湖区 · 106.6282°E / 26.6467°N
     </div>
-    <div class="track-summary">航迹 · {{ trackPointCount }} 个遥测点</div>
+    <div v-if="!leadership" class="track-summary">
+      航迹 · {{ trackPointCount }} 个遥测点
+    </div>
     <div v-if="spatialRules.length" class="spatial-rule-map-labels">
       <article
         v-for="rule in spatialRules"

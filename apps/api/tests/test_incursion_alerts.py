@@ -14,7 +14,7 @@ def test_incursion_alert_requires_persistence_and_ends_after_recovery(tmp_path):
         assert (
             client.post(
                 "/api/auth/login",
-                json={"username": "spatial-admin", "password": TEST_PASSWORD},
+                json={"username": "platform-operator", "password": TEST_PASSWORD},
             ).status_code
             == 200
         )

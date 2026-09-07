@@ -38,19 +38,14 @@ def rule_draft(name: str = "观山湖核心禁飞区") -> dict:
     }
 
 
-def test_only_spatial_admin_publishes_immutable_rule_versions(tmp_path):
+def test_platform_operator_publishes_immutable_rule_versions(tmp_path):
     app = create_app(
         database_url=f"sqlite:///{tmp_path / 'spatial-rules.db'}",
         demo_password=TEST_PASSWORD,
     )
 
     with TestClient(app) as client:
-        login(client, "situation-viewer")
-        denied = client.post("/api/spatial-rules/drafts", json=rule_draft())
-        assert denied.status_code == 403
-
-        client.post("/api/auth/logout")
-        login(client, "spatial-admin")
+        login(client, "platform-operator")
         created = client.post("/api/spatial-rules/drafts", json=rule_draft())
         first_publish = client.post("/api/spatial-rules/drafts/GSH-NFZ-001/publish")
         updated_draft = client.put(
@@ -69,7 +64,7 @@ def test_only_spatial_admin_publishes_immutable_rule_versions(tmp_path):
     assert created.status_code == 201
     assert first_publish.status_code == 201
     assert first_publish.json()["version"] == 1
-    assert first_publish.json()["actor"] == "spatial-admin"
+    assert first_publish.json()["actor"] == "platform-operator"
     assert updated_draft.status_code == 200
     assert second_publish.status_code == 201
     assert mismatched_update.status_code == 409
@@ -136,7 +131,7 @@ def test_invalid_geometry_altitude_and_time_ranges_cannot_be_published(tmp_path)
     invalid_drafts.append(reverse_time)
 
     with TestClient(app) as client:
-        login(client, "spatial-admin")
+        login(client, "platform-operator")
         for draft in invalid_drafts:
             assert (
                 client.post("/api/spatial-rules/drafts", json=draft).status_code == 201

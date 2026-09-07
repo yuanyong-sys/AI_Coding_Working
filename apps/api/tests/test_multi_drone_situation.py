@@ -10,7 +10,7 @@ TEST_PASSWORD = "local-test-password"
 def login(client: TestClient) -> None:
     response = client.post(
         "/api/auth/login",
-        json={"username": "situation-viewer", "password": TEST_PASSWORD},
+        json={"username": "platform-operator", "password": TEST_PASSWORD},
     )
     assert response.status_code == 200
 

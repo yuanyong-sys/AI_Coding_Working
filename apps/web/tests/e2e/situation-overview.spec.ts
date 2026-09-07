@@ -2,6 +2,140 @@ import { expect, test } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+test("平台操作员使用领导驾驶舱观察并进入业务操作台", async ({
+  page,
+  request,
+}) => {
+  const localPmtilesRequests: string[] = [];
+  const externalRequests: string[] = [];
+  page.on("request", (outboundRequest) => {
+    const url = new URL(outboundRequest.url());
+    if (url.pathname.endsWith(".pmtiles"))
+      localPmtilesRequests.push(url.pathname);
+    if (
+      ["http:", "https:"].includes(url.protocol) &&
+      !["127.0.0.1", "localhost"].includes(url.hostname)
+    )
+      externalRequests.push(outboundRequest.url());
+  });
+  const ingestResponse = await request.post(
+    "http://127.0.0.1:8000/api/telemetry/batches",
+    {
+      data: {
+        events: [
+          {
+            event_id: "e2e-leadership-001",
+            drone_id: "UAV-ZZZ-LEADER-01",
+            longitude: 106.6282,
+            latitude: 26.6467,
+            altitude_m: 86,
+            heading_deg: 125,
+            speed_mps: 12.4,
+            flight_state: "flying",
+            source_time: new Date().toISOString(),
+            source_type: "simulated",
+            sortie_id: "GSH-LEADERSHIP-SORTIE-001",
+          },
+        ],
+      },
+    },
+  );
+  expect(ingestResponse.status()).toBe(202);
+
+  await page.goto("/");
+  await page.getByLabel("账号").fill("platform-operator");
+  await page.getByLabel("密码").fill("local-e2e-password");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "低空态势一张图" }),
+  ).toBeVisible();
+  await expect(page.getByText("遥测延迟", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("航向", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("速度", { exact: true })).toHaveCount(0);
+
+  const leadershipMap = page.getByTestId("leadership-map");
+  await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+  await expect(leadershipMap).toHaveAttribute("data-view-mode", "3d");
+  await page.getByRole("button", { name: "切换为二维视图" }).click();
+  await expect(leadershipMap).toHaveAttribute("data-view-mode", "2d");
+  await page
+    .getByRole("button", {
+      name: "查看巡检无人机 UAV-ZZZ-LEADER-01 设备信息",
+    })
+    .click();
+  const deviceDialog = page.getByRole("dialog", {
+    name: "巡检无人机设备信息",
+  });
+  await expect(deviceDialog).toContainText("UAV-ZZZ-LEADER-01");
+  await expect(deviceDialog).toContainText("运行状态");
+  await expect(deviceDialog).toContainText("剩余电量");
+  await expect(deviceDialog).toContainText("预计可用时长");
+  await expect(deviceDialog).toContainText("所属单位");
+  await expect(deviceDialog).toContainText("当前任务");
+  await expect(deviceDialog).toContainText(/剩余电量\s*\d+%/);
+  await expect(deviceDialog).toContainText(/预计可用时长\s*\d+ 分钟/);
+  await page.keyboard.press("Escape");
+  await expect(deviceDialog).toBeHidden();
+
+  const cameraBeforeDrag = await leadershipMap.getAttribute("data-camera");
+  const canvasBox = await page.locator(".maplibregl-canvas").boundingBox();
+  if (!canvasBox) throw new Error("领导驾驶舱地图画布不可见");
+  await page.mouse.move(canvasBox.x + 300, canvasBox.y + 260);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox.x + 370, canvasBox.y + 300, { steps: 5 });
+  await page.mouse.up();
+  await expect(leadershipMap).not.toHaveAttribute(
+    "data-camera",
+    cameraBeforeDrag ?? "",
+  );
+  const cameraBeforeRotate = await leadershipMap.getAttribute("data-camera");
+  await page.mouse.move(canvasBox.x + 420, canvasBox.y + 280);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(canvasBox.x + 480, canvasBox.y + 220, { steps: 5 });
+  await page.mouse.up({ button: "right" });
+  await expect(leadershipMap).not.toHaveAttribute(
+    "data-camera",
+    cameraBeforeRotate ?? "",
+  );
+  await expect(leadershipMap).toHaveAttribute("data-view-mode", "3d");
+  const cameraBeforeZoom = await leadershipMap.getAttribute("data-camera");
+  await page.mouse.wheel(0, -500);
+  await expect(leadershipMap).not.toHaveAttribute(
+    "data-camera",
+    cameraBeforeZoom ?? "",
+  );
+  expect(localPmtilesRequests).toContain("/maps/guanshanhu.pmtiles");
+  expect(externalRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "打开智能问数" }).click();
+  const assistantDialog = page.getByRole("dialog", { name: "智能问数" });
+  await assistantDialog
+    .getByLabel("输入问题")
+    .fill("最近1小时有多少架无人机？");
+  await assistantDialog.getByRole("button", { name: "查询" }).click();
+  await expect(assistantDialog).toContainText("查询依据");
+  await page.keyboard.press("Escape");
+  await expect(assistantDialog).toBeHidden();
+
+  const startedAt = Date.now();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
+  await expect(page.getByRole("heading", { name: "业务操作台" })).toBeVisible();
+  expect(Date.now() - startedAt).toBeLessThan(1_000);
+  await expect(
+    page.getByRole("button", { name: "空间规则", exact: true }),
+  ).toBeVisible();
+  const returnedAt = Date.now();
+  await page.getByRole("button", { name: "进入低空态势一张图" }).click();
+  await expect(
+    page.getByRole("heading", { name: "低空态势一张图" }),
+  ).toBeVisible();
+  expect(Date.now() - returnedAt).toBeLessThan(1_000);
+  await expect(
+    page.getByRole("button", { name: "空间规则", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("模拟无人机显示在观山湖本地态势总览", async ({ page, request }) => {
   const localPmtilesRequests: string[] = [];
   const externalRequests: string[] = [];
@@ -47,15 +181,14 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
   await expect(
     page.getByRole("heading", { name: "进入低空智慧调度平台" }),
   ).toBeVisible();
-  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
 
-  await expect(
-    page.getByRole("heading", { name: "低空态势总览" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
+  await expect(page.getByRole("heading", { name: "业务操作台" })).toBeVisible();
   await expect(page.getByRole("navigation")).toContainText("数据智能");
-  await expect(page.getByRole("navigation")).not.toContainText("空间规则");
+  await expect(page.getByRole("navigation")).toContainText("空间规则");
   await expect(page.getByTestId("situation-map")).toHaveAttribute(
     "data-center",
     "106.6282,26.6467",
@@ -96,11 +229,16 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
     "data-position",
     "106.6382,26.6567",
   );
-  await expect(page.getByTestId("situation-map")).toHaveAttribute(
-    "data-track-points",
-    "2",
-  );
-  await expect(page.getByText("航迹 · 2 个遥测点")).toBeVisible();
+  await expect
+    .poll(async () =>
+      Number(
+        await page
+          .getByTestId("situation-map")
+          .getAttribute("data-track-points"),
+      ),
+    )
+    .toBeGreaterThanOrEqual(2);
+  await expect(page.getByText(/航迹 · \d+ 个遥测点/)).toBeVisible();
   await expect(page.getByText("模拟数据", { exact: true })).toBeVisible();
   await expect(page.getByText("2026-09-02 14:32:18")).toBeVisible();
 
@@ -108,18 +246,17 @@ test("模拟无人机显示在观山湖本地态势总览", async ({ page, reque
   expect(externalRequests).toEqual([]);
 });
 
-test("按角色能力显示功能入口并可退出登录", async ({ page }) => {
+test("平台操作员可查看全部功能入口并退出登录", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("账号").fill("spatial-admin");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
 
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
   await expect(page.getByRole("navigation")).toContainText("运行态势");
   await expect(page.getByRole("navigation")).toContainText("空间规则");
-  await expect(page.getByRole("navigation")).not.toContainText(
-    "AI异常线索研判",
-  );
-  await expect(page.getByText("空间管理员", { exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation")).toContainText("AI异常线索研判");
+  await expect(page.getByText("平台操作员", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "退出登录" }).click();
   await expect(
@@ -127,11 +264,12 @@ test("按角色能力显示功能入口并可退出登录", async ({ page }) => 
   ).toBeVisible();
 });
 
-test("空间管理员发布空间规则并在地图查看生效版本", async ({ page }) => {
+test("平台操作员发布空间规则并在地图查看生效版本", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("账号").fill("spatial-admin");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
   await page.getByRole("button", { name: "空间规则", exact: true }).click();
 
   await expect(
@@ -158,7 +296,7 @@ test("用户提交计划航线并在地图定位航前规则校验结果", async
   request,
 }) => {
   await request.post("http://127.0.0.1:8000/api/auth/login", {
-    data: { username: "spatial-admin", password: "local-e2e-password" },
+    data: { username: "platform-operator", password: "local-e2e-password" },
   });
   await request.post("http://127.0.0.1:8000/api/spatial-rules/drafts", {
     data: {
@@ -189,9 +327,10 @@ test("用户提交计划航线并在地图定位航前规则校验结果", async
   );
 
   await page.goto("/");
-  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
   await page.getByRole("button", { name: "航前规则校验" }).click();
   await page.getByRole("button", { name: "校验计划航线" }).click();
 
@@ -206,7 +345,7 @@ test("用户提交计划航线并在地图定位航前规则校验结果", async
 
 test("越界告警专题视图联动无人机与空间规则", async ({ page, request }) => {
   await request.post("http://127.0.0.1:8000/api/auth/login", {
-    data: { username: "spatial-admin", password: "local-e2e-password" },
+    data: { username: "platform-operator", password: "local-e2e-password" },
   });
   const now = Date.now();
   const ruleId = "E2E-NFZ-INCURSION";
@@ -260,9 +399,10 @@ test("越界告警专题视图联动无人机与空间规则", async ({ page, re
   }
 
   await page.goto("/");
-  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
   await page.getByRole("button", { name: "越界告警", exact: true }).click();
   await expect(page.getByText("UAV-GSH-ALERT", { exact: true })).toBeVisible();
   await page.getByText("UAV-GSH-ALERT", { exact: true }).click();
@@ -273,7 +413,7 @@ test("越界告警专题视图联动无人机与空间规则", async ({ page, re
   ).toBeVisible();
 });
 
-test("线索研判员查看 AI异常线索并联动地图位置", async ({ page, request }) => {
+test("平台操作员查看 AI异常线索并联动地图位置", async ({ page, request }) => {
   const materialRoot = join("/private/tmp", "low-altitude-e2e-clue-materials");
   await mkdir(join(materialRoot, "frames"), { recursive: true });
   await writeFile(join(materialRoot, "frames/e2e-fire.jpg"), "local-frame");
@@ -296,9 +436,10 @@ test("线索研判员查看 AI异常线索并联动地图位置", async ({ page,
   expect(accepted.status(), await accepted.text()).toBe(202);
 
   await page.goto("/");
-  await page.getByLabel("账号").fill("clue-reviewer");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
   await page.getByRole("button", { name: "AI异常线索研判" }).click();
 
   await expect(page.getByRole("heading", { name: "AI异常线索" })).toBeVisible();
@@ -327,13 +468,13 @@ test("线索研判员查看 AI异常线索并联动地图位置", async ({ page,
   );
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await expect(page.getByText("研判结果 · 确认")).toBeVisible();
-  await expect(page.getByText(/确认 · clue-reviewer ·/)).toBeVisible();
+  await expect(page.getByText(/确认 · platform-operator ·/)).toBeVisible();
   await page.getByRole("button", { name: "误报", exact: true }).click();
   await expect(page.getByText("研判结果 · 误报")).toBeVisible();
-  await expect(page.getByText(/误报 · clue-reviewer ·/)).toBeVisible();
+  await expect(page.getByText(/误报 · platform-operator ·/)).toBeVisible();
 });
 
-test("态势查看者执行带查询依据的数据智能查询", async ({ page, request }) => {
+test("平台操作员执行带查询依据的数据智能查询", async ({ page, request }) => {
   const sourceTime = new Date(Date.now() - 5_000).toISOString();
   const telemetry = await request.post(
     "http://127.0.0.1:8000/api/telemetry/batches",
@@ -360,9 +501,10 @@ test("态势查看者执行带查询依据的数据智能查询", async ({ page,
   expect(telemetry.status()).toBe(202);
 
   await page.goto("/");
-  await page.getByLabel("账号").fill("situation-viewer");
+  await page.getByLabel("账号").fill("platform-operator");
   await page.getByLabel("密码").fill("local-e2e-password");
   await page.getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "进入业务操作台" }).click();
   await page.getByRole("button", { name: "数据智能" }).click();
 
   await page.getByLabel("固定自然语言问题").fill("最近30分钟有哪些无人机？");

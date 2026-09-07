@@ -25,27 +25,24 @@ class AuthBase(DeclarativeBase):
 
 
 class Role(StrEnum):
-    SITUATION_VIEWER = "situation_viewer"
-    CLUE_REVIEWER = "clue_reviewer"
-    SPATIAL_ADMIN = "spatial_admin"
+    PLATFORM_OPERATOR = "platform_operator"
 
 
 ROLE_LABELS = {
-    Role.SITUATION_VIEWER: "态势查看者",
-    Role.CLUE_REVIEWER: "线索研判员",
-    Role.SPATIAL_ADMIN: "空间管理员",
+    Role.PLATFORM_OPERATOR: "平台操作员",
 }
 
 ROLE_CAPABILITIES = {
-    Role.SITUATION_VIEWER: ["situation:read", "query:read"],
-    Role.CLUE_REVIEWER: ["situation:read", "clue:review"],
-    Role.SPATIAL_ADMIN: ["situation:read", "spatial:manage"],
+    Role.PLATFORM_OPERATOR: [
+        "situation:read",
+        "query:read",
+        "clue:review",
+        "spatial:manage",
+    ],
 }
 
 DEMO_ACCOUNTS = {
-    "situation-viewer": Role.SITUATION_VIEWER,
-    "clue-reviewer": Role.CLUE_REVIEWER,
-    "spatial-admin": Role.SPATIAL_ADMIN,
+    "platform-operator": Role.PLATFORM_OPERATOR,
 }
 
 
@@ -148,7 +145,7 @@ def configure_auth(
     if configured_password is None:
         configured_password = secrets.token_urlsafe(15)
         logger.warning(
-            "Generated local demo password for all three accounts: %s",
+            "Generated local demo password for all local accounts: %s",
             configured_password,
         )
 
@@ -206,7 +203,7 @@ def configure_auth(
                 record_audit("anonymous", "access_denied", "denied")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
             account = database.get(UserAccount, auth_session.username)
-            if account is None:
+            if account is None or account.username not in DEMO_ACCOUNTS:
                 record_audit(auth_session.username, "access_denied", "denied")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
             return public_user(account)
@@ -215,8 +212,10 @@ def configure_auth(
     def login(credentials: LoginRequest, response: Response) -> AuthenticatedUser:
         with Session(engine) as database:
             account = database.get(UserAccount, credentials.username)
-            if account is None or not password_matches(
-                credentials.password, account.password_hash
+            if (
+                account is None
+                or account.username not in DEMO_ACCOUNTS
+                or not password_matches(credentials.password, account.password_hash)
             ):
                 record_audit(credentials.username, "login_failed", "denied")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)

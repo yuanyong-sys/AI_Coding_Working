@@ -1,6 +1,6 @@
 export type AuthenticatedUser = {
   username: string;
-  role: "situation_viewer" | "clue_reviewer" | "spatial_admin";
+  role: "platform_operator";
   role_label: string;
   capabilities: string[];
 };

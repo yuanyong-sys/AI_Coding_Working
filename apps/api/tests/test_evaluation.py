@@ -10,7 +10,7 @@ TEST_PASSWORD = "local-test-password"
 INFERENCE_TOKEN = "local-inference-token"
 
 
-def login(client: TestClient, username: str = "clue-reviewer") -> None:
+def login(client: TestClient, username: str = "platform-operator") -> None:
     response = client.post(
         "/api/auth/login",
         json={"username": username, "password": TEST_PASSWORD},

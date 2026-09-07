@@ -56,11 +56,7 @@ def test_inference_contract_creates_reviewable_ai_anomaly_clue(tmp_path):
             headers={"X-Inference-Token": INFERENCE_TOKEN},
         )
 
-        login(client, "situation-viewer")
-        viewer_denied = client.get("/api/ai-clues")
-        client.post("/api/auth/logout")
-
-        login(client, "clue-reviewer")
+        login(client, "platform-operator")
         clues = client.get("/api/ai-clues")
         material = client.get("/api/ai-clues/inference-fire-001/material")
 
@@ -70,7 +66,6 @@ def test_inference_contract_creates_reviewable_ai_anomaly_clue(tmp_path):
         "clue_id": "inference-fire-001",
         "status": "pending_review",
     }
-    assert viewer_denied.status_code == 403
     assert clues.status_code == 200
     assert clues.json() == {
         "clues": [
@@ -131,15 +126,7 @@ def test_reviewer_can_review_clue_and_trace_material_access_and_history(tmp_path
         )
         anonymous_material = client.get("/api/ai-clues/inference-fire-001/material")
 
-        login(client, "situation-viewer")
-        viewer_material = client.get("/api/ai-clues/inference-fire-001/material")
-        viewer_review = client.put(
-            "/api/ai-clues/inference-fire-001/review",
-            json={"review_status": "confirmed"},
-        )
-        client.post("/api/auth/logout")
-
-        login(client, "clue-reviewer")
+        login(client, "platform-operator")
         material = client.get("/api/ai-clues/inference-fire-001/material")
         confirmed = client.put(
             "/api/ai-clues/inference-fire-001/review",
@@ -156,15 +143,13 @@ def test_reviewer_can_review_clue_and_trace_material_access_and_history(tmp_path
         audit = client.get("/api/audit/events").json()["events"]
 
     assert anonymous_material.status_code == 401
-    assert viewer_material.status_code == 403
-    assert viewer_review.status_code == 403
     assert material.status_code == 200
     assert confirmed.status_code == 200
     assert false_positive.status_code == 200
     assert pending.status_code == 200
     reviewed = pending.json()
     assert reviewed["review_status"] == "pending_review"
-    assert reviewed["reviewed_by"] == "clue-reviewer"
+    assert reviewed["reviewed_by"] == "platform-operator"
     assert reviewed["reviewed_at"] is not None
     assert [item["review_status"] for item in reviewed["review_history"]] == [
         "confirmed",
@@ -172,7 +157,7 @@ def test_reviewer_can_review_clue_and_trace_material_access_and_history(tmp_path
         "pending_review",
     ]
     assert {item["reviewed_by"] for item in reviewed["review_history"]} == {
-        "clue-reviewer"
+        "platform-operator"
     }
     relevant_audit = [
         (event["action"], event["outcome"], event["subject"])

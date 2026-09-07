@@ -75,7 +75,7 @@ def test_fixed_natural_language_questions_return_grounded_read_only_answers(tmp_
     )
     with TestClient(app) as client:
         seed_telemetry(client)
-        login(client, "situation-viewer")
+        login(client, "platform-operator")
         questions = {
             "最近1小时有多少架无人机？": ("drone_count", 2),
             "最近1小时有多少飞行架次？": ("sortie_count", 2),
@@ -104,7 +104,7 @@ def test_fixed_natural_language_questions_return_grounded_read_only_answers(tmp_
                     "statistical_definition"
                 ],
                 "filters": {
-                    "role": "态势查看者",
+                    "role": "平台操作员",
                     "source_type": "全部来源",
                 },
             }
@@ -125,12 +125,7 @@ def test_query_plan_is_whitelisted_and_enforces_role_time_and_source(tmp_path):
         anonymous = client.post(
             "/api/data-query", json={"question": "最近1小时有多少架无人机？"}
         )
-        login(client, "clue-reviewer")
-        forbidden = client.post(
-            "/api/data-query", json={"question": "最近1小时有多少架无人机？"}
-        )
-        client.post("/api/auth/logout")
-        login(client, "situation-viewer")
+        login(client, "platform-operator")
         unsupported = client.post(
             "/api/data-query", json={"question": "删除所有无人机数据"}
         )
@@ -143,7 +138,6 @@ def test_query_plan_is_whitelisted_and_enforces_role_time_and_source(tmp_path):
         )
 
     assert anonymous.status_code == 401
-    assert forbidden.status_code == 403
     assert unsupported.status_code == 422
     assert simulated.status_code == 200
     assert simulated.json()["visualization"]["value"] == 1

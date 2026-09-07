@@ -23,6 +23,7 @@ import {
   type ReviewStatus,
 } from "@/ai-clues";
 import SituationMap from "@/components/SituationMap.vue";
+import LeadershipCockpit from "@/components/LeadershipCockpit.vue";
 import {
   connectSituationEvents,
   fetchSituationSnapshot,
@@ -56,7 +57,8 @@ const loading = ref(true);
 const error = ref("");
 const user = ref<AuthenticatedUser | null>(null);
 const authReady = ref(false);
-const username = ref("situation-viewer");
+const workspaceMode = ref<"leadership" | "operations">("operations");
+const username = ref("platform-operator");
 const password = ref("");
 const loginError = ref("");
 const loginPending = ref(false);
@@ -392,6 +394,8 @@ async function submitLogin() {
   loginError.value = "";
   try {
     user.value = await login(username.value, password.value);
+    workspaceMode.value =
+      user.value.role === "platform_operator" ? "leadership" : "operations";
     password.value = "";
     await startSituationRefresh();
   } catch (reason) {
@@ -412,10 +416,13 @@ async function signOut() {
   reconnectTimer = undefined;
   spatialRulesTimer = undefined;
   drones.value = [];
+  workspaceMode.value = "operations";
 }
 
 onMounted(async () => {
   user.value = await fetchSession();
+  workspaceMode.value =
+    user.value?.role === "platform_operator" ? "leadership" : "operations";
   authReady.value = true;
   if (user.value) await startSituationRefresh();
 });
@@ -453,7 +460,7 @@ watch(activeView, (view) => {
         </div>
         <div>
           <dt>身份体系</dt>
-          <dd>三角色最小权限</dd>
+          <dd>POC 平台操作员</dd>
         </div>
       </dl>
     </section>
@@ -483,495 +490,541 @@ watch(activeView, (view) => {
       <small>会话仅保存在 HttpOnly 本地 Cookie 中</small>
     </form>
   </main>
-  <main v-else class="command-shell">
-    <header class="command-header">
-      <div class="brand-block">
-        <span class="brand-index">LOW ALTITUDE / GSH-01</span>
-        <h1>低空态势总览</h1>
-      </div>
-      <div class="system-state" role="status">
-        <span class="live-signal" aria-hidden="true"></span>
-        本地态势链路
-        <strong>{{ error ? "异常" : "正常" }}</strong>
-      </div>
-      <div class="identity-block">
-        <div class="header-place">
-          <span>{{ user.role_label }}</span>
-          <strong>{{ user.username }}</strong>
+  <template v-else>
+    <LeadershipCockpit
+      v-if="workspaceMode === 'leadership'"
+      :user="user"
+      :drones="displayedDrones"
+      :metrics="displayedMetrics"
+      :alerts="incursionAlerts"
+      :clues="aiClues"
+      :spatial-rules="spatialRules"
+      :loading="loading"
+      :error="error"
+      @operations="workspaceMode = 'operations'"
+      @logout="signOut"
+    />
+    <main v-else class="command-shell">
+      <header class="command-header">
+        <div class="brand-block">
+          <span class="brand-index">LOW ALTITUDE / GSH-01</span>
+          <h1>业务操作台</h1>
         </div>
-        <button class="logout-button" type="button" @click="signOut">
-          退出登录
-        </button>
-      </div>
-    </header>
-
-    <nav class="capability-nav" aria-label="能力导航">
-      <button
-        v-for="item in navigation"
-        :key="item.label"
-        type="button"
-        :aria-current="activeView === item.label ? 'page' : undefined"
-        @click="activeView = item.label"
-      >
-        {{ item.label }}
-      </button>
-    </nav>
-
-    <aside class="overview-rail" aria-label="运行摘要">
-      <p class="section-code">01 / CURRENT PICTURE</p>
-      <h2>当前图景</h2>
-      <div class="metric">
-        <span>飞行架次</span>
-        <strong>{{ displayedMetrics.flight_sorties }}</strong>
-      </div>
-      <div class="metric metric--accent">
-        <span>当前在飞</span>
-        <strong>{{ displayedMetrics.in_flight_count }}</strong>
-      </div>
-      <div class="metric metric--compact">
-        <span
-          >在线率（近
-          {{ displayedMetrics.observation_window_seconds }} 秒）</span
-        >
-        <strong>{{ displayedMetrics.online_rate.toFixed(1) }}%</strong>
-      </div>
-      <div class="metric metric--compact">
-        <span>遥测延迟</span>
-        <strong
-          >{{ displayedMetrics.telemetry_delay_seconds.toFixed(1) }} 秒</strong
-        >
-      </div>
-      <div class="metric metric--compact">
-        <span>来源构成</span>
-        <strong>
-          真实 {{ displayedMetrics.source_composition.real }} / 模拟
-          {{ displayedMetrics.source_composition.simulated }}
-        </strong>
-      </div>
-      <div v-if="selectedDrone" class="source-card">
-        <span class="source-badge">
-          {{
-            selectedDrone.source_type === "simulated" ? "模拟数据" : "真实数据"
-          }}
-        </span>
-        <p>来源时间</p>
-        <time :datetime="selectedDrone.source_time">
-          {{ formatSourceTime(selectedDrone.source_time) }}
-        </time>
-        <p>平台接收时间 · 最后有效</p>
-        <time :datetime="selectedDrone.platform_received_time">
-          {{ formatSourceTime(selectedDrone.platform_received_time) }}
-        </time>
-        <span class="freshness-state" :data-status="selectedDrone.data_status">
-          {{
-            selectedDrone.data_status === "offline"
-              ? "离线"
-              : selectedDrone.data_status === "delayed"
-                ? "数据延迟"
-                : "数据正常"
-          }}
-        </span>
-        <dl>
-          <div>
-            <dt>高度</dt>
-            <dd>{{ selectedDrone.altitude_m }} m</dd>
-          </div>
-          <div>
-            <dt>速度</dt>
-            <dd>{{ selectedDrone.speed_mps }} m/s</dd>
-          </div>
-          <div>
-            <dt>航向</dt>
-            <dd>{{ selectedDrone.heading_deg }}°</dd>
-          </div>
-        </dl>
-      </div>
-      <p v-else-if="loading" class="quiet-state" role="status">
-        正在读取态势快照…
-      </p>
-      <p v-else-if="error" class="error-state" role="alert">{{ error }}</p>
-      <p v-else class="quiet-state" role="status">暂无已接入无人机</p>
-    </aside>
-
-    <section class="map-stage">
-      <SituationMap
-        :drones="mapDrones"
-        :spatial-rules="displayedSpatialRules"
-        :validation-position="preflightResult?.violations[0]?.position"
-        :incursion-alert="visibleIncursionAlert"
-        :ai-clue="activeView === 'AI异常线索研判' ? selectedAIClue : null"
-      />
-      <div class="map-legend" aria-label="地图图例">
-        <span><i class="legend-dot"></i> 已接入无人机</span>
-        <span><i class="legend-ring"></i> 模拟来源</span>
-      </div>
-    </section>
-
-    <aside
-      v-if="activeView === '数据智能'"
-      class="signal-rail data-query-panel"
-      aria-label="数据智能查询"
-    >
-      <p class="section-code">DATA / READ ONLY</p>
-      <h2>数据智能查询</h2>
-      <p class="scope-warning">只读查询，不触发飞行控制或配置修改。</p>
-      <label>
-        <span>固定自然语言问题</span>
-        <textarea v-model="dataQuestion" rows="3"></textarea>
-      </label>
-      <label>
-        <span>数据来源</span>
-        <select v-model="dataSourceFilter">
-          <option :value="null">全部来源</option>
-          <option value="real">真实数据</option>
-          <option value="simulated">模拟数据</option>
-        </select>
-      </label>
-      <button
-        type="button"
-        class="primary-action"
-        :disabled="dataQueryPending"
-        @click="submitDataQuestion"
-      >
-        {{ dataQueryPending ? "查询中…" : "执行只读查询" }}
-      </button>
-      <p v-if="dataQueryError" class="form-error" role="alert">
-        {{ dataQueryError }}
-      </p>
-      <article v-if="dataQueryResult" class="query-answer" aria-live="polite">
-        <strong>{{ dataQueryResult.answer }}</strong>
-        <div
-          v-if="dataQueryResult.visualization.type === 'chart'"
-          class="query-chart"
-          aria-label="查询结果图表"
-        >
-          <span
-            :style="{
-              width: `${Math.min(100, dataQueryResult.visualization.value ?? 0)}%`,
-            }"
-          ></span>
-          <b>{{ dataQueryResult.visualization.value }}</b>
+        <div class="system-state" role="status">
+          <span class="live-signal" aria-hidden="true"></span>
+          本地态势链路
+          <strong>{{ error ? "异常" : "正常" }}</strong>
         </div>
-        <dl>
-          <div>
-            <dt>时间范围</dt>
-            <dd>
-              {{
-                formatSourceTime(dataQueryResult.query_basis.time_range.start)
-              }}
-              至
-              {{ formatSourceTime(dataQueryResult.query_basis.time_range.end) }}
-            </dd>
-          </div>
-          <div>
-            <dt>数据来源</dt>
-            <dd>{{ dataQueryResult.query_basis.data_sources.join("、") }}</dd>
-          </div>
-          <div>
-            <dt>统计口径</dt>
-            <dd>{{ dataQueryResult.query_basis.statistical_definition }}</dd>
-          </div>
-          <div>
-            <dt>筛选条件</dt>
-            <dd>
-              来源 {{ dataQueryResult.query_basis.filters.source_type }} · 角色
-              {{ dataQueryResult.query_basis.filters.role }}
-            </dd>
-          </div>
-        </dl>
-        <button
-          type="button"
-          class="detail-entry"
-          :aria-expanded="dataQueryDetailsOpen"
-          @click="dataQueryDetailsOpen = !dataQueryDetailsOpen"
-        >
-          {{ dataQueryDetailsOpen ? "收起" : "查看" }}
-          {{ dataQueryResult.detail_entry.record_type }}明细（{{
-            dataQueryResult.detail_entry.records.length
-          }}）
-        </button>
-        <ol v-if="dataQueryDetailsOpen" class="query-details">
-          <li
-            v-for="record in dataQueryResult.detail_entry.records"
-            :key="record.source_type + ':' + record.event_id"
+        <div class="identity-block">
+          <button
+            class="logout-button"
+            type="button"
+            @click="workspaceMode = 'leadership'"
           >
-            <strong>{{ record.drone_id }}</strong>
-            <span>{{ record.event_id }}</span>
-            <time :datetime="record.source_time">
-              来源时间 {{ formatSourceTime(record.source_time) }}
-            </time>
-            <small>
-              {{ record.source_type === "simulated" ? "模拟数据" : "真实数据" }}
-            </small>
-          </li>
-        </ol>
-        <small v-if="dataQueryResult.visualization.type === 'map'">
-          查询结果已只读定位到地图
-        </small>
-      </article>
-    </aside>
-    <aside
-      v-else-if="activeView === '空间规则'"
-      class="signal-rail spatial-editor"
-      aria-label="空间规则编辑"
-    >
-      <p class="section-code">SPATIAL / DRAFT</p>
-      <h2>空间规则草稿</h2>
-      <label><span>规则名称</span><input v-model="spatialDraft.name" /></label>
-      <label>
-        <span>类型</span>
-        <select v-model="spatialDraft.rule_type">
-          <option value="no_fly_zone">禁飞区</option>
-          <option value="geofence">电子围栏</option>
-        </select>
-      </label>
-      <div class="field-pair">
-        <label>
-          <span>最低高度（米）</span>
-          <input v-model.number="spatialDraft.min_altitude_m" type="number" />
-        </label>
-        <label>
-          <span>最高高度（米）</span>
-          <input v-model.number="spatialDraft.max_altitude_m" type="number" />
-        </label>
-      </div>
-      <label>
-        <span>生效时间</span>
-        <input v-model="spatialDraft.valid_from" type="datetime-local" />
-      </label>
-      <label>
-        <span>失效时间</span>
-        <input v-model="spatialDraft.valid_to" type="datetime-local" />
-      </label>
-      <label>
-        <span>水平范围（WGS-84 GeoJSON）</span>
-        <textarea v-model="geometryText" rows="5"></textarea>
-      </label>
-      <label><span>来源</span><input v-model="spatialDraft.source" /></label>
-      <p v-if="spatialRuleError" class="error-state" role="alert">
-        {{ spatialRuleError }}
-      </p>
-      <p v-if="spatialRuleStatus" class="editor-status" role="status">
-        {{ spatialRuleStatus }}
-      </p>
-      <div class="editor-actions">
-        <button type="button" @click="saveDraft">保存草稿</button>
-        <button type="button" class="publish-button" @click="publishDraft">
-          发布版本
-        </button>
-      </div>
-    </aside>
-    <aside
-      v-else-if="activeView === '越界告警'"
-      class="signal-rail incursion-panel"
-      aria-label="越界告警专题视图"
-    >
-      <p class="section-code">INCURSION / RULE HIT</p>
-      <h2>越界告警</h2>
-      <p class="scope-warning">
-        规则命中提示，不代表违规认定，不输出飞行控制指令。
-      </p>
-      <button
-        v-for="alert in incursionAlerts"
-        :key="alert.id"
-        type="button"
-        class="incursion-card"
-        :data-status="alert.ended_at ? 'ended' : 'active'"
-        @click="selectedIncursionAlert = alert"
-      >
-        <span>{{ alert.ended_at ? "已结束" : "持续中" }}</span>
-        <strong>{{ alert.drone_id }}</strong>
-        <p>{{ alert.reason }}</p>
-        <small>{{ alert.rule_id }} · v{{ alert.rule_version }}</small>
-        <small>{{
-          alert.source_type === "simulated" ? "模拟数据" : "真实数据"
-        }}</small>
-        <time :datetime="alert.started_at"
-          >开始 {{ formatSourceTime(alert.started_at) }}</time
-        >
-        <time :datetime="alert.platform_received_time"
-          >平台接收 {{ formatSourceTime(alert.platform_received_time) }}</time
-        >
-        <time v-if="alert.ended_at" :datetime="alert.ended_at"
-          >结束 {{ formatSourceTime(alert.ended_at) }}</time
-        >
-      </button>
-      <p v-if="!incursionAlerts.length" class="quiet-state">当前无越界告警</p>
-    </aside>
-    <aside
-      v-else-if="activeView === '航前规则校验'"
-      class="signal-rail spatial-editor"
-      aria-label="航前规则校验"
-    >
-      <p class="section-code">PREFLIGHT / WGS-84</p>
-      <h2>计划航线航前规则校验</h2>
-      <template v-for="(point, index) in plannedRoute" :key="index">
-        <p class="route-point-title">航点 {{ index + 1 }}</p>
-        <div class="field-pair">
-          <label>
-            <span>经度</span>
-            <input
-              v-model.number="point.longitude"
-              type="number"
-              step="0.001"
-            />
-          </label>
-          <label>
-            <span>纬度</span>
-            <input v-model.number="point.latitude" type="number" step="0.001" />
-          </label>
-          <label>
-            <span>高度（米）</span>
-            <input v-model.number="point.altitude_m" type="number" />
-          </label>
-          <label>
-            <span>时间</span>
-            <input v-model="point.time" />
-          </label>
+            进入低空态势一张图
+          </button>
+          <div class="header-place">
+            <span>{{ user.role_label }}</span>
+            <strong>{{ user.username }}</strong>
+          </div>
+          <button class="logout-button" type="button" @click="signOut">
+            退出登录
+          </button>
         </div>
-      </template>
-      <button
-        class="preflight-button"
-        type="button"
-        @click="runPreflightValidation"
-      >
-        校验计划航线
-      </button>
-      <p v-if="preflightError" class="error-state" role="alert">
-        {{ preflightError }}
-      </p>
-      <article v-if="preflightResult" class="preflight-result">
-        <strong>
-          {{
-            preflightResult.result === "passed"
-              ? "通过"
-              : preflightResult.result === "entered_no_fly_zone"
-                ? "进入禁飞区"
-                : "超出电子围栏"
-          }}
-        </strong>
-        <template v-if="preflightResult.violations[0]">
-          <p>
-            命中版本 {{ preflightResult.violations[0].rule_id }} v{{
-              preflightResult.violations[0].rule_version
+      </header>
+
+      <nav class="capability-nav" aria-label="能力导航">
+        <button
+          v-for="item in navigation"
+          :key="item.label"
+          type="button"
+          :aria-current="activeView === item.label ? 'page' : undefined"
+          @click="activeView = item.label"
+        >
+          {{ item.label }}
+        </button>
+      </nav>
+
+      <aside class="overview-rail" aria-label="运行摘要">
+        <p class="section-code">01 / CURRENT PICTURE</p>
+        <h2>当前图景</h2>
+        <div class="metric">
+          <span>飞行架次</span>
+          <strong>{{ displayedMetrics.flight_sorties }}</strong>
+        </div>
+        <div class="metric metric--accent">
+          <span>当前在飞</span>
+          <strong>{{ displayedMetrics.in_flight_count }}</strong>
+        </div>
+        <div class="metric metric--compact">
+          <span
+            >在线率（近
+            {{ displayedMetrics.observation_window_seconds }} 秒）</span
+          >
+          <strong>{{ displayedMetrics.online_rate.toFixed(1) }}%</strong>
+        </div>
+        <div class="metric metric--compact">
+          <span>遥测延迟</span>
+          <strong
+            >{{
+              displayedMetrics.telemetry_delay_seconds.toFixed(1)
             }}
-          </p>
-          <p>{{ preflightResult.violations[0].reason }}</p>
-        </template>
-        <small>规则判断，不代表审批或飞行许可</small>
-      </article>
-    </aside>
-    <aside
-      v-else-if="activeView === 'AI异常线索研判'"
-      class="signal-rail clue-panel"
-      aria-label="AI异常线索专题视图"
-    >
-      <p class="section-code">AI CLUE / REVIEW</p>
-      <h2>AI异常线索</h2>
-      <p class="scope-warning">算法识别结果仅供核实，不代表确认事件。</p>
-      <div
-        v-if="inferenceHealth"
-        class="inference-health"
-        :data-status="inferenceHealth.status"
-        role="status"
+            秒</strong
+          >
+        </div>
+        <div class="metric metric--compact">
+          <span>来源构成</span>
+          <strong>
+            真实 {{ displayedMetrics.source_composition.real }} / 模拟
+            {{ displayedMetrics.source_composition.simulated }}
+          </strong>
+        </div>
+        <div v-if="selectedDrone" class="source-card">
+          <span class="source-badge">
+            {{
+              selectedDrone.source_type === "simulated"
+                ? "模拟数据"
+                : "真实数据"
+            }}
+          </span>
+          <p>来源时间</p>
+          <time :datetime="selectedDrone.source_time">
+            {{ formatSourceTime(selectedDrone.source_time) }}
+          </time>
+          <p>平台接收时间 · 最后有效</p>
+          <time :datetime="selectedDrone.platform_received_time">
+            {{ formatSourceTime(selectedDrone.platform_received_time) }}
+          </time>
+          <span
+            class="freshness-state"
+            :data-status="selectedDrone.data_status"
+          >
+            {{
+              selectedDrone.data_status === "offline"
+                ? "离线"
+                : selectedDrone.data_status === "delayed"
+                  ? "数据延迟"
+                  : "数据正常"
+            }}
+          </span>
+          <dl>
+            <div>
+              <dt>高度</dt>
+              <dd>{{ selectedDrone.altitude_m }} m</dd>
+            </div>
+            <div>
+              <dt>速度</dt>
+              <dd>{{ selectedDrone.speed_mps }} m/s</dd>
+            </div>
+            <div>
+              <dt>航向</dt>
+              <dd>{{ selectedDrone.heading_deg }}°</dd>
+            </div>
+          </dl>
+        </div>
+        <p v-else-if="loading" class="quiet-state" role="status">
+          正在读取态势快照…
+        </p>
+        <p v-else-if="error" class="error-state" role="alert">{{ error }}</p>
+        <p v-else class="quiet-state" role="status">暂无已接入无人机</p>
+      </aside>
+
+      <section class="map-stage">
+        <SituationMap
+          :drones="mapDrones"
+          :spatial-rules="displayedSpatialRules"
+          :validation-position="preflightResult?.violations[0]?.position"
+          :incursion-alert="visibleIncursionAlert"
+          :ai-clue="activeView === 'AI异常线索研判' ? selectedAIClue : null"
+        />
+        <div class="map-legend" aria-label="地图图例">
+          <span><i class="legend-dot"></i> 已接入无人机</span>
+          <span><i class="legend-ring"></i> 模拟来源</span>
+        </div>
+      </section>
+
+      <aside
+        v-if="activeView === '数据智能'"
+        class="signal-rail data-query-panel"
+        aria-label="数据智能查询"
       >
-        <strong>
-          {{ inferenceHealth.status === "healthy" ? "推理正常" : "推理降级" }}
-        </strong>
-        <span v-if="inferenceHealth.reason">{{ inferenceHealth.reason }}</span>
-        <small v-if="inferenceHealth.model_version">
-          模型 · {{ inferenceHealth.model_version }}
-        </small>
-        <small v-if="inferenceHealth.status === 'degraded'">
-          降级期间不生成伪线索，既有线索仍可查看和研判。
-        </small>
-      </div>
-      <article
-        v-for="clue in aiClues"
-        :key="clue.clue_id"
-        class="clue-card"
-        data-testid="ai-clue-card"
-        :data-selected="selectedAIClue?.clue_id === clue.clue_id"
-      >
-        <span>{{ formatClueSource(clue.source_type) }}</span>
+        <p class="section-code">DATA / READ ONLY</p>
+        <h2>数据智能查询</h2>
+        <p class="scope-warning">只读查询，不触发飞行控制或配置修改。</p>
+        <label>
+          <span>固定自然语言问题</span>
+          <textarea v-model="dataQuestion" rows="3"></textarea>
+        </label>
+        <label>
+          <span>数据来源</span>
+          <select v-model="dataSourceFilter">
+            <option :value="null">全部来源</option>
+            <option value="real">真实数据</option>
+            <option value="simulated">模拟数据</option>
+          </select>
+        </label>
         <button
           type="button"
-          class="clue-select"
-          :aria-pressed="selectedAIClue?.clue_id === clue.clue_id"
-          :aria-label="`${formatAnomalyType(clue.anomaly_type)}，置信度 ${(clue.confidence * 100).toFixed(1)}%`"
-          @click="selectedAIClue = clue"
+          class="primary-action"
+          :disabled="dataQueryPending"
+          @click="submitDataQuestion"
         >
-          <strong>{{ formatAnomalyType(clue.anomaly_type) }}</strong>
-          <small>定位地图位置</small>
+          {{ dataQueryPending ? "查询中…" : "执行只读查询" }}
         </button>
-        <p>置信度 {{ (clue.confidence * 100).toFixed(1) }}%</p>
-        <time :datetime="clue.source_time">{{
-          formatSourceTime(clue.source_time)
-        }}</time>
-        <small>研判材料 · {{ clue.material_reference }}</small>
-        <small>模型 · {{ clue.model_version }}</small>
-        <template v-if="selectedAIClue?.clue_id === clue.clue_id">
-          <img
-            class="clue-material"
-            :src="clueMaterialUrl(clue.clue_id)"
-            :alt="`${formatAnomalyType(clue.anomaly_type)}研判材料`"
-          />
-          <p class="review-current">
-            研判结果 · {{ reviewStatusLabels[clue.review_status] }}
-          </p>
-          <div class="review-actions" aria-label="设置研判结果">
-            <button
-              v-for="status in [
-                'confirmed',
-                'false_positive',
-                'pending_review',
-              ] as ReviewStatus[]"
-              :key="status"
-              type="button"
-              :disabled="clueReviewPending"
-              @click="reviewSelectedClue(status)"
-            >
-              {{ reviewStatusLabels[status] }}
-            </button>
+        <p v-if="dataQueryError" class="form-error" role="alert">
+          {{ dataQueryError }}
+        </p>
+        <article v-if="dataQueryResult" class="query-answer" aria-live="polite">
+          <strong>{{ dataQueryResult.answer }}</strong>
+          <div
+            v-if="dataQueryResult.visualization.type === 'chart'"
+            class="query-chart"
+            aria-label="查询结果图表"
+          >
+            <span
+              :style="{
+                width: `${Math.min(100, dataQueryResult.visualization.value ?? 0)}%`,
+              }"
+            ></span>
+            <b>{{ dataQueryResult.visualization.value }}</b>
           </div>
-          <p v-if="clueReviewError" class="form-error" role="alert">
-            {{ clueReviewError }}
-          </p>
-          <ol v-if="clue.review_history.length" class="review-history">
-            <li v-for="(item, index) in clue.review_history" :key="index">
-              {{ reviewStatusLabels[item.review_status] }} ·
-              {{ item.reviewed_by }} · {{ formatSourceTime(item.reviewed_at) }}
+          <dl>
+            <div>
+              <dt>时间范围</dt>
+              <dd>
+                {{
+                  formatSourceTime(dataQueryResult.query_basis.time_range.start)
+                }}
+                至
+                {{
+                  formatSourceTime(dataQueryResult.query_basis.time_range.end)
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>数据来源</dt>
+              <dd>{{ dataQueryResult.query_basis.data_sources.join("、") }}</dd>
+            </div>
+            <div>
+              <dt>统计口径</dt>
+              <dd>{{ dataQueryResult.query_basis.statistical_definition }}</dd>
+            </div>
+            <div>
+              <dt>筛选条件</dt>
+              <dd>
+                来源 {{ dataQueryResult.query_basis.filters.source_type }} ·
+                角色
+                {{ dataQueryResult.query_basis.filters.role }}
+              </dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            class="detail-entry"
+            :aria-expanded="dataQueryDetailsOpen"
+            @click="dataQueryDetailsOpen = !dataQueryDetailsOpen"
+          >
+            {{ dataQueryDetailsOpen ? "收起" : "查看" }}
+            {{ dataQueryResult.detail_entry.record_type }}明细（{{
+              dataQueryResult.detail_entry.records.length
+            }}）
+          </button>
+          <ol v-if="dataQueryDetailsOpen" class="query-details">
+            <li
+              v-for="record in dataQueryResult.detail_entry.records"
+              :key="record.source_type + ':' + record.event_id"
+            >
+              <strong>{{ record.drone_id }}</strong>
+              <span>{{ record.event_id }}</span>
+              <time :datetime="record.source_time">
+                来源时间 {{ formatSourceTime(record.source_time) }}
+              </time>
+              <small>
+                {{
+                  record.source_type === "simulated" ? "模拟数据" : "真实数据"
+                }}
+              </small>
             </li>
           </ol>
+          <small v-if="dataQueryResult.visualization.type === 'map'">
+            查询结果已只读定位到地图
+          </small>
+        </article>
+      </aside>
+      <aside
+        v-else-if="activeView === '空间规则'"
+        class="signal-rail spatial-editor"
+        aria-label="空间规则编辑"
+      >
+        <p class="section-code">SPATIAL / DRAFT</p>
+        <h2>空间规则草稿</h2>
+        <label
+          ><span>规则名称</span><input v-model="spatialDraft.name"
+        /></label>
+        <label>
+          <span>类型</span>
+          <select v-model="spatialDraft.rule_type">
+            <option value="no_fly_zone">禁飞区</option>
+            <option value="geofence">电子围栏</option>
+          </select>
+        </label>
+        <div class="field-pair">
+          <label>
+            <span>最低高度（米）</span>
+            <input v-model.number="spatialDraft.min_altitude_m" type="number" />
+          </label>
+          <label>
+            <span>最高高度（米）</span>
+            <input v-model.number="spatialDraft.max_altitude_m" type="number" />
+          </label>
+        </div>
+        <label>
+          <span>生效时间</span>
+          <input v-model="spatialDraft.valid_from" type="datetime-local" />
+        </label>
+        <label>
+          <span>失效时间</span>
+          <input v-model="spatialDraft.valid_to" type="datetime-local" />
+        </label>
+        <label>
+          <span>水平范围（WGS-84 GeoJSON）</span>
+          <textarea v-model="geometryText" rows="5"></textarea>
+        </label>
+        <label><span>来源</span><input v-model="spatialDraft.source" /></label>
+        <p v-if="spatialRuleError" class="error-state" role="alert">
+          {{ spatialRuleError }}
+        </p>
+        <p v-if="spatialRuleStatus" class="editor-status" role="status">
+          {{ spatialRuleStatus }}
+        </p>
+        <div class="editor-actions">
+          <button type="button" @click="saveDraft">保存草稿</button>
+          <button type="button" class="publish-button" @click="publishDraft">
+            发布版本
+          </button>
+        </div>
+      </aside>
+      <aside
+        v-else-if="activeView === '越界告警'"
+        class="signal-rail incursion-panel"
+        aria-label="越界告警专题视图"
+      >
+        <p class="section-code">INCURSION / RULE HIT</p>
+        <h2>越界告警</h2>
+        <p class="scope-warning">
+          规则命中提示，不代表违规认定，不输出飞行控制指令。
+        </p>
+        <button
+          v-for="alert in incursionAlerts"
+          :key="alert.id"
+          type="button"
+          class="incursion-card"
+          :data-status="alert.ended_at ? 'ended' : 'active'"
+          @click="selectedIncursionAlert = alert"
+        >
+          <span>{{ alert.ended_at ? "已结束" : "持续中" }}</span>
+          <strong>{{ alert.drone_id }}</strong>
+          <p>{{ alert.reason }}</p>
+          <small>{{ alert.rule_id }} · v{{ alert.rule_version }}</small>
+          <small>{{
+            alert.source_type === "simulated" ? "模拟数据" : "真实数据"
+          }}</small>
+          <time :datetime="alert.started_at"
+            >开始 {{ formatSourceTime(alert.started_at) }}</time
+          >
+          <time :datetime="alert.platform_received_time"
+            >平台接收 {{ formatSourceTime(alert.platform_received_time) }}</time
+          >
+          <time v-if="alert.ended_at" :datetime="alert.ended_at"
+            >结束 {{ formatSourceTime(alert.ended_at) }}</time
+          >
+        </button>
+        <p v-if="!incursionAlerts.length" class="quiet-state">当前无越界告警</p>
+      </aside>
+      <aside
+        v-else-if="activeView === '航前规则校验'"
+        class="signal-rail spatial-editor"
+        aria-label="航前规则校验"
+      >
+        <p class="section-code">PREFLIGHT / WGS-84</p>
+        <h2>计划航线航前规则校验</h2>
+        <template v-for="(point, index) in plannedRoute" :key="index">
+          <p class="route-point-title">航点 {{ index + 1 }}</p>
+          <div class="field-pair">
+            <label>
+              <span>经度</span>
+              <input
+                v-model.number="point.longitude"
+                type="number"
+                step="0.001"
+              />
+            </label>
+            <label>
+              <span>纬度</span>
+              <input
+                v-model.number="point.latitude"
+                type="number"
+                step="0.001"
+              />
+            </label>
+            <label>
+              <span>高度（米）</span>
+              <input v-model.number="point.altitude_m" type="number" />
+            </label>
+            <label>
+              <span>时间</span>
+              <input v-model="point.time" />
+            </label>
+          </div>
         </template>
-      </article>
-      <p v-if="!aiClues.length" class="quiet-state">当前无待复核 AI异常线索</p>
-    </aside>
-    <aside v-else class="signal-rail" aria-label="实时信号">
-      <p class="section-code">SIGNAL / LIVE</p>
-      <h2>实时信号</h2>
-      <article v-if="selectedDrone" class="signal-item">
-        <time :datetime="selectedDrone.source_time">
-          {{ formatSourceTime(selectedDrone.source_time).slice(11) }}
-        </time>
-        <strong>遥测接入成功</strong>
-        <p>观山湖中心区 · {{ selectedDrone.altitude_m }} 米</p>
-        <span>SIM / {{ selectedDrone.flight_state.toUpperCase() }}</span>
-      </article>
-      <p v-else class="quiet-state">等待首个遥测信号</p>
-      <div class="scope-note">
-        <span>MAP PACKAGE</span>
-        <strong>GSH · LOCAL · V1</strong>
-        <p>底图由浏览器直接读取本地 PMTiles，无独立瓦片进程。</p>
-      </div>
-    </aside>
+        <button
+          class="preflight-button"
+          type="button"
+          @click="runPreflightValidation"
+        >
+          校验计划航线
+        </button>
+        <p v-if="preflightError" class="error-state" role="alert">
+          {{ preflightError }}
+        </p>
+        <article v-if="preflightResult" class="preflight-result">
+          <strong>
+            {{
+              preflightResult.result === "passed"
+                ? "通过"
+                : preflightResult.result === "entered_no_fly_zone"
+                  ? "进入禁飞区"
+                  : "超出电子围栏"
+            }}
+          </strong>
+          <template v-if="preflightResult.violations[0]">
+            <p>
+              命中版本 {{ preflightResult.violations[0].rule_id }} v{{
+                preflightResult.violations[0].rule_version
+              }}
+            </p>
+            <p>{{ preflightResult.violations[0].reason }}</p>
+          </template>
+          <small>规则判断，不代表审批或飞行许可</small>
+        </article>
+      </aside>
+      <aside
+        v-else-if="activeView === 'AI异常线索研判'"
+        class="signal-rail clue-panel"
+        aria-label="AI异常线索专题视图"
+      >
+        <p class="section-code">AI CLUE / REVIEW</p>
+        <h2>AI异常线索</h2>
+        <p class="scope-warning">算法识别结果仅供核实，不代表确认事件。</p>
+        <div
+          v-if="inferenceHealth"
+          class="inference-health"
+          :data-status="inferenceHealth.status"
+          role="status"
+        >
+          <strong>
+            {{ inferenceHealth.status === "healthy" ? "推理正常" : "推理降级" }}
+          </strong>
+          <span v-if="inferenceHealth.reason">{{
+            inferenceHealth.reason
+          }}</span>
+          <small v-if="inferenceHealth.model_version">
+            模型 · {{ inferenceHealth.model_version }}
+          </small>
+          <small v-if="inferenceHealth.status === 'degraded'">
+            降级期间不生成伪线索，既有线索仍可查看和研判。
+          </small>
+        </div>
+        <article
+          v-for="clue in aiClues"
+          :key="clue.clue_id"
+          class="clue-card"
+          data-testid="ai-clue-card"
+          :data-selected="selectedAIClue?.clue_id === clue.clue_id"
+        >
+          <span>{{ formatClueSource(clue.source_type) }}</span>
+          <button
+            type="button"
+            class="clue-select"
+            :aria-pressed="selectedAIClue?.clue_id === clue.clue_id"
+            :aria-label="`${formatAnomalyType(clue.anomaly_type)}，置信度 ${(clue.confidence * 100).toFixed(1)}%`"
+            @click="selectedAIClue = clue"
+          >
+            <strong>{{ formatAnomalyType(clue.anomaly_type) }}</strong>
+            <small>定位地图位置</small>
+          </button>
+          <p>置信度 {{ (clue.confidence * 100).toFixed(1) }}%</p>
+          <time :datetime="clue.source_time">{{
+            formatSourceTime(clue.source_time)
+          }}</time>
+          <small>研判材料 · {{ clue.material_reference }}</small>
+          <small>模型 · {{ clue.model_version }}</small>
+          <template v-if="selectedAIClue?.clue_id === clue.clue_id">
+            <img
+              class="clue-material"
+              :src="clueMaterialUrl(clue.clue_id)"
+              :alt="`${formatAnomalyType(clue.anomaly_type)}研判材料`"
+            />
+            <p class="review-current">
+              研判结果 · {{ reviewStatusLabels[clue.review_status] }}
+            </p>
+            <div class="review-actions" aria-label="设置研判结果">
+              <button
+                v-for="status in [
+                  'confirmed',
+                  'false_positive',
+                  'pending_review',
+                ] as ReviewStatus[]"
+                :key="status"
+                type="button"
+                :disabled="clueReviewPending"
+                @click="reviewSelectedClue(status)"
+              >
+                {{ reviewStatusLabels[status] }}
+              </button>
+            </div>
+            <p v-if="clueReviewError" class="form-error" role="alert">
+              {{ clueReviewError }}
+            </p>
+            <ol v-if="clue.review_history.length" class="review-history">
+              <li v-for="(item, index) in clue.review_history" :key="index">
+                {{ reviewStatusLabels[item.review_status] }} ·
+                {{ item.reviewed_by }} ·
+                {{ formatSourceTime(item.reviewed_at) }}
+              </li>
+            </ol>
+          </template>
+        </article>
+        <p v-if="!aiClues.length" class="quiet-state">
+          当前无待复核 AI异常线索
+        </p>
+      </aside>
+      <aside v-else class="signal-rail" aria-label="实时信号">
+        <p class="section-code">SIGNAL / LIVE</p>
+        <h2>实时信号</h2>
+        <article v-if="selectedDrone" class="signal-item">
+          <time :datetime="selectedDrone.source_time">
+            {{ formatSourceTime(selectedDrone.source_time).slice(11) }}
+          </time>
+          <strong>遥测接入成功</strong>
+          <p>观山湖中心区 · {{ selectedDrone.altitude_m }} 米</p>
+          <span>SIM / {{ selectedDrone.flight_state.toUpperCase() }}</span>
+        </article>
+        <p v-else class="quiet-state">等待首个遥测信号</p>
+        <div class="scope-note">
+          <span>MAP PACKAGE</span>
+          <strong>GSH · LOCAL · V1</strong>
+          <p>底图由浏览器直接读取本地 PMTiles，无独立瓦片进程。</p>
+        </div>
+      </aside>
 
-    <footer class="command-footer">
-      <span>PRIVATE / OFFLINE CAPABLE</span>
-      <div class="activity-line">
-        <i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
-      <strong>态势快照 · HTTP</strong>
-    </footer>
-  </main>
+      <footer class="command-footer">
+        <span>PRIVATE / OFFLINE CAPABLE</span>
+        <div class="activity-line">
+          <i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <strong>态势快照 · HTTP</strong>
+      </footer>
+    </main>
+  </template>
 </template>

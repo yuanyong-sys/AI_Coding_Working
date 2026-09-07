@@ -5,7 +5,7 @@ from low_altitude_poc_api.app import create_app
 TEST_PASSWORD = "local-test-password"
 
 
-def login(client: TestClient, username: str = "spatial-admin") -> None:
+def login(client: TestClient, username: str = "platform-operator") -> None:
     assert (
         client.post(
             "/api/auth/login",

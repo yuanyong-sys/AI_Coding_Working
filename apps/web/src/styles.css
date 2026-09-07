@@ -786,6 +786,32 @@ h2 {
   color: var(--cyan);
   cursor: pointer;
 }
+button.drone-marker {
+  padding: 0;
+  border: 0;
+  outline-offset: 0.25rem;
+  background: transparent;
+  font: inherit;
+}
+button.drone-marker:focus-visible {
+  outline: 2px solid var(--cyan);
+}
+.map-view-toggle {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  z-index: 5;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(85, 226, 213, 0.5);
+  background: rgba(5, 24, 27, 0.9);
+  color: #dcebea;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.map-view-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
 .drone-marker__body {
   z-index: 2;
   font-size: 1rem;
