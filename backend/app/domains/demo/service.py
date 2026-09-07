@@ -371,9 +371,6 @@ async def handle_mission_anomaly(session: AsyncSession, mission: Mission, kind: 
         mission.control_state = "AUTO_BACKUP_SWITCH"
         outcome = "BACKUP_SWITCHED"
         action = "MISSION_AUTO_BACKUP_SWITCH"
-    elif mission.control_state == "AUTO_BACKUP_SWITCH":
-        outcome = "BACKUP_SWITCHED"
-        action = "MISSION_ANOMALY_REPEATED"
     else:
         mission.status = "ABNORMAL"
         outcome = "ABNORMAL"

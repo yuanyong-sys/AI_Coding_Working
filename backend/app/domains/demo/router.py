@@ -71,11 +71,12 @@ async def control_mission(
     mission = await require_running_mission(session, mission_id)
     command = request.command.value
     result = "FAILED" if request.simulateFailure else "SUCCESS"
+    previous_control_state = mission.control_state
     mission.control_state = command if result == "SUCCESS" else mission.control_state
     await service.record_audit(
         session, action=f"MISSION_CONTROL_{command}", mission_id=mission.id,
         result=result, detail=f"模拟{command}指令",
-        before_state=mission.status, after_state=mission.status,
+        before_state=previous_control_state, after_state=mission.control_state,
         failure_reason="模拟指令失败" if request.simulateFailure else None,
     )
     if request.simulateFailure:

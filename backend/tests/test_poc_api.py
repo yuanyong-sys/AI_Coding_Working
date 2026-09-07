@@ -195,8 +195,10 @@ async def test_running_mission_monitor_and_controls_are_audited(client: AsyncCli
         ("MISSION_CONTROL_RETURN", "FAILED"),
     ]
     assert audit[-1]["actor"] == "王警官"
-    assert audit[-1]["beforeState"] == "RUNNING"
-    assert audit[-1]["afterState"] == "RUNNING"
+    assert audit[-2]["beforeState"] is None
+    assert audit[-2]["afterState"] == "HOVER"
+    assert audit[-1]["beforeState"] == "HOVER"
+    assert audit[-1]["afterState"] == "HOVER"
     assert audit[-1]["failureReason"] == "模拟指令失败"
 
 
@@ -219,6 +221,8 @@ async def test_anomaly_auto_switches_backup_or_marks_abnormal_with_unique_alert(
 
     repeated = await client.post(f"/api/tasks/{created['id']}/anomaly", json={"kind": "LOW_BATTERY"})
     assert repeated.json()["alert"]["id"] == alert_id
+    assert repeated.json()["outcome"] == "ABNORMAL"
+    assert repeated.json()["mission"]["status"] == "ABNORMAL"
     state = (await client.get("/api/state")).json()
     assert len([item for item in state["alerts"] if item.get("missionId") == created["id"]]) == 1
 
