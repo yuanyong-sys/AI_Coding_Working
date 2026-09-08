@@ -24,6 +24,7 @@ button{font-family:inherit; cursor:pointer; background:none; border:none; color:
 a{color:var(--blue-600); text-decoration:none}
 :focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:3px}
 .dark-zone :focus-visible{outline-color:var(--blue-400)}
+#queue-search:focus-visible{outline:2px solid var(--blue-600);outline-offset:2px}
 svg{display:block}
 
 .layout{display:flex; height:100vh; min-width:1280px}
@@ -737,11 +738,17 @@ async function loadEvidence(simulateFailure){
   error.classList.remove('show');
   try{
     const response = await fetch('/api/alerts/'+encodeURIComponent(state.selId)+'/evidence'+(simulateFailure?'?simulateFailure=true':''));
-    if(!response.ok){ const body = await response.json().catch(()=>({})); throw new Error(body.detail || 'HTTP '+response.status); }
+    if(!response.ok){
+      const body = await response.json().catch(()=>({})), detail=body.detail;
+      const failure=new Error(typeof detail==='string'?detail:detail?.reason||'HTTP '+response.status);
+      if(detail && typeof detail==='object') Object.assign(failure,detail);
+      throw failure;
+    }
     await response.json();
     renderEvidence();
   }catch(err){
-    $('#ev-error-reason').textContent = err.message === 'EVIDENCE_TEMPORARILY_UNAVAILABLE' ? '证据服务暂不可用，请稍后重试' : '加载失败：'+err.message;
+    $('#ev-error-reason').textContent = err.message === 'EVIDENCE_TEMPORARILY_UNAVAILABLE' ? '证据服务暂不可用，请稍后重试' : '加载失败：'+err.message+(err.lastValid?'；最后有效信息 '+err.lastValid:'');
+    $('#ev-retry').dataset.retryUrl=err.retry||'';
     error.classList.add('show');
   }
 }
@@ -759,16 +766,19 @@ function applyServerDetail(a, payload){
   }));
 }
 async function syncAlerts(){
-  const response = await fetch('/api/alerts');
+  const [response,controlResponse] = await Promise.all([fetch('/api/alerts'),fetch('/api/demo/control')]);
   if(!response.ok) throw new Error('告警队列加载失败');
   const payload = await response.json();
+  const control=controlResponse.ok?await controlResponse.json():{simulationClock:'2026-09-05T14:32:00+08:00'};
+  const clock=new Date(control.simulationClock), simulatedMinutes=clock.getHours()*60+clock.getMinutes();
   const prototypes = ALERTS.slice();
   ALERTS = payload.alerts.map((item, index)=>{
     const basis = prototypes.find(a=>a.id===item.id) || prototypes.find(a=>a.type===item.type) || prototypes[index % prototypes.length];
     return {...basis, id:item.id, type:item.type, loc:item.location, level:SERVER_LEVEL[item.level] || 'minor',
-      status:SERVER_STATUS[item.status] || 'pending', found:item.time, mins:Math.max(0, (14*60+32)-Number(item.time.slice(0,2))*60-Number(item.time.slice(3,5))),
+      status:SERVER_STATUS[item.status] || 'pending', found:item.time, mins:Math.max(0, simulatedMinutes-Number(item.time.slice(0,2))*60-Number(item.time.slice(3,5))),
       task:item.missionId, drone:item.droneId, route:item.route, coord:item.coordinate, conf:item.confidence,
-      unread:item.status==='PENDING_VERIFICATION'};
+      unread:item.status==='PENDING_VERIFICATION',
+      escalatedTimeout:item.level==='EMERGENCY' && item.status==='PENDING_VERIFICATION' && simulatedMinutes-Number(item.time.slice(0,2))*60-Number(item.time.slice(3,5))>5};
   });
   state.selId = ALERTS[0] && ALERTS[0].id;
   renderQueue(); renderEvidence(); renderDetail(); renderTimeline();
@@ -803,7 +813,14 @@ $('#ev-compare').addEventListener('click', e=>{
   renderEvidence();
 });
 $('#ev-fail-next').addEventListener('click', ()=>loadEvidence(true));
-$('#ev-retry').addEventListener('click', ()=>loadEvidence(false));
+$('#ev-retry').addEventListener('click', async e=>{
+  const button=e.currentTarget; button.disabled=true;
+  try{
+    await fetch(button.dataset.retryUrl||'/api/demo/control/retry/media',{method:'POST'});
+    button.dataset.retryUrl='';
+    await loadEvidence(false);
+  }finally{ button.disabled=false; }
+});
 
 /* ================= 处置面板 ================= */
 function miniMapSvg(a){

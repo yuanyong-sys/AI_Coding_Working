@@ -12,6 +12,30 @@ class Confirmation(BaseModel):
     confirmed: bool = False
 
 
+class SimulationFailure(StrEnum):
+    DATA = "data"
+    MAP = "map"
+    MEDIA = "media"
+    CONTROL = "control"
+
+
+class DemoFailures(BaseModel):
+    data: bool = False
+    map: bool = False
+    media: bool = False
+    control: bool = False
+
+
+class DemoControlState(BaseModel):
+    simulationClock: str = "2026-09-05T14:32:00+08:00"
+    failures: DemoFailures = Field(default_factory=DemoFailures)
+
+
+class DemoControlRequest(BaseModel):
+    advanceMinutes: int = Field(default=0, ge=0, le=1440)
+    failures: list[SimulationFailure] = Field(default_factory=list)
+
+
 class MissionPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

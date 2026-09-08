@@ -12,6 +12,7 @@ from app.config import Settings
 from app.database import Database
 from app.domains.demo.router import router as demo_router
 from app.domains.demo.service import ensure_seeded
+from app.domains.demo.schemas import DemoControlState
 
 
 def create_app(
@@ -35,6 +36,7 @@ def create_app(
 
     app = FastAPI(title="无人机警务监控平台 POC API", version="0.1.0", lifespan=lifespan)
     app.state.database = database
+    app.state.demo_control = DemoControlState()
     app.include_router(demo_router)
     app.add_middleware(
         CORSMiddleware,

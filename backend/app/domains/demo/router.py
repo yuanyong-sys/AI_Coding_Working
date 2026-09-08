@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_session
@@ -10,6 +10,9 @@ from app.domains.demo.schemas import (
     AnomalyRequest,
     Confirmation,
     ControlRequest,
+    DemoControlRequest,
+    DemoControlState,
+    SimulationFailure,
     DemoState,
     DispatchRequest,
     FalsePositiveRequest,
@@ -31,6 +34,14 @@ from app.domains.report.service import build_pdf, build_xlsx, report_lines
 router = APIRouter(prefix="/api", tags=["poc-demo"])
 
 
+def demo_failure(request: Request, kind: str, code: str, reason: str) -> dict:
+    return {
+        "code": code, "reason": reason,
+        "lastValid": request.app.state.demo_control.simulationClock,
+        "retry": f"/api/demo/control/retry/{kind}",
+    }
+
+
 async def require_running_mission(session: AsyncSession, mission_id: str) -> Mission:
     mission = await service.get_transitionable_mission(session, mission_id)
     if mission is None:
@@ -41,8 +52,52 @@ async def require_running_mission(session: AsyncSession, mission_id: str) -> Mis
 
 
 @router.get("/state", response_model=DemoState)
-async def state(session: AsyncSession = Depends(get_session)) -> dict:
-    return await service.read_state(session)
+async def state(request: Request, session: AsyncSession = Depends(get_session)) -> dict:
+    if request.app.state.demo_control.failures.data:
+        raise HTTPException(status_code=503, detail={
+            "code": "DEMO_DATA_UNAVAILABLE", "reason": "演示数据服务加载失败",
+            "lastValid": request.app.state.demo_control.simulationClock,
+            "retry": "/api/demo/control/retry/data",
+        })
+    result = await service.read_state(session)
+    result["simulationClock"] = request.app.state.demo_control.simulationClock
+    return result
+
+
+@router.get("/demo/control")
+async def get_demo_control(request: Request) -> DemoControlState:
+    return request.app.state.demo_control
+
+
+@router.post("/demo/control")
+async def set_demo_control(
+    request: Request, control: DemoControlRequest, session: AsyncSession = Depends(get_session)
+) -> DemoControlState:
+    state: DemoControlState = request.app.state.demo_control
+    current = datetime.fromisoformat(state.simulationClock)
+    state.simulationClock = (current + timedelta(minutes=control.advanceMinutes)).isoformat()
+    for failure in control.failures:
+        setattr(state.failures, failure.value, True)
+    initial = datetime.fromisoformat(DemoControlState().simulationClock)
+    elapsed_minutes = int((datetime.fromisoformat(state.simulationClock) - initial).total_seconds() // 60)
+    if elapsed_minutes:
+        await service.trigger_emergency_reminders(session, elapsed_minutes)
+    return state
+
+
+@router.post("/demo/control/retry/{failure}")
+async def retry_demo_failure(request: Request, failure: SimulationFailure) -> DemoControlState:
+    setattr(request.app.state.demo_control.failures, failure.value, False)
+    return request.app.state.demo_control
+
+
+@router.get("/map/status")
+async def map_status(request: Request) -> dict:
+    if request.app.state.demo_control.failures.map:
+        raise HTTPException(status_code=503, detail=demo_failure(
+            request, "map", "DEMO_MAP_UNAVAILABLE", "地图底图服务不可用"
+        ))
+    return {"status": "AVAILABLE", "lastValid": request.app.state.demo_control.simulationClock}
 
 
 @router.get("/audit")
@@ -85,10 +140,14 @@ async def alert_detail(alert_id: str, session: AsyncSession = Depends(get_sessio
 
 @router.get("/alerts/{alert_id}/evidence")
 async def alert_evidence(
-    alert_id: str, simulateFailure: bool = False, session: AsyncSession = Depends(get_session)
+    alert_id: str, request: Request, simulateFailure: bool = False, session: AsyncSession = Depends(get_session)
 ) -> dict:
     if await session.get(Alert, alert_id) is None:
         raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if request.app.state.demo_control.failures.media:
+        raise HTTPException(status_code=503, detail=demo_failure(
+            request, "media", "DEMO_MEDIA_STREAM_INTERRUPTED", "视频证据流已中断"
+        ))
     if simulateFailure:
         raise HTTPException(status_code=503, detail="EVIDENCE_TEMPORARILY_UNAVAILABLE")
     return service.alert_evidence(alert_id)
@@ -210,20 +269,25 @@ async def monitor_mission(mission_id: str, session: AsyncSession = Depends(get_s
 
 @router.post("/tasks/{mission_id}/control")
 async def control_mission(
-    mission_id: str, request: ControlRequest, session: AsyncSession = Depends(get_session)
+    mission_id: str, control: ControlRequest, request: Request, session: AsyncSession = Depends(get_session)
 ) -> dict:
     mission = await require_running_mission(session, mission_id)
-    command = request.command.value
-    result = "FAILED" if request.simulateFailure else "SUCCESS"
+    command = control.command.value
+    injected_timeout = request.app.state.demo_control.failures.control
+    result = "FAILED" if control.simulateFailure or injected_timeout else "SUCCESS"
     previous_control_state = mission.control_state
     mission.control_state = command if result == "SUCCESS" else mission.control_state
     await service.record_audit(
         session, action=f"MISSION_CONTROL_{command}", mission_id=mission.id,
         result=result, detail=f"模拟{command}指令",
         before_state=previous_control_state, after_state=mission.control_state,
-        failure_reason="模拟指令失败" if request.simulateFailure else None,
+        failure_reason="模拟控制超时" if injected_timeout else "模拟指令失败" if control.simulateFailure else None,
     )
-    if request.simulateFailure:
+    if injected_timeout:
+        raise HTTPException(status_code=504, detail=demo_failure(
+            request, "control", "DEMO_CONTROL_TIMEOUT", "模拟飞控指令响应超时"
+        ))
+    if control.simulateFailure:
         raise HTTPException(status_code=503, detail="SIMULATED_CONTROL_FAILURE")
     return {"missionId": mission.id, "command": command, "result": result, "simulated": True}
 
@@ -302,11 +366,12 @@ async def dispatch_mission(
 
 @router.post("/demo/reset", response_model=ResetResult)
 async def reset_demo(
-    confirmation: Confirmation, session: AsyncSession = Depends(get_session)
+    confirmation: Confirmation, request: Request, session: AsyncSession = Depends(get_session)
 ) -> dict:
     if not confirmation.confirmed:
         raise HTTPException(status_code=409, detail="CONFIRMATION_REQUIRED")
     audit_entry = await service.restore_business_state(session)
+    request.app.state.demo_control = DemoControlState()
     full_state = await service.read_state(session)
     business_state = {key: value for key, value in full_state.items() if key != "audit"}
     return {

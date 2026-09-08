@@ -693,7 +693,12 @@ const DRONE_BATTERY = {'警航-01':82,'警航-02':76,'警航-03':45,'警航-04':
 async function api(url, options = {}) {
   const response = await fetch(url, {headers:{'content-type':'application/json'}, ...options});
   const body = await response.json();
-  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : '请求失败');
+  if (!response.ok) {
+    const detail = body.detail;
+    const error = new Error(typeof detail === 'string' ? detail : detail?.reason || '请求失败');
+    if(detail && typeof detail === 'object') Object.assign(error, detail);
+    throw error;
+  }
   return body;
 }
 
@@ -969,9 +974,15 @@ async function sendControl(button, command, successText){
   const simulateFailure = failureToggle.getAttribute('aria-pressed') === 'true';
   failureToggle.setAttribute('aria-pressed', 'false'); failureToggle.classList.remove('on');
   try {
+    if(button.dataset.retryUrl){ await fetch(button.dataset.retryUrl,{method:'POST'}); delete button.dataset.retryUrl; }
     await api(`/api/tasks/${button.dataset.code}/control`, {method:'POST',body:JSON.stringify({command,simulateFailure})});
     button.textContent = `${original}·成功`; toast(successText, 'ok');
-  } catch (_) { button.textContent = `${original}·失败·重试`; toast(`${original}指令发送失败，可重试`, 'err'); }
+  } catch (error) {
+    if(error.retry) button.dataset.retryUrl=error.retry;
+    button.textContent = `${original}·失败·重试`;
+    const reason=error.message==='SIMULATED_CONTROL_FAILURE'?`${original}指令发送失败`:error.message;
+    toast(`${reason}；最后有效信息 ${error.lastValid||'当前任务状态'}；请点击重试`, 'err');
+  }
   finally { button.disabled = false; setTimeout(() => { if (button.textContent.endsWith('·成功')) button.textContent = original; }, 1200); }
 }
 $('#mm-fail-next').addEventListener('click', e => {

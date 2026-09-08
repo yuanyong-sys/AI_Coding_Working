@@ -89,6 +89,21 @@ async function waitFor(cdp, expression) {
   throw new Error(`Browser condition timed out: ${expression}`);
 }
 
+async function tabTo(cdp, selector, limit = 120) {
+  await evaluate(cdp, "document.body.focus()");
+  for (let index = 0; index < limit; index += 1) {
+    await cdp.command("Input.dispatchKeyEvent", {type:"keyDown",key:"Tab",code:"Tab",windowsVirtualKeyCode:9});
+    await cdp.command("Input.dispatchKeyEvent", {type:"keyUp",key:"Tab",code:"Tab",windowsVirtualKeyCode:9});
+    if (await evaluate(cdp, `document.activeElement.matches(${JSON.stringify(selector)})`)) return;
+  }
+  throw new Error(`Keyboard focus did not reach ${selector}`);
+}
+
+async function pressEnter(cdp) {
+  await cdp.command("Input.dispatchKeyEvent", {type:"keyDown",key:"Enter",code:"Enter",text:"\r",unmodifiedText:"\r",windowsVirtualKeyCode:13});
+  await cdp.command("Input.dispatchKeyEvent", {type:"keyUp",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
+}
+
 async function compareScreenshots(cdp, actualBase64, expectedBase64) {
   return evaluate(cdp, `(async()=>{
     const load = src => new Promise((resolve,reject) => { const image=new Image(); image.onload=()=>resolve(image); image.onerror=reject; image.src=src; });
@@ -146,6 +161,92 @@ export async function browserEndToEnd() {
         await waitFor(cdp, "Boolean(document.querySelector('iframe.prototype-frame'))");
         assert.equal(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), `/prototype/${page}.html`);
       }
+    }
+
+    // AC10: externally controlled failures expose reason, last-valid information and a retry action.
+    await fetch(`${baseUrl}/api/demo/control`, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({advanceMinutes:3,failures:["data"]}) });
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    await waitFor(cdp, "Boolean(document.querySelector('#data-failure'))");
+    assert.match(await evaluate(cdp, "document.querySelector('#data-failure').textContent"), /演示数据服务加载失败.*最后有效信息.*重试数据/);
+    assert.ok(await evaluate(cdp, "document.querySelectorAll('.fleet-row').length > 0"));
+    await evaluate(cdp, "document.querySelector('#data-retry').click()");
+    await waitFor(cdp, "!document.querySelector('#data-failure')");
+
+    await fetch(`${baseUrl}/api/demo/control`, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({failures:["map"]}) });
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    await waitFor(cdp, "Boolean(document.querySelector('#map-failure'))");
+    assert.match(await evaluate(cdp, "document.querySelector('#map-failure').textContent"), /地图底图服务不可用.*最后有效信息.*重试地图/);
+    assert.ok(await evaluate(cdp, "document.querySelectorAll('#layer-drones g').length > 0"));
+    await evaluate(cdp, "document.querySelector('#map-retry').click()");
+    await waitFor(cdp, "!document.querySelector('#map-failure')");
+
+    await fetch(`${baseUrl}/api/demo/control`, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({failures:["media"]}) });
+    await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html`);
+    await waitFor(cdp, "document.querySelectorAll('.alert-card').length > 0");
+    await evaluate(cdp, "document.querySelector('.alert-card').click()");
+    await waitFor(cdp, "document.querySelector('#ev-error').classList.contains('show')");
+    assert.match(await evaluate(cdp, "document.querySelector('#ev-error').textContent"), /视频证据流已中断.*最后有效信息.*重试加载/);
+    await evaluate(cdp, "document.querySelector('#ev-retry').click()");
+    await waitFor(cdp, "!document.querySelector('#ev-error').classList.contains('show')");
+
+    await fetch(`${baseUrl}/api/demo/control`, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({failures:["control"]}) });
+    await navigate(cdp, `${baseUrl}/prototype/dispatch-tasks.html`);
+    await evaluate(cdp, "document.querySelector('.k-card.clickable').click()");
+    await waitFor(cdp, "document.querySelector('#monitor-mask').classList.contains('open')");
+    await evaluate(cdp, "document.querySelector('#mm-hover-btn').click()");
+    await waitFor(cdp, "document.querySelector('#mm-hover-btn').textContent.includes('失败·重试')");
+    assert.match((await evaluate(cdp, "Array.from(document.querySelectorAll('.toast')).at(-1).textContent")), /响应超时.*最后有效信息.*点击重试/);
+    await evaluate(cdp, "document.querySelector('#mm-hover-btn').click()");
+    await waitFor(cdp, "document.querySelector('#mm-hover-btn').textContent.includes('成功')");
+
+    // AC07: advancing the public simulation clock deterministically raises and displays the overdue reminder.
+    await fetch(`${baseUrl}/api/demo/reset`, {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({confirmed:true})});
+    await fetch(`${baseUrl}/api/demo/control`, {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({advanceMinutes:6})});
+    await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html`);
+    await waitFor(cdp, "document.querySelector('.ac-esc')?.textContent.includes('超时未核实')");
+    assert.equal(await evaluate(cdp, "document.querySelector('.alert-card').classList.contains('urgent-open')"), true);
+    const reminderAudit = await (await fetch(`${baseUrl}/api/audit`)).json();
+    assert.ok(reminderAudit.audit.some(item=>item.action==='ALERT_EMERGENCY_REMINDER'));
+
+    // AC11: a browser-visible mutation survives reload; repeated restore is identical and audited.
+    await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({name:"刷新后仍保留的任务"})});
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.task-name')).some(n=>n.textContent.includes('刷新后仍保留的任务'))");
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.task-name')).some(n=>n.textContent.includes('刷新后仍保留的任务'))");
+    const restoredOnce = await (await fetch(`${baseUrl}/api/demo/reset`, {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({confirmed:true})})).json();
+    const restoredTwice = await (await fetch(`${baseUrl}/api/demo/reset`, {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({confirmed:true})})).json();
+    assert.deepEqual(restoredOnce.businessState, restoredTwice.businessState);
+    const restoreAudit = await (await fetch(`${baseUrl}/api/audit`)).json();
+    assert.deepEqual(restoreAudit.audit.slice(-2).map(item=>item.action), ["DEMO_RESET","DEMO_RESET"]);
+
+    // AC12: every page is reached by real Tab navigation, shows focus and renders at each target viewport.
+    const viewportPages = [
+      [1920,1080,"screen-overview","#mute-btn",[".topbar",".map-wrap",".col"]],
+      [1440,900,"dispatch-tasks","#btn-new",[".topbar","#stats-strip","#kanban-board"]],
+      [1440,900,"alert-workbench","#queue-search",[".topbar",".queue",".evidence",".disp"]],
+      [1440,900,"stats-ledger","#btn-query",[".topbar",".filter-bar",".content"]],
+      [1366,768,"dispatch-tasks","#btn-new",[".topbar","#stats-strip","#kanban-board"]],
+      [1366,768,"alert-workbench","#queue-search",[".topbar",".queue",".evidence",".disp"]],
+      [1366,768,"stats-ledger","#btn-query",[".topbar",".filter-bar",".content"]]
+    ];
+    for (const [width,height,page,targetSelector,regions] of viewportPages) {
+      await cdp.command("Emulation.setDeviceMetricsOverride", {width,height,deviceScaleFactor:1,mobile:false});
+      await navigate(cdp, `${baseUrl}/prototype/${page}.html`);
+      await tabTo(cdp,targetSelector);
+      const focusStyle=await evaluate(cdp, "({outline:getComputedStyle(document.activeElement).outlineStyle,shadow:getComputedStyle(document.activeElement).boxShadow,tag:document.activeElement.outerHTML.slice(0,120)})");
+      assert.ok(focusStyle.outline!=="none" || focusStyle.shadow!=="none", `${page} ${width}x${height} has no visible focus: ${JSON.stringify(focusStyle)}`);
+      assert.deepEqual(await evaluate(cdp, "[innerWidth,innerHeight]"), [width,height]);
+      const viewportShot=await cdp.command("Page.captureScreenshot",{format:"png",captureBeyondViewport:false});
+      const viewportBuffer=Buffer.from(viewportShot.data,"base64");
+      assert.deepEqual([viewportBuffer.readUInt32BE(16),viewportBuffer.readUInt32BE(20)],[width,height]);
+      const layout=await evaluate(cdp, `(() => ({
+        horizontalOverflow:document.documentElement.scrollWidth-innerWidth,
+        regions:${JSON.stringify(regions)}.map(selector=>{const node=document.querySelector(selector),r=node?.getBoundingClientRect();return {selector,exists:Boolean(node),width:r?.width||0,height:r?.height||0,visible:Boolean(r&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight)};})
+      }))()`);
+      assert.ok(layout.horizontalOverflow<=1, `${page} ${width}x${height} horizontal overflow: ${layout.horizontalOverflow}px`);
+      assert.ok(layout.regions.every(region=>region.exists&&region.visible&&region.width>40&&region.height>20), `${page} ${width}x${height} hidden/collapsed core region: ${JSON.stringify(layout.regions)}`);
+      if(page==='dispatch-tasks'){ await pressEnter(cdp); await waitFor(cdp,"document.querySelector('#drawer-mask').classList.contains('open')"); }
     }
 
     await navigate(cdp, `${baseUrl}/prototype/dispatch-tasks.html`);

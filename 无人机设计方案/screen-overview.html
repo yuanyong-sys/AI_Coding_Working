@@ -1122,13 +1122,39 @@ async function hydrateSharedState(){
     x:boundedNumber(a.x,180+index*90,0,940),y:boundedNumber(a.y,180+index*70,0,944)}));
   document.querySelector(".poc-badge").title = "数据快照 " + state.snapshotVersion;
 }
+function showMapFailure(detail){
+  let panel=$("map-failure");
+  if(!panel){
+    panel=document.createElement("div"); panel.id="map-failure"; panel.setAttribute("role","alert");
+    panel.style.cssText="position:absolute;z-index:30;left:50%;top:18px;transform:translateX(-50%);padding:12px 16px;border:1px solid #E5484D;border-radius:6px;background:#12294a;color:#EAF1FB;text-align:center";
+    panel.innerHTML='<b>地图不可用</b><div id="map-failure-detail" style="margin:6px 0;color:#8FA3C4"></div><button id="map-retry" style="padding:5px 14px;border:1px solid #4C9AFF;border-radius:4px;color:white;background:#2675df">重试地图</button>';
+    document.querySelector(".map-wrap").appendChild(panel);
+  }
+  $("map-failure-detail").textContent=detail.reason+"；最后有效信息 "+detail.lastValid+"；业务点位保持显示";
+  $("map-retry").onclick=async()=>{ await fetch(detail.retry,{method:"POST"}); panel.remove(); checkMapStatus(); };
+}
+async function checkMapStatus(){
+  const response=await fetch("/api/map/status",{cache:"no-store"});
+  if(!response.ok){ const body=await response.json(); showMapFailure(body.detail); return false; }
+  return true;
+}
+function showDataFailure(detail){
+  const panel=document.createElement("div"); panel.id="data-failure"; panel.setAttribute("role","alert");
+  panel.style.cssText="position:fixed;z-index:100;left:50%;top:90px;transform:translateX(-50%);padding:12px 18px;border:1px solid #E5484D;border-radius:6px;background:#12294a;color:#EAF1FB";
+  panel.innerHTML='<b>数据加载失败</b><span id="data-failure-detail" style="margin:0 12px;color:#8FA3C4"></span><button id="data-retry">重试数据</button>';
+  document.body.appendChild(panel); $("data-failure-detail").textContent=detail.reason+"；最后有效信息 "+detail.lastValid+"；当前展示页面内置的最后有效数据";
+  $("data-retry").onclick=async()=>{ await fetch(detail.retry,{method:"POST"}); panel.remove(); await hydrateSharedState(); renderFleet(); renderTasks(); renderAlerts(); renderMapPoints(); };
+}
 async function init(){
   try{ await hydrateSharedState(); }
-  catch(error){ toast(error.message + "，已使用页面内置回退数据"); }
+  catch(error){
+    try{ const response=await fetch("/api/state"); const body=await response.json(); showDataFailure(body.detail); }
+    catch(_){ toast(error.message + "，已使用页面内置回退数据"); }
+  }
   renderStats("day"); renderFleet(); renderTasks(); renderAlerts(); renderChartsForDimension("day"); renderTicker(); renderMapPoints();
   if(!VISUAL_TEST){
     initFlightSim(); armAutoTour();
-    if(AMAP_KEY){ initAMap(); } else { initRasterTiles(); }
+    if(await checkMapStatus()){ if(AMAP_KEY){ initAMap(); } else { initRasterTiles(); } }
   }
 }
 init();

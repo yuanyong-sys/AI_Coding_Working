@@ -62,6 +62,64 @@ async def test_reset_requires_confirmation_is_repeatable_and_audited(client: Asy
 
 
 @pytest.mark.asyncio
+async def test_public_demo_control_advances_clock_and_injects_retriable_failures(client: AsyncClient):
+    initial = (await client.get("/api/demo/control")).json()
+    assert initial == {
+        "simulationClock": "2026-09-05T14:32:00+08:00",
+        "failures": {"data": False, "map": False, "media": False, "control": False},
+    }
+
+    advanced = await client.post("/api/demo/control", json={
+        "advanceMinutes": 7,
+        "failures": ["data", "map", "media", "control"],
+    })
+    assert advanced.status_code == 200
+    assert advanced.json() == {
+        "simulationClock": "2026-09-05T14:39:00+08:00",
+        "failures": {"data": True, "map": True, "media": True, "control": True},
+    }
+
+    failed_state = await client.get("/api/state")
+    assert failed_state.status_code == 503
+    assert failed_state.json()["detail"] == {
+        "code": "DEMO_DATA_UNAVAILABLE", "reason": "演示数据服务加载失败", "retry": "/api/demo/control/retry/data"
+        , "lastValid": "2026-09-05T14:39:00+08:00"
+    }
+    retried = await client.post("/api/demo/control/retry/data")
+    assert retried.status_code == 200
+    assert retried.json()["failures"]["data"] is False
+    restored_state = await client.get("/api/state")
+    assert restored_state.status_code == 200
+    assert restored_state.json()["simulationClock"] == "2026-09-05T14:39:00+08:00"
+    audit = (await client.get("/api/audit")).json()["audit"]
+    assert any(item["action"] == "ALERT_EMERGENCY_REMINDER" for item in audit)
+
+
+@pytest.mark.asyncio
+async def test_demo_failures_report_reason_last_valid_information_and_retry(client: AsyncClient):
+    await client.post("/api/demo/control", json={"failures": ["map", "media", "control"]})
+
+    map_status = await client.get("/api/map/status")
+    assert map_status.status_code == 503
+    assert map_status.json()["detail"] == {
+        "code": "DEMO_MAP_UNAVAILABLE", "reason": "地图底图服务不可用",
+        "lastValid": "2026-09-05T14:32:00+08:00", "retry": "/api/demo/control/retry/map",
+    }
+
+    evidence = await client.get("/api/alerts/GJ-20260905-031/evidence")
+    assert evidence.status_code == 503
+    assert evidence.json()["detail"]["code"] == "DEMO_MEDIA_STREAM_INTERRUPTED"
+    assert evidence.json()["detail"]["lastValid"] == "2026-09-05T14:32:00+08:00"
+
+    control = await client.post("/api/tasks/RW-20260905-012/control", json={"command": "HOVER"})
+    assert control.status_code == 504
+    assert control.json()["detail"]["code"] == "DEMO_CONTROL_TIMEOUT"
+    state = (await client.post("/api/demo/control/retry/control")).json()
+    assert state["failures"]["control"] is False
+    assert (await client.post("/api/tasks/RW-20260905-012/control", json={"command": "HOVER"})).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_legacy_json_is_imported_once_with_changes_and_audit(tmp_path: Path):
     legacy = tmp_path / "poc.json"
     document = {
