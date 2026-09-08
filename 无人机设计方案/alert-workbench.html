@@ -1043,7 +1043,8 @@ setTimeout(async ()=>{
 
 /* ================= 初始化 ================= */
 syncAlerts().then(()=>{
-  const requested=new URLSearchParams(location.search).get('alert');
+  const params=new URLSearchParams(location.search);
+  const requested=params.get('alert') || (ALERTS.find(a=>a.type===params.get('type'))||{}).id;
   if(requested && ALERTS.some(a=>a.id===requested)) selectAlert(requested,true);
 }).catch(err=>{ renderQueue(); renderEvidence(); renderDetail(); renderTimeline(); toast(err.message, true); });
 </script>

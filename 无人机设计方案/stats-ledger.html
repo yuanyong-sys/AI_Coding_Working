@@ -483,6 +483,10 @@ var LEDGERS=[
  {id:'TZ-20260822-004',name:'人民路小学周边护学巡查',date:'2026-08-22',district:'中心老城区',drone:'警航-01',type:'专项巡查',km:9.6,clues:4,rate:100,
   list:[clue('行人闯入','重要','07:40','已办结'),clue('车辆违停','提示','07:58','已办结'),clue('道路拥堵','提示','08:15','已办结'),clue('其他','提示','08:30','已办结')]}
 ];
+var PLANNED_KM=[20,15,25,18,20,10,24,16,22,24,14,28,20,30,12];
+var DURATION_SECONDS=[92,185,248,372,515,134,278,421,88,196,343,612,155,226,487,105,332,544,76,214,398,681,142,265,457,98,176,309,526,740,121,238,416,83,191,355,598,149,287,472,69,203,327,563,118,251,439,95,168,384,655,137,294,508,79,219,366,574,126,243,448,101,188,317,692,146,273,492,86,231,407,621,113,259,463,97,182,348,536,129,246,418];
+var durationIndex=0;
+LEDGERS.forEach(function(r,i){r.plannedKm=PLANNED_KM[i];r.list.forEach(function(c){c.durationSec=DURATION_SECONDS[durationIndex++%DURATION_SECONDS.length];});});
 
 var DURATION_LABELS=['0-2分','2-4分','4-6分','6-8分','8-10分','10分以上'];
 
@@ -525,11 +529,12 @@ function getFiltered(){
     if(f.type && r.type!==f.type)return false;
     if(f.drone && r.drone!==f.drone)return false;
     if(f.clue && !r.list.some(function(c){return c.type===f.clue;}))return false;
+    if(f.durationBin!==undefined && f.durationBin!=='' && !r.list.some(function(c){return durationBin(c.durationSec)===Number(f.durationBin);}))return false;
     return true;
   });
 }
 
-var FILTER_LABELS={from:'起始',to:'截止',district:'辖区',type:'类型',drone:'无人机',clue:'线索'};
+var FILTER_LABELS={from:'起始',to:'截止',district:'辖区',type:'类型',drone:'无人机',clue:'线索',durationBin:'处置时长'};
 function renderCapsules(){
   var box=$('#filter-capsules');box.innerHTML='';
   var keys=Object.keys(state.filters).filter(function(k){return state.filters[k];});
@@ -540,7 +545,7 @@ function renderCapsules(){
   keys.forEach(function(k){
     var c=document.createElement('span');c.className='capsule';
     var val=state.filters[k];
-    var label=FILTER_LABELS[k]+'：'+val;
+    var label=FILTER_LABELS[k]+'：'+(k==='durationBin'?DURATION_LABELS[Number(val)]:val);
     c.innerHTML=label+' <button aria-label="移除筛选条件" data-k="'+k+'">'+
       '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
     c.querySelector('button').addEventListener('click',function(){
@@ -598,7 +603,7 @@ function sparkSVG(data){
 }
 function renderStats(){
   var wrap=$('#stat-cards');wrap.innerHTML='';
-  var data=getFiltered(), clues=data.reduce(function(sum,r){return sum+r.clues;},0);
+  var data=getFiltered(), clues=data.reduce(function(sum,r){return sum+r.list.length;},0);
   var km=data.reduce(function(sum,r){return sum+r.km;},0);
   var closed=data.reduce(function(sum,r){return sum+r.list.filter(function(c){return c.status==='已办结';}).length;},0);
   var stats=[
@@ -627,7 +632,7 @@ function renderTrend(data){
   var byDate={};
   data.forEach(function(r){
     if(!byDate[r.date])byDate[r.date]={task:0,clue:0};
-    byDate[r.date].task++;byDate[r.date].clue+=r.clues;
+    byDate[r.date].task++;byDate[r.date].clue+=r.list.length;
   });
   var days=Object.keys(byDate).sort();
   var vals=days.map(function(d){return byDate[d];});
@@ -753,7 +758,7 @@ function renderDonut(data){
 function renderDistrict(data){
   var svg=$('#district-svg');var card=svg.closest('.chart-card');
   var grouped={};data.forEach(function(r){if(!grouped[r.district])grouped[r.district]=[];grouped[r.district].push(r);});
-  var coverage=Object.keys(grouped).map(function(name){var rows=grouped[name];return {name:name,pct:rows.reduce(function(s,r){return s+r.rate;},0)/rows.length};});
+  var coverage=Object.keys(grouped).map(function(name){var rows=grouped[name],flown=rows.reduce(function(s,r){return s+r.km;},0),planned=rows.reduce(function(s,r){return s+r.plannedKm;},0);return {name:name,pct:Math.min(100,flown/planned*100)};});
   card.querySelector('[data-empty]').classList.toggle('show',!coverage.length);
   svg.style.visibility=coverage.length?'visible':'hidden';
   svg.innerHTML='';
@@ -797,7 +802,7 @@ function renderDistrict(data){
 function renderDuration(data){
   var svg=$('#duration-svg');var card=svg.closest('.chart-card');
   var bins=DURATION_LABELS.map(function(label){return {label:label,v:0};});
-  data.forEach(function(r){r.list.forEach(function(c,i){bins[Math.min(5,(i+c.type.length)%6)].v++;});});
+  data.forEach(function(r){r.list.forEach(function(c){bins[durationBin(c.durationSec)].v++;});});
   card.querySelector('[data-empty]').classList.toggle('show',!data.length);
   svg.style.visibility=data.length?'visible':'hidden';
   svg.innerHTML='';
@@ -820,11 +825,13 @@ function renderDuration(data){
   html+='<path d="'+line+' L'+pts[pts.length-1][0].toFixed(1)+','+(pt+ih)+' L'+pts[0][0].toFixed(1)+','+(pt+ih)+' Z" fill="url(#durGrad)"/>';
   html+='<path d="'+line+'" fill="none" stroke="#1F6FEB" stroke-width="2" stroke-linejoin="round"/>';
   /* 均值参考线：6分32秒 ≈ 第 3 个区间中部 */
-  var meanX=pl+step*3.1;
+  var durations=[];data.forEach(function(r){r.list.forEach(function(c){durations.push(c.durationSec);});});
+  var meanSeconds=durations.reduce(function(s,v){return s+v;},0)/Math.max(1,durations.length);
+  var meanX=pl+step*Math.min(5.5,meanSeconds/120);
   html+='<line x1="'+meanX+'" y1="'+pt+'" x2="'+meanX+'" y2="'+(pt+ih)+'" stroke="#F76B15" stroke-width="1.4" stroke-dasharray="5 4"/>'+
-    '<text x="'+(meanX+6)+'" y="'+(pt+12)+'" font-size="10" fill="#F76B15">均值 6分32秒</text>';
+    '<text x="'+(meanX+6)+'" y="'+(pt+12)+'" font-size="10" fill="#F76B15">均值 '+Math.floor(meanSeconds/60)+'分'+Math.round(meanSeconds%60)+'秒</text>';
   pts.forEach(function(p,i){
-    html+='<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.2" fill="#fff" stroke="#1F6FEB" stroke-width="2">'+
+    html+='<circle data-duration-bin="'+i+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.2" fill="#fff" stroke="#1F6FEB" stroke-width="2" style="cursor:pointer">'+
       '<title>'+bins[i].label+'：'+bins[i].v+' 条</title></circle>';
   });
   bins.forEach(function(b,i){
@@ -832,7 +839,10 @@ function renderDuration(data){
     html+='<text x="'+x.toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#8FA3C4">'+b.label+'</text>';
   });
   svg.innerHTML=html;
+  Array.prototype.forEach.call(svg.querySelectorAll('[data-duration-bin]'),function(item){item.addEventListener('click',function(){state.filters.durationBin=item.getAttribute('data-duration-bin');state.page=1;state.expanded=null;refreshAll();toast('已下钻至 '+DURATION_LABELS[Number(state.filters.durationBin)]+' 台账');});});
 }
+
+function durationBin(seconds){return Math.min(5,Math.floor(seconds/120));}
 
 /* ================= 台账表 ================= */
 function statusClass(s){
@@ -865,7 +875,7 @@ function renderTable(){
     tr.innerHTML='<td class="num">'+r.id+'</td>'+
       '<td>'+r.name+'<div style="margin-top:3px"><span class="type-tag">'+r.type+'</span></div></td>'+
       '<td class="num">'+r.date+'</td><td>'+r.district+'</td><td>'+r.drone+'</td>'+
-      '<td class="num">'+r.km.toFixed(1)+'</td><td class="num">'+r.clues+'</td>'+
+      '<td class="num">'+r.km.toFixed(1)+'</td><td class="num">'+r.list.length+'</td>'+
       '<td><span class="rate-pill '+pill+' num">'+r.rate.toFixed(1)+'%</span></td>'+
       '<td><button class="link" data-act="view">'+(state.expanded===r.id?'收起':'查看')+'</button>'+
       '<button class="link" data-act="exp">导出</button></td>';

@@ -250,8 +250,11 @@ export async function browserEndToEnd() {
     await evaluate(cdp, "document.querySelector('#ledger-tbody [data-act=\"view\"]').click()");
     assert.equal(await evaluate(cdp, "Boolean(document.querySelector('.expand-row'))"), true);
     assert.equal(await evaluate(cdp, "Boolean(document.querySelector('.expand-row a[href*=\"alert-workbench\"]'))"), true);
+    assert.match(await evaluate(cdp, "document.querySelector('.expand-row a[href*=\"alert-workbench\"]').getAttribute('href')"), /type=/);
     await evaluate(cdp, "document.querySelector('th[data-sort=\"km\"]').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('[data-arr=\"km\"]').classList.contains('on')"), true);
+    await evaluate(cdp, "document.querySelector('#duration-svg [data-duration-bin]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+    assert.ok((await evaluate(cdp, "document.querySelector('#filter-capsules').textContent")).includes("处置时长："));
     await evaluate(cdp, "document.querySelector('#f-date-from').value='2025-01-01'; document.querySelector('#f-date-to').value='2025-01-02'; document.querySelector('#btn-query').click()");
     await waitFor(cdp, "document.querySelector('#empty-state').classList.contains('show')");
     assert.equal(await evaluate(cdp, "document.querySelector('#btn-adjust').textContent"), "调整筛选条件");
