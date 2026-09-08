@@ -348,6 +348,18 @@ async def test_report_export_generates_excel_pdf_and_audits(client: AsyncClient)
     assert "巡查里程" in sheet
     assert "attachment" in excel.headers["content-disposition"]
 
+    template_markers = {
+        "日报": "当日执行", "周报": "七日趋势",
+        "月报": "月度覆盖", "自定义": "自定义视图",
+    }
+    for template, marker in template_markers.items():
+        payload["template"] = template
+        rendered = await client.post("/api/reports/export", json=payload)
+        with ZipFile(BytesIO(rendered.content)) as archive:
+            template_sheet = archive.read("xl/worksheets/sheet1.xml").decode()
+        assert marker in template_sheet
+
+    payload["template"] = "周报"
     payload["format"] = "pdf"
     pdf = await client.post("/api/reports/export", json=payload)
     assert pdf.status_code == 200

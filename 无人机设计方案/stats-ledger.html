@@ -965,8 +965,15 @@ function updatePreview(){
   var f=state.filters;
   var range=(f.from||'不限')+' 至 '+(f.to||'不限');
   var data=getFiltered(),km=data.reduce(function(s,r){return s+r.km;},0),clues=data.reduce(function(s,r){return s+r.list.length;},0);
+  var dates=new Set(data.map(function(r){return r.date;})),districts=new Set(data.map(function(r){return r.district;}));
+  var templateView={
+    '日报':'当日执行：逐任务处置明细',
+    '周报':'七日趋势：覆盖 '+dates.size+' 个有数据日期',
+    '月报':'月度覆盖：涉及 '+districts.size+' 个辖区',
+    '自定义':'自定义视图：按当前筛选与字段组合'
+  }[exportTpl];
   $('#export-preview').innerHTML=
-    '模板：<b>'+exportTpl+'</b> ｜ 数据范围：<b>'+range+'</b><br>'+
+    '模板：<b>'+exportTpl+'</b> ｜ '+templateView+' ｜ 数据范围：<b>'+range+'</b><br>'+
     '辖区：<b>'+(f.district||'全部')+'</b> ｜ 类型：<b>'+(f.type||'全部')+'</b> ｜ 无人机：<b>'+(f.drone||'全部')+'</b><br>'+
     '任务 <b>'+data.length+'</b> 项 ｜ 里程 <b>'+km.toFixed(1)+'</b> km ｜ 线索 <b>'+clues+'</b> 条 ｜ 格式 <b>'+$('#export-format').value.toUpperCase()+'</b><br>'+
     '导出字段（'+fields.length+' 项）：'+(fields.length?fields.join('、'):'<b style="color:var(--alert-red)">未选择字段</b>');
