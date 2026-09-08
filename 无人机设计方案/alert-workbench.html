@@ -143,6 +143,9 @@ svg{display:block}
 .ev-live i{width:8px; height:8px; border-radius:50%; background:var(--alert-red); animation:breathe 1s ease-in-out infinite}
 .ev-stage{flex:1; position:relative; min-height:0; background:var(--navy-900)}
 .ev-stage svg{position:absolute; inset:0; width:100%; height:100%}
+.ev-error{position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(7,20,39,.94);color:#EAF1FB;text-align:center}
+.ev-error.show{display:flex}.ev-error p{font-size:12px;color:#8FA3C4}.ev-error button{padding:7px 18px;border:1px solid #4C9AFF;border-radius:5px;color:#fff;background:#2675df}
+.ev-stage.compare svg{clip-path:inset(0 50% 0 0)}.ev-stage.compare::after{content:'前帧  |  后帧';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:4px 8px;border-radius:4px;background:rgba(7,20,39,.8);color:#3DD9EB;font-size:11px;z-index:2}
 .ev-badge{position:absolute; top:12px; right:12px; font-size:11px; color:#8FA3C4;
   background:rgba(18,41,74,0.85); border:1px solid rgba(76,154,255,0.3); border-radius:4px; padding:3px 8px}
 .ev-frame-tag{position:absolute; top:12px; left:12px; font-size:11px; color:#3DD9EB;
@@ -396,6 +399,7 @@ svg{display:block}
         </div>
         <div class="ev-stage">
           <svg id="ev-scene" viewBox="0 0 800 460" preserveAspectRatio="xMidYMid slice" role="img" aria-label="AI 抓图场景示意"></svg>
+          <div class="ev-error" id="ev-error" role="alert"><b>证据加载失败</b><p id="ev-error-reason">证据服务暂不可用</p><button id="ev-retry">重试加载</button></div>
           <span class="ev-frame-tag" id="ev-frame-tag">帧 1 / 4 · 14:02:31</span>
           <span class="ev-badge">AI 抓图 · 示例数据</span>
         </div>
@@ -410,10 +414,13 @@ svg{display:block}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
           </button>
           <select class="ev-speed" id="ev-speed" aria-label="回放倍速">
+            <option value="0.5">0.5×</option>
             <option value="1">1.0×</option>
             <option value="2">2.0×</option>
             <option value="4">4.0×</option>
           </select>
+          <button class="ev-btn" id="ev-compare" aria-pressed="false" aria-label="前后对比">对比</button>
+          <button class="ev-btn" id="ev-fail-next" aria-label="模拟证据加载失败" title="POC 故障演示">!</button>
         </div>
         <div class="ev-frames" id="ev-frames" data-od-id="evidence-frames"></div>
         <div class="ev-taskbar">
@@ -612,7 +619,7 @@ setInterval(()=>{ $('#top-clock').textContent = nowTime(); }, 1000);
 $('#top-clock').textContent = nowTime();
 
 /* ================= 状态 ================= */
-const state = { level:'all', kw:'', time:'all', selId:ALERTS[0].id, frame:0, playing:false, playTimer:null, speed:1 };
+const state = { level:'all', kw:'', time:'all', selId:ALERTS[0].id, frame:0, playing:false, playTimer:null, speed:1, compare:false };
 let pendingBase = 12, falseCount = 4; /* 误报率 = falseCount / 47 */
 
 function filtered(){
@@ -721,6 +728,19 @@ function renderEvidence(){
     el.addEventListener('click', ()=>{ stopPlay(); state.frame = +el.dataset.frame; renderEvidence(); });
   });
 }
+async function loadEvidence(simulateFailure){
+  const error = $('#ev-error');
+  error.classList.remove('show');
+  try{
+    const response = await fetch('/api/alerts/'+encodeURIComponent(state.selId)+'/evidence'+(simulateFailure?'?simulateFailure=true':''));
+    if(!response.ok){ const body = await response.json().catch(()=>({})); throw new Error(body.detail || 'HTTP '+response.status); }
+    await response.json();
+    renderEvidence();
+  }catch(err){
+    $('#ev-error-reason').textContent = err.message === 'EVIDENCE_TEMPORARILY_UNAVAILABLE' ? '证据服务暂不可用，请稍后重试' : '加载失败：'+err.message;
+    error.classList.add('show');
+  }
+}
 function stepFrame(d){ state.frame = (state.frame + d + 4) % 4; renderEvidence(); }
 function stopPlay(){
   state.playing = false;
@@ -740,6 +760,13 @@ $('#ev-play').addEventListener('click', ()=>{
     state.playTimer = setInterval(()=>stepFrame(1), 1200/state.speed);
   } else stopPlay();
 });
+$('#ev-compare').addEventListener('click', e=>{
+  state.compare = !state.compare;
+  $('.ev-stage').classList.toggle('compare', state.compare);
+  e.currentTarget.setAttribute('aria-pressed', String(state.compare));
+});
+$('#ev-fail-next').addEventListener('click', ()=>loadEvidence(true));
+$('#ev-retry').addEventListener('click', ()=>loadEvidence(false));
 
 /* ================= 处置面板 ================= */
 function miniMapSvg(a){
@@ -792,6 +819,7 @@ function selectAlert(id, manual){
   const a = ALERTS.find(x=>x.id===id);
   if(a && a.unread){ a.unread = false; }
   renderQueue(); renderEvidence(); renderDetail(); renderTimeline();
+  loadEvidence(false);
   if(manual){
     const el = document.querySelector('#queue-list .alert-card[data-id="'+id+'"]');
     if(el){
@@ -842,9 +870,13 @@ function pushNode(a, name, op, note){
   a.timeline.forEach(n=>{ if(n.s === 'now'){ n.s = 'done'; if(n.t === '—') n.t = nowTime(); } });
   a.timeline.push({ n:name, op:op, t:nowTime(), s:'now', note:note });
 }
-function doConfirm(){
+async function doConfirm(){
   const a = currentAlert();
   if(!a || a.status !== 'pending') return;
+  try{
+    const response = await fetch('/api/alerts/'+encodeURIComponent(a.id)+'/confirm', {method:'POST'});
+    if(!response.ok) throw new Error((await response.json()).detail || '提交失败');
+  }catch(err){ toast('确认失败：'+err.message, true); return; }
   a.status = 'doing';
   const idx = a.timeline.findIndex(n=>n.s==='now');
   if(idx >= 0){ a.timeline[idx].s = 'done'; a.timeline[idx].t = nowTime(); a.timeline[idx].note = '人工复核确认线索有效'; }
@@ -886,9 +918,16 @@ $$('#false-reasons .check-row').forEach(r=>r.addEventListener('click', ()=>{
   r.classList.toggle('on');
   $('#false-ok').disabled = !$$('#false-reasons .check-row.on').length;
 }));
-$('#false-ok').addEventListener('click', ()=>{
+$('#false-ok').addEventListener('click', async ()=>{
   const a = currentAlert(); if(!a) return;
   const reasons = $$('#false-reasons .check-row.on').map(x=>x.dataset.reason).join('、');
+  if(!reasons){ toast('请至少选择一个误报原因', true); return; }
+  try{
+    const response = await fetch('/api/alerts/'+encodeURIComponent(a.id)+'/false-positive', {
+      method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({reasons:reasons.split('、')})
+    });
+    if(!response.ok) throw new Error((await response.json()).detail || '提交失败');
+  }catch(err){ toast('误报提交失败：'+err.message, true); return; }
   a.status = 'false';
   pushNode(a, '值班员核实', '王警官', '标记误报：' + reasons);
   a.timeline.push({ n:'办结归档', op:'系统自动', t:nowTime(), s:'now', note:'误报原因已回流至 AI 规则配置' });

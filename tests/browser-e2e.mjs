@@ -182,6 +182,35 @@ export async function browserEndToEnd() {
     await evaluate(cdp, "document.querySelector('#mm-stop-btn').click(); document.querySelector('#cf-ok').click()");
     await waitFor(cdp, "Array.from(document.querySelectorAll('.k-head')).some(h=>h.textContent.includes('已终止') && h.textContent.match(/1/))");
 
+    // AC06: alert verification, evidence failure/retry, false-positive validation and keyboard safety.
+    await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
+    await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html`);
+    await waitFor(cdp, "document.querySelectorAll('.alert-card').length > 0");
+    await evaluate(cdp, "document.querySelector('#ev-fail-next').click()");
+    await waitFor(cdp, "document.querySelector('#ev-error').classList.contains('show')");
+    assert.ok((await evaluate(cdp, "document.querySelector('#ev-error-reason').textContent")).includes("暂不可用"));
+    await evaluate(cdp, "document.querySelector('#ev-retry').click()");
+    await waitFor(cdp, "!document.querySelector('#ev-error').classList.contains('show')");
+    await evaluate(cdp, "document.querySelector('#queue-search').focus(); document.querySelector('#queue-search').value='K1582'; document.querySelector('#queue-search').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#queue-search').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
+    assert.equal(await evaluate(cdp, "document.querySelector('.alert-card .ac-loc').textContent"), "兰海高速 K1582 都匀段");
+    assert.equal(await evaluate(cdp, "document.querySelector('.st-tag').textContent"), "待核实");
+    await evaluate(cdp, "document.querySelector('#queue-search').blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
+    await waitFor(cdp, "document.querySelector('.st-tag').textContent === '处置中'");
+    const confirmedAlert = await (await fetch(`${baseUrl}/api/alerts/GJ-20260905-031`)).json();
+    assert.equal(confirmedAlert.timeline.at(-1).action, "ALERT_CONFIRMED");
+    assert.equal(confirmedAlert.timeline.at(-1).actor, "王警官");
+    assert.ok(confirmedAlert.timeline.at(-1).occurredAt);
+
+    await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
+    await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html`);
+    await waitFor(cdp, "document.querySelector('#act-false') && !document.querySelector('#act-false').disabled");
+    await evaluate(cdp, "document.querySelector('#act-false').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#false-ok').disabled"), true);
+    await evaluate(cdp, "document.querySelector('#false-reasons .check-row').click(); document.querySelector('#false-ok').click()");
+    await waitFor(cdp, "document.querySelector('.st-tag').textContent === '误报'");
+    const falseAlert = await (await fetch(`${baseUrl}/api/alerts/GJ-20260905-031`)).json();
+    assert.equal(falseAlert.timeline.at(-1).action, "ALERT_MARKED_FALSE_POSITIVE");
+
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })

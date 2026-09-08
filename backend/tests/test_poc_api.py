@@ -232,3 +232,53 @@ async def test_anomaly_auto_switches_backup_or_marks_abnormal_with_unique_alert(
     audit = (await client.get("/api/audit")).json()["audit"]
     assert any(item["action"] == "MISSION_AUTO_BACKUP_SWITCH" for item in audit)
     assert any(item["action"] == "MISSION_MARKED_ABNORMAL" for item in audit)
+
+
+@pytest.mark.asyncio
+async def test_alert_queue_filters_and_exposes_complete_detail_and_evidence(client: AsyncClient):
+    filtered = await client.get("/api/alerts", params={"level": "EMERGENCY", "time": "30m", "keyword": "K1582"})
+    assert filtered.status_code == 200
+    assert [item["id"] for item in filtered.json()["alerts"]] == ["GJ-20260905-031"]
+
+    detail = await client.get("/api/alerts/GJ-20260905-031")
+    assert detail.status_code == 200
+    payload = detail.json()
+    assert payload["alert"]["location"] == "兰海高速 K1582 都匀段"
+    assert payload["relatedMission"]["id"] == "RW-20260905-012"
+    assert len(payload["evidence"]["frames"]) == 4
+    assert payload["evidence"]["comparison"] == {"before": 0, "after": 3}
+    assert payload["evidence"]["boundingBoxes"] is True
+    assert payload["timeline"][0]["action"] == "AI_DETECTED"
+
+    failed = await client.get("/api/alerts/GJ-20260905-031/evidence", params={"simulateFailure": "true"})
+    assert failed.status_code == 503
+    assert failed.json()["detail"] == "EVIDENCE_TEMPORARILY_UNAVAILABLE"
+    retried = await client.get("/api/alerts/GJ-20260905-031/evidence")
+    assert retried.status_code == 200
+    assert len(retried.json()["frames"]) == 4
+
+
+@pytest.mark.asyncio
+async def test_alert_confirm_and_false_positive_require_reason_and_append_audit(client: AsyncClient):
+    confirmed = await client.post("/api/alerts/GJ-20260905-031/confirm")
+    assert confirmed.status_code == 200
+    assert confirmed.json()["alert"]["status"] == "PROCESSING"
+    assert confirmed.json()["timeline"][-1]["action"] == "ALERT_CONFIRMED"
+    assert confirmed.json()["timeline"][-1]["actor"] == "王警官"
+    assert confirmed.json()["timeline"][-1]["occurredAt"]
+
+    no_reason = await client.post("/api/alerts/GJ-20260905-026/false-positive", json={"reasons": []})
+    assert no_reason.status_code == 422
+    unchanged = await client.get("/api/alerts/GJ-20260905-026")
+    assert unchanged.json()["alert"]["status"] == "PROCESSING"
+
+    false_positive = await client.post(
+        "/api/alerts/GJ-20260905-026/false-positive",
+        json={"reasons": ["光影干扰", "模型误识别"]},
+    )
+    assert false_positive.status_code == 200
+    assert false_positive.json()["alert"]["status"] == "FALSE_POSITIVE"
+    entry = false_positive.json()["timeline"][-1]
+    assert entry["action"] == "ALERT_MARKED_FALSE_POSITIVE"
+    assert entry["actor"] == "王警官"
+    assert "光影干扰" in entry["detail"]

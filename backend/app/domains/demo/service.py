@@ -183,6 +183,77 @@ def serialize_alert(item: Alert) -> dict:
     return row
 
 
+ALERT_MISSIONS = {
+    "GJ-20260905-031": "RW-20260905-012",
+    "GJ-20260905-026": "RW-20260905-009",
+    "GJ-20260905-024": "RW-20260905-007",
+    "GJ-20260905-019": "RW-20260905-006",
+}
+
+
+async def filter_alerts(
+    session: AsyncSession, *, level: str | None, time_window: str, keyword: str
+) -> list[dict]:
+    alerts = (await session.scalars(select(Alert).order_by(Alert.time.desc()))).all()
+    cutoff = {"30m": 30, "1h": 60}.get(time_window)
+    keyword = keyword.casefold().strip()
+    result = []
+    for alert in alerts:
+        minutes = max(0, (14 * 60 + 32) - sum(int(value) * factor for value, factor in zip(alert.time.split(":"), (60, 1))))
+        if level and level != "all" and alert.level != level:
+            continue
+        if cutoff is not None and minutes > cutoff:
+            continue
+        if keyword and keyword not in f"{alert.id}{alert.type}{alert.location}".casefold():
+            continue
+        result.append(serialize_alert(alert))
+    return result
+
+
+def alert_evidence(alert_id: str) -> dict:
+    return {
+        "mode": "SIMULATED",
+        "alertId": alert_id,
+        "frames": [
+            {"index": index, "time": time, "label": f"模拟证据帧 {index + 1}"}
+            for index, time in enumerate(("14:02:31", "14:02:34", "14:02:37", "14:02:40"))
+        ],
+        "playbackSpeeds": [0.5, 1, 2],
+        "comparison": {"before": 0, "after": 3},
+        "boundingBoxes": True,
+    }
+
+
+async def alert_detail(session: AsyncSession, alert: Alert) -> dict:
+    mission_id = alert.mission_id or ALERT_MISSIONS.get(alert.id)
+    mission = await session.get(Mission, mission_id) if mission_id else None
+    audits = (await session.scalars(
+        select(Audit).where(Audit.subject_id == alert.id).order_by(Audit.id)
+    )).all()
+    detected = {
+        "action": "AI_DETECTED", "actor": "AI 识别引擎",
+        "occurredAt": f"2026-09-05T{alert.time}:00+08:00", "detail": f"识别到{alert.type}",
+    }
+    return {
+        "alert": serialize_alert(alert),
+        "relatedMission": serialize_mission(mission) if mission else {"id": mission_id},
+        "evidence": alert_evidence(alert.id),
+        "timeline": [detected, *(serialize_audit(item) for item in audits)],
+    }
+
+
+async def record_alert_audit(
+    session: AsyncSession, alert: Alert, *, action: str, detail: str,
+    before_state: str, after_state: str,
+) -> None:
+    session.add(Audit(
+        action=action, snapshot_version=SNAPSHOT_VERSION, occurred_at=datetime.now(timezone.utc),
+        subject_id=alert.id, result="SUCCESS", detail=detail, actor="王警官",
+        before_state=before_state, after_state=after_state,
+    ))
+    await session.commit()
+
+
 DRONE_ALIASES = {f"警航-{index:02d}": f"U-{index:02d}" for index in range(1, 9)}
 RESTRICTED_ROUTES = {"演示禁飞区航线"}
 PROTOTYPE_PENDING = {

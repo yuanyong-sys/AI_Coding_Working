@@ -5,7 +5,7 @@ from enum import StrEnum
 from datetime import date as Date
 from datetime import time as Time
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Confirmation(BaseModel):
@@ -78,6 +78,10 @@ class ControlRequest(BaseModel):
 
 class AnomalyRequest(BaseModel):
     kind: AnomalyKind
+
+
+class FalsePositiveRequest(BaseModel):
+    reasons: list[str] = Field(min_length=1)
 
 
 class DemoState(BaseModel):

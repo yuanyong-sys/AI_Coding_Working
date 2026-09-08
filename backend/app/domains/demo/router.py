@@ -11,6 +11,7 @@ from app.domains.demo.schemas import (
     ControlRequest,
     DemoState,
     DispatchRequest,
+    FalsePositiveRequest,
     MissionDraft,
     MissionPatch,
     ResetResult,
@@ -18,6 +19,7 @@ from app.domains.demo.schemas import (
 )
 from app.domains.demo.snapshot import SNAPSHOT_VERSION
 from app.domains.mission.models import Mission
+from app.domains.alert.models import Alert
 
 
 router = APIRouter(prefix="/api", tags=["poc-demo"])
@@ -40,6 +42,69 @@ async def state(session: AsyncSession = Depends(get_session)) -> dict:
 @router.get("/audit")
 async def audit(session: AsyncSession = Depends(get_session)) -> dict:
     return {"audit": (await service.read_state(session))["audit"]}
+
+
+@router.get("/alerts")
+async def alerts(
+    level: str | None = None,
+    time: str = "all",
+    keyword: str = "",
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    return {"alerts": await service.filter_alerts(session, level=level, time_window=time, keyword=keyword)}
+
+
+@router.get("/alerts/{alert_id}")
+async def alert_detail(alert_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+    alert = await session.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return await service.alert_detail(session, alert)
+
+
+@router.get("/alerts/{alert_id}/evidence")
+async def alert_evidence(
+    alert_id: str, simulateFailure: bool = False, session: AsyncSession = Depends(get_session)
+) -> dict:
+    if await session.get(Alert, alert_id) is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if simulateFailure:
+        raise HTTPException(status_code=503, detail="EVIDENCE_TEMPORARILY_UNAVAILABLE")
+    return service.alert_evidence(alert_id)
+
+
+@router.post("/alerts/{alert_id}/confirm")
+async def confirm_alert(alert_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+    alert = await session.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if alert.status not in {"PENDING_VERIFICATION", "PENDING"}:
+        raise HTTPException(status_code=409, detail="ALERT_NOT_PENDING")
+    alert.status = "PROCESSING"
+    await service.record_alert_audit(
+        session, alert, action="ALERT_CONFIRMED", detail="人工复核确认告警有效",
+        before_state="PENDING_VERIFICATION", after_state="PROCESSING",
+    )
+    return await service.alert_detail(session, alert)
+
+
+@router.post("/alerts/{alert_id}/false-positive")
+async def mark_false_positive(
+    alert_id: str, request: FalsePositiveRequest, session: AsyncSession = Depends(get_session)
+) -> dict:
+    alert = await session.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if alert.status in {"RESOLVED", "FALSE_POSITIVE"}:
+        raise HTTPException(status_code=409, detail="ALERT_ALREADY_CLOSED")
+    previous = alert.status
+    alert.status = "FALSE_POSITIVE"
+    await service.record_alert_audit(
+        session, alert, action="ALERT_MARKED_FALSE_POSITIVE",
+        detail="误报原因：" + "、".join(request.reasons),
+        before_state=previous, after_state="FALSE_POSITIVE",
+    )
+    return await service.alert_detail(session, alert)
 
 
 @router.patch("/tasks/{mission_id}")
