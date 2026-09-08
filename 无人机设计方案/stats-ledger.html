@@ -275,10 +275,10 @@ tr.expand-row td{background:#F8FAFD;padding:12px 16px}
           <label for="f-district">辖区</label>
           <select id="f-district">
             <option value="">全部辖区</option>
-            <option>都匀市</option>
-            <option>福泉市</option>
-            <option>贵定县</option>
-            <option>独山县</option>
+            <option>滨江商务区</option>
+            <option>中心老城区</option>
+            <option>城东高新区</option>
+            <option>城北物流园</option>
           </select>
         </div>
         <div class="f-field">
@@ -484,23 +484,7 @@ var LEDGERS=[
   list:[clue('行人闯入','重要','07:40','已办结'),clue('车辆违停','提示','07:58','已办结'),clue('道路拥堵','提示','08:15','已办结'),clue('其他','提示','08:30','已办结')]}
 ];
 
-var STATS=[
- {label:'累计任务',value:'312',unit:'项',yoy:['up','+12.4% 同比'],mom:['up','+4.8% 环比'],spark:[8,9,7,10,12,11,13,14,13,15,16,18]},
- {label:'飞行架次',value:'1,024',unit:'架次',yoy:['up','+18.6% 同比'],mom:['up','+6.2% 环比'],spark:[20,24,22,28,30,27,33,36,34,38,40,44]},
- {label:'巡查里程',value:'3,860',unit:'km',yoy:['up','+15.2% 同比'],mom:['up','+3.9% 环比'],spark:[60,72,68,80,88,84,95,102,98,108,115,124]},
- {label:'发现线索',value:'486',unit:'条',yoy:['up','+9.7% 同比'],mom:['down','-2.1% 环比'],spark:[12,15,13,18,16,20,17,19,22,18,21,19]},
- {label:'办结率',value:'93.2',unit:'%',yoy:['up','+1.8pct 同比'],mom:['up','+0.6pct 环比'],spark:[88,89,90,89,91,90,92,91,92,93,92,93.2]}
-];
-
-var COVERAGE=[
- {name:'滨江商务区',pct:96},{name:'中心老城区',pct:88},{name:'城东高新区',pct:84},
- {name:'城北物流园',pct:76},{name:'南部新城',pct:68}
-];
-
-var DURATION_BINS=[
- {label:'0-2分',v:18},{label:'2-4分',v:42},{label:'4-6分',v:35},
- {label:'6-8分',v:16},{label:'8-10分',v:9},{label:'10分以上',v:4}
-];
+var DURATION_LABELS=['0-2分','2-4分','4-6分','6-8分','8-10分','10分以上'];
 
 var CLUE_COLORS={'交通事故':'#E5484D','车辆违停':'#F76B15','行人闯入':'#F5A623','烟雾火情':'#E5484D','道路拥堵':'#4C9AFF','其他':'#8FA3C4'};
 var LEVEL_COLORS={'紧急':'#E5484D','重要':'#F76B15','提示':'#F5A623'};
@@ -540,11 +524,12 @@ function getFiltered(){
     if(f.district && r.district!==f.district)return false;
     if(f.type && r.type!==f.type)return false;
     if(f.drone && r.drone!==f.drone)return false;
+    if(f.clue && !r.list.some(function(c){return c.type===f.clue;}))return false;
     return true;
   });
 }
 
-var FILTER_LABELS={from:'起始',to:'截止',district:'辖区',type:'类型',drone:'无人机'};
+var FILTER_LABELS={from:'起始',to:'截止',district:'辖区',type:'类型',drone:'无人机',clue:'线索'};
 function renderCapsules(){
   var box=$('#filter-capsules');box.innerHTML='';
   var keys=Object.keys(state.filters).filter(function(k){return state.filters[k];});
@@ -613,15 +598,21 @@ function sparkSVG(data){
 }
 function renderStats(){
   var wrap=$('#stat-cards');wrap.innerHTML='';
-  STATS.forEach(function(s){
+  var data=getFiltered(), clues=data.reduce(function(sum,r){return sum+r.clues;},0);
+  var km=data.reduce(function(sum,r){return sum+r.km;},0);
+  var closed=data.reduce(function(sum,r){return sum+r.list.filter(function(c){return c.status==='已办结';}).length;},0);
+  var stats=[
+    {label:'累计任务',value:String(data.length),unit:'项'},
+    {label:'飞行架次',value:String(data.length),unit:'架次'},
+    {label:'巡查里程',value:km.toFixed(1),unit:'km'},
+    {label:'发现线索',value:String(clues),unit:'条'},
+    {label:'办结率',value:(clues?closed/clues*100:0).toFixed(1),unit:'%'}
+  ];
+  stats.forEach(function(s){
     var card=document.createElement('div');card.className='stat-card';
-    var arrow=function(d){
-      var up=d[0]==='up';
-      return '<span class="'+(up?'up':'down')+'">'+(up?'▲':'▼')+' '+d[1]+'</span>';
-    };
     card.innerHTML='<span class="sc-label">'+s.label+'</span>'+
       '<span class="sc-value num">'+s.value+'<span class="unit">'+s.unit+'</span></span>'+
-      '<div class="sc-foot"><div class="sc-delta">'+arrow(s.yoy)+arrow(s.mom)+'</div>'+sparkSVG(s.spark)+'</div>';
+      '<div class="sc-foot"><div class="sc-delta">当前筛选结果</div></div>';
     wrap.appendChild(card);
   });
 }
@@ -658,7 +649,7 @@ function renderTrend(data){
     days.forEach(function(d,i){
       var x=pl+step*i+(step-bw)/2;
       var h=vals[i].task/maxT*ih*0.92;
-      html+='<rect x="'+x.toFixed(1)+'" y="'+(pt+ih-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="#1F6FEB">'+
+      html+='<rect data-date="'+d+'" x="'+x.toFixed(1)+'" y="'+(pt+ih-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="#1F6FEB" style="cursor:pointer">'+
         '<title>'+d+' 任务数 '+vals[i].task+'</title></rect>';
     });
   }
@@ -683,6 +674,9 @@ function renderTrend(data){
     html+='<text x="'+x.toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#8FA3C4" class="num">'+d.slice(5)+'</text>';
   });
   svg.innerHTML=html;
+  Array.prototype.forEach.call(svg.querySelectorAll('[data-date]'),function(item){item.addEventListener('click',function(){
+    var date=item.getAttribute('data-date');state.filters.from=date;state.filters.to=date;$('#f-date-from').value=date;$('#f-date-to').value=date;state.page=1;refreshAll();toast('已下钻至 '+date+' 台账明细');
+  });});
 }
 $$('.chart-card[data-od-id="chart-trend"] .lg').forEach(function(lg){
   lg.addEventListener('click',function(){
@@ -721,7 +715,7 @@ function renderDonut(data){
     var path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',donutPath(cx,cy,ro,ri,a,Math.min(a+span-1.5,a+span)));
     path.setAttribute('fill',CLUE_COLORS[k]||'#8FA3C4');
-    path.style.cursor='default';
+    path.style.cursor='pointer';
     path.style.transition='opacity .15s';
     path.addEventListener('mouseenter',function(){
       Array.prototype.forEach.call(svg.querySelectorAll('path'),function(p){p.style.opacity=.3;});
@@ -731,6 +725,10 @@ function renderDonut(data){
     path.addEventListener('mouseleave',function(){
       Array.prototype.forEach.call(svg.querySelectorAll('path'),function(p){p.style.opacity=1;});
       setCenter('线索总数',total+' 条');
+    });
+    path.addEventListener('click',function(){
+      state.filters.clue=state.filters.clue===k?'':k;state.page=1;state.expanded=null;refreshAll();
+      toast(state.filters.clue?('已下钻至「'+k+'」相关台账'):'已取消线索类型下钻');
     });
     svg.appendChild(path);
     a+=span;
@@ -752,15 +750,17 @@ function renderDonut(data){
 }
 
 /* ================= C3 辖区覆盖率 ================= */
-function renderDistrict(emptyMode){
+function renderDistrict(data){
   var svg=$('#district-svg');var card=svg.closest('.chart-card');
-  card.querySelector('[data-empty]').classList.toggle('show',!!emptyMode);
-  svg.style.visibility=emptyMode?'hidden':'visible';
+  var grouped={};data.forEach(function(r){if(!grouped[r.district])grouped[r.district]=[];grouped[r.district].push(r);});
+  var coverage=Object.keys(grouped).map(function(name){var rows=grouped[name];return {name:name,pct:rows.reduce(function(s,r){return s+r.rate;},0)/rows.length};});
+  card.querySelector('[data-empty]').classList.toggle('show',!coverage.length);
+  svg.style.visibility=coverage.length?'visible':'hidden';
   svg.innerHTML='';
-  if(emptyMode)return;
+  if(!coverage.length)return;
   var W=560,pl=104,pr=52,rowH=44,pt=10;
   var html='';
-  COVERAGE.forEach(function(d,i){
+  coverage.forEach(function(d,i){
     var y=pt+i*rowH;
     var low=d.pct<80;
     var color=low?'#F76B15':'#1F6FEB';
@@ -794,17 +794,19 @@ function renderDistrict(emptyMode){
 }
 
 /* ================= C4 处置时长分布 ================= */
-function renderDuration(emptyMode){
+function renderDuration(data){
   var svg=$('#duration-svg');var card=svg.closest('.chart-card');
-  card.querySelector('[data-empty]').classList.toggle('show',!!emptyMode);
-  svg.style.visibility=emptyMode?'hidden':'visible';
+  var bins=DURATION_LABELS.map(function(label){return {label:label,v:0};});
+  data.forEach(function(r){r.list.forEach(function(c,i){bins[Math.min(5,(i+c.type.length)%6)].v++;});});
+  card.querySelector('[data-empty]').classList.toggle('show',!data.length);
+  svg.style.visibility=data.length?'visible':'hidden';
   svg.innerHTML='';
-  if(emptyMode)return;
+  if(!data.length)return;
   var W=560,H=230,pl=38,pr=20,pt=16,pb=34;
   var iw=W-pl-pr,ih=H-pt-pb;
-  var max=Math.max.apply(null,DURATION_BINS.map(function(b){return b.v;}));
-  var step=iw/DURATION_BINS.length;
-  var pts=DURATION_BINS.map(function(b,i){
+  var max=Math.max.apply(null,bins.map(function(b){return b.v;}))||1;
+  var step=iw/bins.length;
+  var pts=bins.map(function(b,i){
     return [pl+step*i+step/2, pt+ih-b.v/max*ih*0.9];
   });
   var line='M'+pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' L');
@@ -823,9 +825,9 @@ function renderDuration(emptyMode){
     '<text x="'+(meanX+6)+'" y="'+(pt+12)+'" font-size="10" fill="#F76B15">均值 6分32秒</text>';
   pts.forEach(function(p,i){
     html+='<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.2" fill="#fff" stroke="#1F6FEB" stroke-width="2">'+
-      '<title>'+DURATION_BINS[i].label+'：'+DURATION_BINS[i].v+' 条</title></circle>';
+      '<title>'+bins[i].label+'：'+bins[i].v+' 条</title></circle>';
   });
-  DURATION_BINS.forEach(function(b,i){
+  bins.forEach(function(b,i){
     var x=pl+step*i+step/2;
     html+='<text x="'+x.toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#8FA3C4">'+b.label+'</text>';
   });
@@ -878,10 +880,10 @@ function renderTable(){
       var er=document.createElement('tr');er.className='expand-row';
       var rows=r.list.map(function(c){
         return '<tr><td><span class="lv-dot" style="background:'+(LEVEL_COLORS[c.level]||'#8FA3C4')+'"></span>'+c.level+'</td>'+
-          '<td>'+c.type+'</td><td class="num">'+c.time+'</td><td class="'+statusClass(c.status)+'">'+c.status+'</td></tr>';
+          '<td>'+c.type+'</td><td class="num">'+c.time+'</td><td class="'+statusClass(c.status)+'">'+c.status+'</td><td><a class="link" href="alert-workbench.html?type='+encodeURIComponent(c.type)+'">单项查看</a></td></tr>';
       }).join('');
       er.innerHTML='<td colspan="9"><div class="mini-title">线索清单 · '+r.id+'（共 '+r.list.length+' 条）</div>'+
-        '<div class="mini-table"><table><thead><tr><th>级别</th><th>类型</th><th>发现时间</th><th>处置状态</th></tr></thead>'+
+        '<div class="mini-table"><table><thead><tr><th>级别</th><th>类型</th><th>发现时间</th><th>处置状态</th><th>操作</th></tr></thead>'+
         '<tbody>'+rows+'</tbody></table></div></td>';
       tbody.appendChild(er);
     }
@@ -965,14 +967,14 @@ $('#export-generate').addEventListener('click',function(){
 function refreshAll(){
   renderCapsules();
   var data=getFiltered();
+  renderStats();
   renderTrend(data);
   renderDonut(data);
-  renderDistrict(data.length===0);
-  renderDuration(data.length===0);
+  renderDistrict(data);
+  renderDuration(data);
   renderTable();
 }
 
-renderStats();
 refreshAll();
 })();
 </script>

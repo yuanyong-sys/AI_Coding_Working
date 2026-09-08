@@ -236,6 +236,26 @@ export async function browserEndToEnd() {
     assert.ok((await evaluate(cdp, "document.querySelector('#info-rows').textContent")).includes("已办结"));
     assert.match(await evaluate(cdp, "document.querySelector('#info-drill').getAttribute('href')"), /alert=GJ-20260905-031/);
 
+    // AC08: one filter expression drives metrics, charts, drill-down and ledger detail.
+    await navigate(cdp, `${baseUrl}/prototype/stats-ledger.html`);
+    await waitFor(cdp, "document.querySelectorAll('#ledger-tbody tr.row').length > 0");
+    await evaluate(cdp, "document.querySelector('#f-district').value='中心老城区'; document.querySelector('#btn-query').click()");
+    await waitFor(cdp, "document.querySelector('#filter-capsules').textContent.includes('辖区：中心老城区')");
+    assert.equal(await evaluate(cdp, "document.querySelector('.stat-card .sc-value').textContent.trim()"), "5项");
+    assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 5 条台账 · 10 条/页");
+    await evaluate(cdp, "document.querySelector('#filter-capsules button[data-k=\"district\"]').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 15 条台账 · 10 条/页");
+    await evaluate(cdp, "document.querySelector('#trend-svg [data-date]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+    assert.ok((await evaluate(cdp, "document.querySelector('#filter-capsules').textContent")).includes("起始："));
+    await evaluate(cdp, "document.querySelector('#ledger-tbody [data-act=\"view\"]').click()");
+    assert.equal(await evaluate(cdp, "Boolean(document.querySelector('.expand-row'))"), true);
+    assert.equal(await evaluate(cdp, "Boolean(document.querySelector('.expand-row a[href*=\"alert-workbench\"]'))"), true);
+    await evaluate(cdp, "document.querySelector('th[data-sort=\"km\"]').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('[data-arr=\"km\"]').classList.contains('on')"), true);
+    await evaluate(cdp, "document.querySelector('#f-date-from').value='2025-01-01'; document.querySelector('#f-date-to').value='2025-01-02'; document.querySelector('#btn-query').click()");
+    await waitFor(cdp, "document.querySelector('#empty-state').classList.contains('show')");
+    assert.equal(await evaluate(cdp, "document.querySelector('#btn-adjust').textContent"), "调整筛选条件");
+
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })
