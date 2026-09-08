@@ -180,14 +180,23 @@ def serialize_audit(item: Audit) -> dict:
 def serialize_alert(item: Alert) -> dict:
     row = _row(item)
     row["missionId"] = row.pop("mission_id")
+    context = ALERT_CONTEXT.get(item.id, {})
+    row["missionId"] = row["missionId"] or context.get("missionId")
+    row["droneId"] = context.get("droneId")
+    row["route"] = context.get("route")
+    row["coordinate"] = context.get("coordinate")
+    row["confidence"] = context.get("confidence")
     return row
 
 
-ALERT_MISSIONS = {
-    "GJ-20260905-031": "RW-20260905-012",
-    "GJ-20260905-026": "RW-20260905-009",
-    "GJ-20260905-024": "RW-20260905-007",
-    "GJ-20260905-019": "RW-20260905-006",
+ALERT_CONTEXT = {
+    "GJ-20260905-031": {"missionId": "RW-20260905-012", "missionName": "福泉马场坪段夜间巡查", "droneId": "U-03", "route": "兰海高速都匀段", "coordinate": "107.5218°E · 26.2594°N", "confidence": 96},
+    "GJ-20260905-026": {"missionId": "RW-20260905-009", "missionName": "荔波互通环线巡查", "droneId": "U-05", "route": "荔波互通环线", "coordinate": "107.8836°E · 25.4122°N", "confidence": 91},
+    "GJ-20260905-024": {"missionId": "RW-20260905-007", "missionName": "贵定连接线隐患排查", "droneId": "U-07", "route": "贵定连接线", "coordinate": "107.2345°E · 26.5847°N", "confidence": 84},
+    "GJ-20260905-019": {"missionId": "RW-20260905-006", "missionName": "厦蓉高速独山段巡查", "droneId": "U-02", "route": "厦蓉高速独山段", "coordinate": "107.5478°E · 25.8296°N", "confidence": 79},
+    "GJ-20260905-017": {"missionId": "RW-20260905-009", "missionName": "福泉服务区入口巡查", "droneId": "U-05", "route": "兰海高速福泉段", "coordinate": "107.5336°E · 26.6720°N", "confidence": 78},
+    "GJ-20260905-014": {"missionId": "RW-20260905-007", "missionName": "贵定连接线隐患排查", "droneId": "U-07", "route": "贵定连接线", "coordinate": "107.2345°E · 26.5847°N", "confidence": 82},
+    "GJ-20260905-008": {"missionId": "RW-20260905-001", "missionName": "贵北高速惠水段航线巡检", "droneId": "U-01", "route": "贵北高速惠水段", "coordinate": "106.6547°E · 26.1318°N", "confidence": 75},
 }
 
 
@@ -227,7 +236,8 @@ def alert_evidence(alert_id: str) -> dict:
 
 
 async def alert_detail(session: AsyncSession, alert: Alert) -> dict:
-    mission_id = alert.mission_id or ALERT_MISSIONS.get(alert.id)
+    context = ALERT_CONTEXT.get(alert.id, {})
+    mission_id = alert.mission_id or context.get("missionId")
     mission = await session.get(Mission, mission_id) if mission_id else None
     audits = (await session.scalars(
         select(Audit).where(Audit.subject_id == alert.id).order_by(Audit.id)
@@ -238,7 +248,10 @@ async def alert_detail(session: AsyncSession, alert: Alert) -> dict:
     }
     return {
         "alert": serialize_alert(alert),
-        "relatedMission": serialize_mission(mission) if mission else {"id": mission_id},
+        "relatedMission": serialize_mission(mission) if mission else {
+            "id": mission_id, "name": context.get("missionName"), "status": "DEMO_REFERENCE",
+            "droneId": context.get("droneId"), "route": context.get("route"),
+        },
         "evidence": alert_evidence(alert.id),
         "timeline": [detected, *(serialize_audit(item) for item in audits)],
     }

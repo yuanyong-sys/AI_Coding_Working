@@ -250,6 +250,11 @@ async def test_alert_queue_filters_and_exposes_complete_detail_and_evidence(clie
     assert payload["evidence"]["boundingBoxes"] is True
     assert payload["timeline"][0]["action"] == "AI_DETECTED"
 
+    secondary = (await client.get("/api/alerts/GJ-20260905-017")).json()
+    assert set(secondary["relatedMission"]) >= {"id", "name", "status", "droneId", "route"}
+    assert secondary["alert"]["coordinate"]
+    assert secondary["alert"]["confidence"]
+
     failed = await client.get("/api/alerts/GJ-20260905-031/evidence", params={"simulateFailure": "true"})
     assert failed.status_code == 503
     assert failed.json()["detail"] == "EVIDENCE_TEMPORARILY_UNAVAILABLE"

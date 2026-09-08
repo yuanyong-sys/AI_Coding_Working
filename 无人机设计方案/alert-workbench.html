@@ -662,7 +662,7 @@ function renderQueue(){
       + (a.unread ? '<span class="unread-dot"></span>' : '')
       + '<div class="ac-row1">'
       +   '<span class="lv-chip lv-'+a.level+'">'+lv.name+'</span>'
-      +   '<span class="ac-type">'+ICONS[a.type]+a.type+'</span>'
+      +   '<span class="ac-type">'+(ICONS[a.type] || '● ')+a.type+'</span>'
       +   '<span class="ac-time num">'+agoText(a.mins)+'</span>'
       + '</div>'
       + '<div class="ac-row2">'
@@ -715,9 +715,10 @@ function sceneSvg(a, frame, small){
 function renderEvidence(){
   const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
   $('#ev-sub').textContent = a.id + ' · ' + a.type + ' · ' + a.loc;
-  $('#ev-scene').innerHTML = sceneSvg(a, state.frame, false);
+  const primaryFrame = state.compare ? 0 : state.frame;
+  $('#ev-scene').innerHTML = sceneSvg(a, primaryFrame, false);
   $('#ev-compare-scene').innerHTML = sceneSvg(a, 3, false);
-  $('#ev-frame-tag').textContent = '帧 '+(state.frame+1)+' / 4 · '+FRAME_TIME[state.frame];
+  $('#ev-frame-tag').textContent = state.compare ? '前帧 1 / 后帧 4' : '帧 '+(state.frame+1)+' / 4 · '+FRAME_TIME[state.frame];
   $('#ev-task').textContent = a.task;
   $('#ev-drone').textContent = a.drone;
   $('#ev-route').textContent = a.route;
@@ -765,7 +766,8 @@ async function syncAlerts(){
     const basis = prototypes.find(a=>a.id===item.id) || prototypes.find(a=>a.type===item.type) || prototypes[index % prototypes.length];
     return {...basis, id:item.id, type:item.type, loc:item.location, level:SERVER_LEVEL[item.level] || 'minor',
       status:SERVER_STATUS[item.status] || 'pending', found:item.time, mins:Math.max(0, (14*60+32)-Number(item.time.slice(0,2))*60-Number(item.time.slice(3,5))),
-      task:item.missionId || basis.task, unread:item.status==='PENDING_VERIFICATION'};
+      task:item.missionId, drone:item.droneId, route:item.route, coord:item.coordinate, conf:item.confidence,
+      unread:item.status==='PENDING_VERIFICATION'};
   });
   state.selId = ALERTS[0] && ALERTS[0].id;
   renderQueue(); renderEvidence(); renderDetail(); renderTimeline();
@@ -797,6 +799,7 @@ $('#ev-compare').addEventListener('click', e=>{
   state.compare = !state.compare;
   $('.ev-stage').classList.toggle('compare', state.compare);
   e.currentTarget.setAttribute('aria-pressed', String(state.compare));
+  renderEvidence();
 });
 $('#ev-fail-next').addEventListener('click', ()=>loadEvidence(true));
 $('#ev-retry').addEventListener('click', ()=>loadEvidence(false));
