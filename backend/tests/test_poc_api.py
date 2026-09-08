@@ -245,6 +245,8 @@ async def test_alert_queue_filters_and_exposes_complete_detail_and_evidence(clie
     payload = detail.json()
     assert payload["alert"]["location"] == "兰海高速 K1582 都匀段"
     assert payload["relatedMission"]["id"] == "RW-20260905-012"
+    assert payload["relatedMission"]["droneId"] == "U-03"
+    assert payload["relatedMission"]["route"] == "兰海高速都匀段"
     assert len(payload["evidence"]["frames"]) == 4
     assert payload["evidence"]["comparison"] == {"before": 0, "after": 3}
     assert payload["evidence"]["boundingBoxes"] is True

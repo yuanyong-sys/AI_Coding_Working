@@ -246,12 +246,14 @@ async def alert_detail(session: AsyncSession, alert: Alert) -> dict:
         "action": "AI_DETECTED", "actor": "AI 识别引擎",
         "occurredAt": f"2026-09-05T{alert.time}:00+08:00", "detail": f"识别到{alert.type}",
     }
+    related_mission = serialize_mission(mission) if mission else {
+        "id": mission_id, "name": context.get("missionName"), "status": "DEMO_REFERENCE",
+    }
+    related_mission["droneId"] = related_mission.get("droneId") or context.get("droneId")
+    related_mission["route"] = related_mission.get("route") or context.get("route")
     return {
         "alert": serialize_alert(alert),
-        "relatedMission": serialize_mission(mission) if mission else {
-            "id": mission_id, "name": context.get("missionName"), "status": "DEMO_REFERENCE",
-            "droneId": context.get("droneId"), "route": context.get("route"),
-        },
+        "relatedMission": related_mission,
         "evidence": alert_evidence(alert.id),
         "timeline": [detected, *(serialize_audit(item) for item in audits)],
     }
