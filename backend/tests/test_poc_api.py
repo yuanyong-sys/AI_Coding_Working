@@ -269,6 +269,8 @@ async def test_alert_confirm_and_false_positive_require_reason_and_append_audit(
 
     no_reason = await client.post("/api/alerts/GJ-20260905-026/false-positive", json={"reasons": []})
     assert no_reason.status_code == 422
+    blank_reason = await client.post("/api/alerts/GJ-20260905-026/false-positive", json={"reasons": ["  "]})
+    assert blank_reason.status_code == 422
     unchanged = await client.get("/api/alerts/GJ-20260905-026")
     assert unchanged.json()["alert"]["status"] == "PROCESSING"
 

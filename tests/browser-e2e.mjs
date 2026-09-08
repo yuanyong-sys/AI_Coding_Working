@@ -191,6 +191,9 @@ export async function browserEndToEnd() {
     assert.ok((await evaluate(cdp, "document.querySelector('#ev-error-reason').textContent")).includes("暂不可用"));
     await evaluate(cdp, "document.querySelector('#ev-retry').click()");
     await waitFor(cdp, "!document.querySelector('#ev-error').classList.contains('show')");
+    await evaluate(cdp, "document.querySelector('#ev-compare').click()");
+    assert.equal(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-compare-scene')).display"), "block");
+    assert.notEqual(await evaluate(cdp, "document.querySelector('#ev-scene').innerHTML"), await evaluate(cdp, "document.querySelector('#ev-compare-scene').innerHTML"));
     await evaluate(cdp, "document.querySelector('#queue-search').focus(); document.querySelector('#queue-search').value='K1582'; document.querySelector('#queue-search').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#queue-search').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
     assert.equal(await evaluate(cdp, "document.querySelector('.alert-card .ac-loc').textContent"), "兰海高速 K1582 都匀段");
     assert.equal(await evaluate(cdp, "document.querySelector('.st-tag').textContent"), "待核实");

@@ -5,7 +5,7 @@ from enum import StrEnum
 from datetime import date as Date
 from datetime import time as Time
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Confirmation(BaseModel):
@@ -82,6 +82,14 @@ class AnomalyRequest(BaseModel):
 
 class FalsePositiveRequest(BaseModel):
     reasons: list[str] = Field(min_length=1)
+
+    @field_validator("reasons")
+    @classmethod
+    def reasons_must_contain_text(cls, reasons: list[str]) -> list[str]:
+        cleaned = [reason.strip() for reason in reasons if reason.strip()]
+        if not cleaned:
+            raise ValueError("至少选择一个误报原因")
+        return cleaned
 
 
 class DemoState(BaseModel):

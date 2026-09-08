@@ -198,8 +198,10 @@ async def filter_alerts(
     cutoff = {"30m": 30, "1h": 60}.get(time_window)
     keyword = keyword.casefold().strip()
     result = []
+    simulation_minutes = 14 * 60 + 32
     for alert in alerts:
-        minutes = max(0, (14 * 60 + 32) - sum(int(value) * factor for value, factor in zip(alert.time.split(":"), (60, 1))))
+        hour, minute = (int(value) for value in alert.time.split(":")[:2])
+        minutes = max(0, simulation_minutes - (hour * 60 + minute))
         if level and level != "all" and alert.level != level:
             continue
         if cutoff is not None and minutes > cutoff:
