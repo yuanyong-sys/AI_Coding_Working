@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_session
@@ -14,6 +15,7 @@ from app.domains.demo.schemas import (
     FalsePositiveRequest,
     ReminderRequest,
     ResolveAlertRequest,
+    ReportExportRequest,
     TransferRequest,
     MissionDraft,
     MissionPatch,
@@ -23,6 +25,7 @@ from app.domains.demo.schemas import (
 from app.domains.demo.snapshot import SNAPSHOT_VERSION
 from app.domains.mission.models import Mission
 from app.domains.alert.models import Alert
+from app.domains.report.service import build_pdf, build_xlsx, report_lines
 
 
 router = APIRouter(prefix="/api", tags=["poc-demo"])
@@ -45,6 +48,21 @@ async def state(session: AsyncSession = Depends(get_session)) -> dict:
 @router.get("/audit")
 async def audit(session: AsyncSession = Depends(get_session)) -> dict:
     return {"audit": (await service.read_state(session))["audit"]}
+
+
+@router.post("/reports/export")
+async def export_report(request: ReportExportRequest, session: AsyncSession = Depends(get_session)) -> Response:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    detail = f"{request.template}/{request.format}；筛选={request.filters}；字段={request.fields}"
+    if request.simulateFailure:
+        await service.record_generic_audit(session, action="REPORT_EXPORTED", result="FAILED", detail=detail, actor=request.operator)
+        raise HTTPException(status_code=503, detail="SIMULATED_EXPORT_FAILURE")
+    lines = report_lines(request, generated_at)
+    content = build_xlsx(lines) if request.format == "xlsx" else build_pdf(lines)
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if request.format == "xlsx" else "application/pdf"
+    filename = f"inspection-report.{request.format}"
+    await service.record_generic_audit(session, action="REPORT_EXPORTED", result="SUCCESS", detail=detail, actor=request.operator)
+    return Response(content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("/alerts")

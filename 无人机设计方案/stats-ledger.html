@@ -430,6 +430,7 @@ tr.expand-row td{background:#F8FAFD;padding:12px 16px}
           <label class="chk"><input type="checkbox" checked value="办结率">办结率</label>
           <label class="chk"><input type="checkbox" value="线索明细">线索明细</label>
         </div>
+        <div style="display:flex;gap:16px;margin-top:12px;font-size:12px"><label>格式 <select id="export-format"><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF (.pdf)</option></select></label><label><input type="checkbox" id="export-fail"> 模拟生成失败</label></div>
       </div>
       <div class="m-sec">
         <h4>预览</h4>
@@ -958,31 +959,34 @@ $('#tpl-grid').addEventListener('click',function(e){
   updatePreview();
 });
 $('#field-checks').addEventListener('change',updatePreview);
+$('#export-format').addEventListener('change',updatePreview);
 function updatePreview(){
   var fields=$$('#field-checks input:checked').map(function(i){return i.value;});
   var f=state.filters;
   var range=(f.from||'不限')+' 至 '+(f.to||'不限');
+  var data=getFiltered(),km=data.reduce(function(s,r){return s+r.km;},0),clues=data.reduce(function(s,r){return s+r.list.length;},0);
   $('#export-preview').innerHTML=
     '模板：<b>'+exportTpl+'</b> ｜ 数据范围：<b>'+range+'</b><br>'+
     '辖区：<b>'+(f.district||'全部')+'</b> ｜ 类型：<b>'+(f.type||'全部')+'</b> ｜ 无人机：<b>'+(f.drone||'全部')+'</b><br>'+
+    '任务 <b>'+data.length+'</b> 项 ｜ 里程 <b>'+km.toFixed(1)+'</b> km ｜ 线索 <b>'+clues+'</b> 条 ｜ 格式 <b>'+$('#export-format').value.toUpperCase()+'</b><br>'+
     '导出字段（'+fields.length+' 项）：'+(fields.length?fields.join('、'):'<b style="color:var(--alert-red)">未选择字段</b>');
 }
-$('#export-generate').addEventListener('click',function(){
+$('#export-generate').addEventListener('click',async function(){
   var fields=$$('#field-checks input:checked');
   if(!fields.length){toast('请至少勾选 1 个导出字段',true);return;}
   var btn=this;btn.disabled=true;btn.textContent='正在生成…';
   var bar=$('#export-progress');bar.classList.add('show');
-  var fill=bar.querySelector('i');var w=0;
-  var timer=setInterval(function(){
-    w+=25;fill.style.width=Math.min(w,100)+'%';
-    if(w>=100){
-      clearInterval(timer);
-      setTimeout(function(){
-        closeExport();
-        toast(exportTpl+'已生成：巡检研判报表-20260905.xlsx');
-      },350);
-    }
-  },300);
+  bar.querySelector('i').style.width='45%';
+  var names=fields.map(function(i){return i.value;}),data=getFiltered();
+  var fieldValue=function(r,name){return {'台账编号':r.id,'任务名称':r.name,'日期':r.date,'辖区':r.district,'无人机':r.drone,'巡查里程':r.km.toFixed(1),'线索数':r.list.length,'办结率':completionRate(r).toFixed(1)+'%','线索明细':r.list.map(function(c){return c.type+' '+c.status;}).join('；')}[name];};
+  var rows=data.map(function(r){var row={};names.forEach(function(n){row[n]=fieldValue(r,n);});return row;});
+  var km=data.reduce(function(s,r){return s+r.km;},0),clues=data.reduce(function(s,r){return s+r.list.length;},0);
+  try{
+    var response=await fetch('/api/reports/export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:exportTpl,format:$('#export-format').value,fields:names,filters:state.filters,stats:{'累计任务':data.length+'项','巡查里程':km.toFixed(1)+'km','发现线索':clues+'条'},rows:rows,operator:'王警官',simulateFailure:$('#export-fail').checked})});
+    if(!response.ok)throw new Error((await response.json()).detail||'生成失败');
+    bar.querySelector('i').style.width='100%';var blob=await response.blob();var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='巡检研判报表.'+$('#export-format').value;a.click();URL.revokeObjectURL(url);
+    closeExport();toast(exportTpl+'生成成功');
+  }catch(err){btn.disabled=false;btn.textContent='重新生成';bar.classList.remove('show');toast('报表生成失败：'+err.message,true);}
 });
 
 /* ================= 汇总刷新 ================= */

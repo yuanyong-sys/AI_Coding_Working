@@ -258,6 +258,15 @@ export async function browserEndToEnd() {
     await evaluate(cdp, "document.querySelector('#f-date-from').value='2025-01-01'; document.querySelector('#f-date-to').value='2025-01-02'; document.querySelector('#btn-query').click()");
     await waitFor(cdp, "document.querySelector('#empty-state').classList.contains('show')");
     assert.equal(await evaluate(cdp, "document.querySelector('#btn-adjust').textContent"), "调整筛选条件");
+    await evaluate(cdp, "document.querySelector('#btn-reset').click(); document.querySelector('#btn-export').click(); document.querySelector('#tpl-grid [data-tpl=\"周报\"]').click(); document.querySelector('#export-format').value='pdf'; document.querySelector('#export-format').dispatchEvent(new Event('change',{bubbles:true}))");
+    assert.ok((await evaluate(cdp, "document.querySelector('#export-preview').textContent")).includes("PDF"));
+    await evaluate(cdp, "document.querySelector('#export-fail').checked=true; document.querySelector('#export-generate').click()");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('报表生成失败'))");
+    assert.equal(await evaluate(cdp, "document.querySelector('#export-generate').textContent"), "重新生成");
+    await evaluate(cdp, "document.querySelector('#export-fail').checked=false; document.querySelector('#export-generate').click()");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('生成成功'))");
+    const exportAudit = await (await fetch(`${baseUrl}/api/audit`)).json();
+    assert.ok(exportAudit.audit.some(item=>item.action==='REPORT_EXPORTED' && item.result==='SUCCESS'));
 
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {

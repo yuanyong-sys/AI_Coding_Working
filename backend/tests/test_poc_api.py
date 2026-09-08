@@ -326,3 +326,32 @@ async def test_alert_transfer_escalate_resolve_and_emergency_reminder_close_loop
     assert repeated.json()["alerts"][0]["id"] == "GJ-20260905-031"
     audit = (await client.get("/api/audit")).json()["audit"]
     assert len([item for item in audit if item["action"] == "ALERT_EMERGENCY_REMINDER"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_report_export_generates_excel_pdf_and_audits(client: AsyncClient):
+    payload = {
+        "template": "周报", "format": "xlsx", "fields": ["台账编号", "巡查里程"],
+        "filters": {"district": "中心老城区"},
+        "stats": {"累计任务": "5项", "巡查里程": "62.9km"},
+        "rows": [{"台账编号": "TZ-20260905-009", "巡查里程": "12.4"}],
+        "operator": "王警官",
+    }
+    excel = await client.post("/api/reports/export", json=payload)
+    assert excel.status_code == 200
+    assert excel.content.startswith(b"PK")
+    assert "attachment" in excel.headers["content-disposition"]
+
+    payload["format"] = "pdf"
+    pdf = await client.post("/api/reports/export", json=payload)
+    assert pdf.status_code == 200
+    assert pdf.content.startswith(b"%PDF-")
+
+    payload["simulateFailure"] = True
+    failed = await client.post("/api/reports/export", json=payload)
+    assert failed.status_code == 503
+    audit = (await client.get("/api/audit")).json()["audit"]
+    exports = [item for item in audit if item["action"] == "REPORT_EXPORTED"]
+    assert [item["result"] for item in exports[-3:]] == ["SUCCESS", "SUCCESS", "FAILED"]
+    assert all(item["actor"] == "王警官" for item in exports[-3:])
+    assert "中心老城区" in exports[-1]["detail"]

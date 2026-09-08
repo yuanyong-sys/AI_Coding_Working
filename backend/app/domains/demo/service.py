@@ -271,6 +271,11 @@ async def record_alert_audit(
     await session.commit()
 
 
+async def record_generic_audit(session: AsyncSession, *, action: str, result: str, detail: str, actor: str) -> None:
+    session.add(Audit(action=action, snapshot_version=SNAPSHOT_VERSION, occurred_at=datetime.now(timezone.utc), result=result, detail=detail, actor=actor))
+    await session.commit()
+
+
 async def get_actionable_alert(session: AsyncSession, alert_id: str) -> Alert:
     from fastapi import HTTPException
     alert = await session.get(Alert, alert_id)

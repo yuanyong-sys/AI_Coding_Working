@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from enum import StrEnum
 from datetime import date as Date
 from datetime import time as Time
@@ -116,6 +116,17 @@ class ResolveAlertRequest(BaseModel):
 
 class ReminderRequest(BaseModel):
     elapsedMinutes: int = Field(ge=0)
+
+
+class ReportExportRequest(BaseModel):
+    template: Literal["日报", "周报", "月报", "自定义"]
+    format: Literal["xlsx", "pdf"]
+    fields: list[str] = Field(min_length=1)
+    filters: dict[str, Any]
+    stats: dict[str, str]
+    rows: list[dict[str, Any]]
+    operator: str = "王警官"
+    simulateFailure: bool = False
 
 
 class DemoState(BaseModel):
