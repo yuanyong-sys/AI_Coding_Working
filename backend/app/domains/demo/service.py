@@ -285,12 +285,16 @@ async def trigger_emergency_reminders(session: AsyncSession, elapsed_minutes: in
     alerts = (await session.scalars(select(Alert).where(
         Alert.level == "EMERGENCY", Alert.status.in_(("PENDING_VERIFICATION", "PENDING"))
     ))).all()
-    if elapsed_minutes < 5:
-        return []
+    simulated_now = 14 * 60 + 32 + elapsed_minutes
+    overdue_alerts = []
+    for alert in alerts:
+        hour, minute = (int(value) for value in alert.time.split(":")[:2])
+        if simulated_now - (hour * 60 + minute) > 5:
+            overdue_alerts.append(alert)
     existing = set((await session.scalars(select(Audit.subject_id).where(
         Audit.action == "ALERT_EMERGENCY_REMINDER"
     ))).all())
-    for alert in alerts:
+    for alert in overdue_alerts:
         if alert.id not in existing:
             session.add(Audit(
                 action="ALERT_EMERGENCY_REMINDER", snapshot_version=SNAPSHOT_VERSION,
@@ -299,7 +303,7 @@ async def trigger_emergency_reminders(session: AsyncSession, elapsed_minutes: in
                 before_state=alert.status, after_state=alert.status,
             ))
     await session.commit()
-    return [{**serialize_alert(alert), "overdue": True} for alert in alerts]
+    return [{**serialize_alert(alert), "overdue": True} for alert in overdue_alerts]
 
 
 DRONE_ALIASES = {f"警航-{index:02d}": f"U-{index:02d}" for index in range(1, 9)}

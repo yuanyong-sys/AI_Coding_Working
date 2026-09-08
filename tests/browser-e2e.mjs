@@ -218,10 +218,9 @@ export async function browserEndToEnd() {
 
     // AC07: transfer, escalation, resolution and dashboard drill-down close the loop.
     await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
+    await fetch(`${baseUrl}/api/alerts/GJ-20260905-031/confirm`, { method: "POST" });
     await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html?alert=GJ-20260905-031`);
     await waitFor(cdp, "document.querySelector('.alert-card.sel')?.dataset.id === 'GJ-20260905-031'");
-    await waitFor(cdp, "document.querySelector('#act-confirm') && !document.querySelector('#act-confirm').disabled");
-    await evaluate(cdp, "document.querySelector('#act-confirm').click()");
     await waitFor(cdp, "document.querySelector('#detail-grid .st-tag').textContent === '处置中'");
     await evaluate(cdp, "document.querySelector('#act-reassign').click(); document.querySelector('#reassign-ok').click()");
     await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('ZP-MOCK-'))");

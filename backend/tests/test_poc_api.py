@@ -316,6 +316,8 @@ async def test_alert_transfer_escalate_resolve_and_emergency_reminder_close_loop
     ]
 
     await client.post("/api/demo/reset", json={"confirmed": True})
+    not_yet = await client.post("/api/alerts/emergency-reminders", json={"elapsedMinutes": 5})
+    assert not_yet.json()["alerts"] == []
     reminder = await client.post("/api/alerts/emergency-reminders", json={"elapsedMinutes": 6})
     assert reminder.status_code == 200
     assert reminder.json()["alerts"][0]["id"] == "GJ-20260905-031"

@@ -1032,15 +1032,14 @@ document.addEventListener('keydown', e=>{
 
 /* ================= 超时升级演示 ================= */
 setTimeout(async ()=>{
-  const response=await fetch('/api/alerts/emergency-reminders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({elapsedMinutes:5})});
+  const response=await fetch('/api/alerts/emergency-reminders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({elapsedMinutes:6})});
   const overdue=response.ok?(await response.json()).alerts:[];
-  const a = ALERTS.find(x=>overdue.some(item=>item.id===x.id) && !x.escalatedTimeout);
-  if(!a) return;
-  a.escalatedTimeout = true; a.unread = true; a.mins = Math.max(0, a.mins - 1);
+  const affected=ALERTS.filter(x=>overdue.some(item=>item.id===x.id) && !x.escalatedTimeout);
+  if(!affected.length) return;
+  affected.forEach(a=>{ a.escalatedTimeout=true; a.unread=true; toast('紧急告警 '+a.id+' 超五个模拟分钟未核实，已置顶并提醒值班领导',true); });
   renderQueue();
-  if(a.id !== state.selId) selectAlert(a.id, true); else renderQueue();
-  toast('紧急告警 ' + a.id + ' 超时未核实，已置顶并升级提醒值班领导', true);
-}, 5000);
+  if(!affected.some(a=>a.id===state.selId)) selectAlert(affected[0].id,true);
+}, 6000);
 
 /* ================= 初始化 ================= */
 syncAlerts().then(()=>{
