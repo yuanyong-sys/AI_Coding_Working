@@ -1,4 +1,6 @@
 import json
+from io import BytesIO
+from zipfile import ZipFile
 from pathlib import Path
 
 import pytest
@@ -340,12 +342,17 @@ async def test_report_export_generates_excel_pdf_and_audits(client: AsyncClient)
     excel = await client.post("/api/reports/export", json=payload)
     assert excel.status_code == 200
     assert excel.content.startswith(b"PK")
+    with ZipFile(BytesIO(excel.content)) as archive:
+        sheet = archive.read("xl/worksheets/sheet1.xml").decode()
+    assert 'r="B7"' in sheet
+    assert "巡查里程" in sheet
     assert "attachment" in excel.headers["content-disposition"]
 
     payload["format"] = "pdf"
     pdf = await client.post("/api/reports/export", json=payload)
     assert pdf.status_code == 200
     assert pdf.content.startswith(b"%PDF-")
+    assert len(pdf.content) > 5000
 
     payload["simulateFailure"] = True
     failed = await client.post("/api/reports/export", json=payload)

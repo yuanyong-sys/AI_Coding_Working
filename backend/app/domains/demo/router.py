@@ -58,7 +58,7 @@ async def export_report(request: ReportExportRequest, session: AsyncSession = De
         await service.record_generic_audit(session, action="REPORT_EXPORTED", result="FAILED", detail=detail, actor=request.operator)
         raise HTTPException(status_code=503, detail="SIMULATED_EXPORT_FAILURE")
     lines = report_lines(request, generated_at)
-    content = build_xlsx(lines) if request.format == "xlsx" else build_pdf(lines)
+    content = build_xlsx(request, lines) if request.format == "xlsx" else build_pdf(lines)
     media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if request.format == "xlsx" else "application/pdf"
     filename = f"inspection-report.{request.format}"
     await service.record_generic_audit(session, action="REPORT_EXPORTED", result="SUCCESS", detail=detail, actor=request.operator)

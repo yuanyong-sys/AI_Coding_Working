@@ -6,6 +6,7 @@ dependencies = [
   "aiosqlite>=0.20,<1",
   "fastapi>=0.111,<1",
   "pydantic-settings>=2.3,<3",
+  "reportlab>=4.2,<5",
   "sqlalchemy[asyncio]>=2.0,<3",
   "uvicorn[standard]>=0.30,<1"
 ]
