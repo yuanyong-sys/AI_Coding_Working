@@ -483,10 +483,21 @@ var LEDGERS=[
  {id:'TZ-20260822-004',name:'人民路小学周边护学巡查',date:'2026-08-22',district:'中心老城区',drone:'警航-01',type:'专项巡查',km:9.6,clues:4,rate:100,
   list:[clue('行人闯入','重要','07:40','已办结'),clue('车辆违停','提示','07:58','已办结'),clue('道路拥堵','提示','08:15','已办结'),clue('其他','提示','08:30','已办结')]}
 ];
-var PLANNED_KM=[20,15,25,18,20,10,24,16,22,24,14,28,20,30,12];
-var DURATION_SECONDS=[92,185,248,372,515,134,278,421,88,196,343,612,155,226,487,105,332,544,76,214,398,681,142,265,457,98,176,309,526,740,121,238,416,83,191,355,598,149,287,472,69,203,327,563,118,251,439,95,168,384,655,137,294,508,79,219,366,574,126,243,448,101,188,317,692,146,273,492,86,231,407,621,113,259,463,97,182,348,536,129,246,418];
-var durationIndex=0;
-LEDGERS.forEach(function(r,i){r.plannedKm=PLANNED_KM[i];r.list.forEach(function(c){c.durationSec=DURATION_SECONDS[durationIndex++%DURATION_SECONDS.length];});});
+var PLANNED_KM={
+ 'TZ-20260905-012':20,'TZ-20260905-009':15,'TZ-20260904-021':25,'TZ-20260904-018':18,'TZ-20260904-015':20,
+ 'TZ-20260903-027':10,'TZ-20260903-024':24,'TZ-20260902-019':16,'TZ-20260902-016':22,'TZ-20260901-022':24,
+ 'TZ-20260831-014':14,'TZ-20260829-011':28,'TZ-20260827-009':20,'TZ-20260825-007':30,'TZ-20260822-004':12
+};
+var DURATION_BY_LEDGER={
+ 'TZ-20260905-012':[92,185,248,372,515], 'TZ-20260905-009':[134,278,421,88,196,343],
+ 'TZ-20260904-021':[612,155,226,487], 'TZ-20260904-018':[105,332,544,76,214,398,681,142],
+ 'TZ-20260904-015':[265,457,98], 'TZ-20260903-027':[176,309], 'TZ-20260903-024':[526,740,121,238,416],
+ 'TZ-20260902-019':[83,191,355,598], 'TZ-20260902-016':[149,287,472,69],
+ 'TZ-20260901-022':[203,327,563,118,251,439,95], 'TZ-20260831-014':[168,384,655,137,294],
+ 'TZ-20260829-011':[508,79,219], 'TZ-20260827-009':[366,574,126,243,448],
+ 'TZ-20260825-007':[101,188], 'TZ-20260822-004':[317,692,146,273]
+};
+LEDGERS.forEach(function(r){r.plannedKm=PLANNED_KM[r.id];r.list.forEach(function(c,i){c.durationSec=DURATION_BY_LEDGER[r.id][i];});});
 
 var DURATION_LABELS=['0-2分','2-4分','4-6分','6-8分','8-10分','10分以上'];
 
@@ -848,11 +859,12 @@ function durationBin(seconds){return Math.min(5,Math.floor(seconds/120));}
 function statusClass(s){
   return s==='已办结'?'st-ok':(s==='处置中'?'st-doing':'st-wait');
 }
+function completionRate(r){return r.list.length?r.list.filter(function(c){return c.status==='已办结';}).length/r.list.length*100:0;}
 function renderTable(){
   var data=getFiltered().slice();
   var k=state.sort.key,dir=state.sort.dir;
   data.sort(function(a,b){
-    var va=a[k],vb=b[k];
+    var va=k==='rate'?completionRate(a):a[k],vb=k==='rate'?completionRate(b):b[k];
     if(typeof va==='string')return va<vb?-dir:va>vb?dir:0;
     return (va-vb)*dir;
   });
@@ -871,12 +883,12 @@ function renderTable(){
   var tbody=$('#ledger-tbody');tbody.innerHTML='';
   slice.forEach(function(r){
     var tr=document.createElement('tr');tr.className='row';
-    var pill=r.rate>=90?'rate-high':'rate-mid';
+    var rate=completionRate(r),pill=rate>=90?'rate-high':'rate-mid';
     tr.innerHTML='<td class="num">'+r.id+'</td>'+
       '<td>'+r.name+'<div style="margin-top:3px"><span class="type-tag">'+r.type+'</span></div></td>'+
       '<td class="num">'+r.date+'</td><td>'+r.district+'</td><td>'+r.drone+'</td>'+
       '<td class="num">'+r.km.toFixed(1)+'</td><td class="num">'+r.list.length+'</td>'+
-      '<td><span class="rate-pill '+pill+' num">'+r.rate.toFixed(1)+'%</span></td>'+
+      '<td><span class="rate-pill '+pill+' num">'+rate.toFixed(1)+'%</span></td>'+
       '<td><button class="link" data-act="view">'+(state.expanded===r.id?'收起':'查看')+'</button>'+
       '<button class="link" data-act="exp">导出</button></td>';
     tr.querySelector('[data-act="view"]').addEventListener('click',function(){
