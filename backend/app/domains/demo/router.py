@@ -12,6 +12,9 @@ from app.domains.demo.schemas import (
     DemoState,
     DispatchRequest,
     FalsePositiveRequest,
+    ReminderRequest,
+    ResolveAlertRequest,
+    TransferRequest,
     MissionDraft,
     MissionPatch,
     ResetResult,
@@ -103,6 +106,64 @@ async def mark_false_positive(
         session, alert, action="ALERT_MARKED_FALSE_POSITIVE",
         detail="误报原因：" + "、".join(request.reasons),
         before_state=previous, after_state="FALSE_POSITIVE",
+    )
+    return await service.alert_detail(session, alert)
+
+
+@router.post("/alerts/emergency-reminders")
+async def emergency_reminders(
+    request: ReminderRequest, session: AsyncSession = Depends(get_session)
+) -> dict:
+    return {"alerts": await service.trigger_emergency_reminders(session, request.elapsedMinutes)}
+
+
+@router.post("/alerts/{alert_id}/transfer")
+async def transfer_alert(
+    alert_id: str, request: TransferRequest, session: AsyncSession = Depends(get_session)
+) -> dict:
+    alert = await service.get_actionable_alert(session, alert_id)
+    transfer_id = f"ZP-MOCK-{alert.id.rsplit('-', 1)[-1]}"
+    previous = alert.status
+    alert.status = "PROCESSING"
+    await service.record_alert_audit(
+        session, alert, action="ALERT_TRANSFERRED",
+        detail=f"模拟转派至{request.target}，转派单号 {transfer_id}",
+        before_state=previous, after_state="PROCESSING",
+    )
+    result = await service.alert_detail(session, alert)
+    result["transferId"] = transfer_id
+    return result
+
+
+@router.post("/alerts/{alert_id}/escalate")
+async def escalate_alert(
+    alert_id: str, confirmation: Confirmation, session: AsyncSession = Depends(get_session)
+) -> dict:
+    if not confirmation.confirmed:
+        raise HTTPException(status_code=409, detail="CONFIRMATION_REQUIRED")
+    alert = await service.get_actionable_alert(session, alert_id)
+    event_id = f"SJ-MOCK-{alert.id.rsplit('-', 1)[-1]}"
+    previous = alert.status
+    alert.status = "PROCESSING"
+    await service.record_alert_audit(
+        session, alert, action="ALERT_ESCALATED", detail=f"生成模拟事件编号 {event_id}",
+        before_state=previous, after_state="PROCESSING",
+    )
+    result = await service.alert_detail(session, alert)
+    result["eventId"] = event_id
+    return result
+
+
+@router.post("/alerts/{alert_id}/resolve")
+async def resolve_alert(
+    alert_id: str, request: ResolveAlertRequest, session: AsyncSession = Depends(get_session)
+) -> dict:
+    alert = await service.get_actionable_alert(session, alert_id)
+    previous = alert.status
+    alert.status = "RESOLVED"
+    await service.record_alert_audit(
+        session, alert, action="ALERT_RESOLVED", detail=f"办结结果：{request.result}",
+        before_state=previous, after_state="RESOLVED",
     )
     return await service.alert_detail(session, alert)
 

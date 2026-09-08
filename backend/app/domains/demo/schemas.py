@@ -92,6 +92,32 @@ class FalsePositiveRequest(BaseModel):
         return cleaned
 
 
+class TransferRequest(BaseModel):
+    target: str = Field(min_length=1)
+
+    @field_validator("target")
+    @classmethod
+    def target_must_contain_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("转派目标不能为空")
+        return value.strip()
+
+
+class ResolveAlertRequest(BaseModel):
+    result: str = Field(min_length=1)
+
+    @field_validator("result")
+    @classmethod
+    def result_must_contain_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("办结结果不能为空")
+        return value.strip()
+
+
+class ReminderRequest(BaseModel):
+    elapsedMinutes: int = Field(ge=0)
+
+
 class DemoState(BaseModel):
     snapshotVersion: str
     schemaVersion: int

@@ -291,3 +291,36 @@ async def test_alert_confirm_and_false_positive_require_reason_and_append_audit(
     assert entry["action"] == "ALERT_MARKED_FALSE_POSITIVE"
     assert entry["actor"] == "王警官"
     assert "光影干扰" in entry["detail"]
+
+
+@pytest.mark.asyncio
+async def test_alert_transfer_escalate_resolve_and_emergency_reminder_close_loop(client: AsyncClient):
+    confirmed = await client.post("/api/alerts/GJ-20260905-031/confirm")
+    assert confirmed.json()["alert"]["status"] == "PROCESSING"
+
+    transferred = await client.post("/api/alerts/GJ-20260905-031/transfer", json={"target": "交管二大队"})
+    assert transferred.status_code == 200
+    assert transferred.json()["transferId"].startswith("ZP-MOCK-")
+
+    unconfirmed = await client.post("/api/alerts/GJ-20260905-031/escalate", json={"confirmed": False})
+    assert unconfirmed.status_code == 409
+    escalated = await client.post("/api/alerts/GJ-20260905-031/escalate", json={"confirmed": True})
+    assert escalated.json()["eventId"].startswith("SJ-MOCK-")
+
+    missing_result = await client.post("/api/alerts/GJ-20260905-031/resolve", json={"result": "  "})
+    assert missing_result.status_code == 422
+    resolved = await client.post("/api/alerts/GJ-20260905-031/resolve", json={"result": "现场已恢复通行"})
+    assert resolved.json()["alert"]["status"] == "RESOLVED"
+    assert [item["action"] for item in resolved.json()["timeline"][-3:]] == [
+        "ALERT_TRANSFERRED", "ALERT_ESCALATED", "ALERT_RESOLVED"
+    ]
+
+    await client.post("/api/demo/reset", json={"confirmed": True})
+    reminder = await client.post("/api/alerts/emergency-reminders", json={"elapsedMinutes": 6})
+    assert reminder.status_code == 200
+    assert reminder.json()["alerts"][0]["id"] == "GJ-20260905-031"
+    assert reminder.json()["alerts"][0]["overdue"] is True
+    repeated = await client.post("/api/alerts/emergency-reminders", json={"elapsedMinutes": 7})
+    assert repeated.json()["alerts"][0]["id"] == "GJ-20260905-031"
+    audit = (await client.get("/api/audit")).json()["audit"]
+    assert len([item for item in audit if item["action"] == "ALERT_EMERGENCY_REMINDER"]) == 1

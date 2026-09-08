@@ -216,6 +216,27 @@ export async function browserEndToEnd() {
     const falseAlert = await (await fetch(`${baseUrl}/api/alerts/GJ-20260905-031`)).json();
     assert.equal(falseAlert.timeline.at(-1).action, "ALERT_MARKED_FALSE_POSITIVE");
 
+    // AC07: transfer, escalation, resolution and dashboard drill-down close the loop.
+    await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
+    await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html?alert=GJ-20260905-031`);
+    await waitFor(cdp, "document.querySelector('.alert-card.sel')?.dataset.id === 'GJ-20260905-031'");
+    await waitFor(cdp, "document.querySelector('#act-confirm') && !document.querySelector('#act-confirm').disabled");
+    await evaluate(cdp, "document.querySelector('#act-confirm').click()");
+    await waitFor(cdp, "document.querySelector('#detail-grid .st-tag').textContent === '处置中'");
+    await evaluate(cdp, "document.querySelector('#act-reassign').click(); document.querySelector('#reassign-ok').click()");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('ZP-MOCK-'))");
+    await evaluate(cdp, "document.querySelector('#act-escalate').click(); document.querySelector('#escalate-ok').click()");
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('SJ-MOCK-'))");
+    await evaluate(cdp, "window.prompt=()=> '现场已恢复通行'; document.querySelector('#act-resolve').click()");
+    await waitFor(cdp, "document.querySelector('#detail-grid .st-tag').textContent === '已办结'");
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    await waitFor(cdp, "document.querySelectorAll('#layer-alerts g').length > 0");
+    const resolvedMarker = await evaluate(cdp, `(() => { const alerts=Array.from(document.querySelectorAll('#layer-alerts g')); const item=alerts.find(g=>g.getAttribute('aria-label').includes('交通事故')); return {pulse:Boolean(item.querySelector('.pulse-ring')), index:item.dataset.i}; })()`);
+    assert.equal(resolvedMarker.pulse, false);
+    await evaluate(cdp, `document.querySelector('#layer-alerts g[data-i="${resolvedMarker.index}"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+    assert.ok((await evaluate(cdp, "document.querySelector('#info-rows').textContent")).includes("已办结"));
+    assert.match(await evaluate(cdp, "document.querySelector('#info-drill').getAttribute('href')"), /alert=GJ-20260905-031/);
+
     const injectionText = '<img id="stored-xss" src=x onerror="window.__storedXss=true">';
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })

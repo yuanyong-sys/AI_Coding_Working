@@ -271,6 +271,37 @@ async def record_alert_audit(
     await session.commit()
 
 
+async def get_actionable_alert(session: AsyncSession, alert_id: str) -> Alert:
+    from fastapi import HTTPException
+    alert = await session.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    if alert.status in {"RESOLVED", "FALSE_POSITIVE"}:
+        raise HTTPException(status_code=409, detail="ALERT_ALREADY_CLOSED")
+    return alert
+
+
+async def trigger_emergency_reminders(session: AsyncSession, elapsed_minutes: int) -> list[dict]:
+    alerts = (await session.scalars(select(Alert).where(
+        Alert.level == "EMERGENCY", Alert.status.in_(("PENDING_VERIFICATION", "PENDING"))
+    ))).all()
+    if elapsed_minutes < 5:
+        return []
+    existing = set((await session.scalars(select(Audit.subject_id).where(
+        Audit.action == "ALERT_EMERGENCY_REMINDER"
+    ))).all())
+    for alert in alerts:
+        if alert.id not in existing:
+            session.add(Audit(
+                action="ALERT_EMERGENCY_REMINDER", snapshot_version=SNAPSHOT_VERSION,
+                occurred_at=datetime.now(timezone.utc), subject_id=alert.id, result="SUCCESS",
+                detail="紧急告警超过五个模拟分钟未核实，已置顶并站内提醒", actor="系统",
+                before_state=alert.status, after_state=alert.status,
+            ))
+    await session.commit()
+    return [{**serialize_alert(alert), "overdue": True} for alert in alerts]
+
+
 DRONE_ALIASES = {f"警航-{index:02d}": f"U-{index:02d}" for index in range(1, 9)}
 RESTRICTED_ROUTES = {"演示禁飞区航线"}
 PROTOTYPE_PENDING = {

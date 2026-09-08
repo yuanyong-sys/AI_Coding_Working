@@ -451,6 +451,7 @@ svg{display:block}
               <button class="btn btn-primary" id="act-confirm">确认有效</button>
               <button class="btn" id="act-reassign">转派处置</button>
               <button class="btn" id="act-false">标记误报</button>
+              <button class="btn" id="act-resolve">办结告警</button>
               <button class="btn btn-danger" id="act-escalate">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 17H2L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>
                 升级为事件
@@ -839,6 +840,7 @@ function renderDetail(){
   $('#act-reassign').disabled = a.status === 'done' || a.status === 'false';
   $('#act-false').disabled = a.status === 'done' || a.status === 'false';
   $('#act-escalate').disabled = a.status === 'done' || a.status === 'false';
+  $('#act-resolve').disabled = a.status !== 'doing';
 }
 function renderTimeline(){
   const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
@@ -934,15 +936,18 @@ $$('#reassign-body .radio-row').forEach(r=>r.addEventListener('click', ()=>{
   $$('#reassign-body .radio-row').forEach(x=>x.classList.remove('on'));
   r.classList.add('on');
 }));
-$('#reassign-ok').addEventListener('click', ()=>{
+$('#reassign-ok').addEventListener('click', async ()=>{
   const a = currentAlert(); if(!a) return;
   const dept = $('#reassign-body .radio-row.on').dataset.dept;
-  a.status = 'doing';
-  pushNode(a, '派单处置', '王警官 → ' + dept, '已生成处置工单并推送至移动终端');
+  try{
+    const response = await fetch('/api/alerts/'+encodeURIComponent(a.id)+'/transfer',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({target:dept})});
+    if(!response.ok) throw new Error((await response.json()).detail || '转派失败');
+    const payload=await response.json(); applyServerDetail(a,payload);
+    toast('模拟转派单 '+payload.transferId+' 已生成');
+  }catch(err){ toast(err.message,true); return; }
   bumpStats('resolved');
   closeModal('reassign-modal');
   renderQueue(); renderDetail(); renderTimeline();
-  toast('已转派至「' + dept + '」，工单同步下发');
 });
 
 /* 误报 */
@@ -980,14 +985,28 @@ $('#act-escalate').addEventListener('click', ()=>{
   $('#esc-target').textContent = '线索：' + a.id + ' · ' + a.type + ' · ' + a.loc;
   $('#escalate-confirm').classList.add('show');
 });
-$('#escalate-ok').addEventListener('click', ()=>{
+$('#escalate-ok').addEventListener('click', async ()=>{
   const a = currentAlert(); if(!a) return;
-  a.status = 'doing'; a.escalated = true;
-  pushNode(a, '升级为事件', '王警官', '已同步指挥调度事件系统，事件单号 SJ-20260905-018');
+  try{
+    const response=await fetch('/api/alerts/'+encodeURIComponent(a.id)+'/escalate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({confirmed:true})});
+    if(!response.ok) throw new Error((await response.json()).detail || '升级失败');
+    const payload=await response.json(); applyServerDetail(a,payload);
+    toast('模拟事件 '+payload.eventId+' 已生成',true);
+  }catch(err){toast(err.message,true);return;}
   bumpStats('resolved');
   closeModal('escalate-confirm');
   renderQueue(); renderDetail(); renderTimeline();
-  toast('已升级为事件并通知值班领导', true);
+});
+
+$('#act-resolve').addEventListener('click', async ()=>{
+  const a=currentAlert(); if(!a || a.status!=='doing') return;
+  const result=window.prompt('请输入办结结果');
+  if(!result || !result.trim()){ toast('办结结果不能为空',true); return; }
+  try{
+    const response=await fetch('/api/alerts/'+encodeURIComponent(a.id)+'/resolve',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({result})});
+    if(!response.ok) throw new Error((await response.json()).detail || '办结失败');
+    applyServerDetail(a,await response.json()); renderQueue();renderDetail();renderTimeline();toast('告警已办结');
+  }catch(err){toast(err.message,true);}
 });
 
 /* ================= 键盘流 ================= */
@@ -1012,17 +1031,22 @@ document.addEventListener('keydown', e=>{
 });
 
 /* ================= 超时升级演示 ================= */
-setTimeout(()=>{
-  const a = ALERTS.find(x=>x.level==='urgent' && x.status==='pending' && !x.escalatedTimeout);
+setTimeout(async ()=>{
+  const response=await fetch('/api/alerts/emergency-reminders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({elapsedMinutes:5})});
+  const overdue=response.ok?(await response.json()).alerts:[];
+  const a = ALERTS.find(x=>overdue.some(item=>item.id===x.id) && !x.escalatedTimeout);
   if(!a) return;
   a.escalatedTimeout = true; a.unread = true; a.mins = Math.max(0, a.mins - 1);
   renderQueue();
   if(a.id !== state.selId) selectAlert(a.id, true); else renderQueue();
   toast('紧急告警 ' + a.id + ' 超时未核实，已置顶并升级提醒值班领导', true);
-}, 30000);
+}, 5000);
 
 /* ================= 初始化 ================= */
-syncAlerts().catch(err=>{ renderQueue(); renderEvidence(); renderDetail(); renderTimeline(); toast(err.message, true); });
+syncAlerts().then(()=>{
+  const requested=new URLSearchParams(location.search).get('alert');
+  if(requested && ALERTS.some(a=>a.id===requested)) selectAlert(requested,true);
+}).catch(err=>{ renderQueue(); renderEvidence(); renderDetail(); renderTimeline(); toast(err.message, true); });
 </script>
 </body>
 </html>

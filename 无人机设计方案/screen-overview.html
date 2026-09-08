@@ -675,7 +675,7 @@ function renderMapPoints(){
     g.setAttribute("tabindex","0"); g.setAttribute("role","button");
     g.setAttribute("aria-label", DATA.levelText[a.level]+"告警："+a.type+"，"+a.loc);
     g.innerHTML =
-      '<circle class="pulse-ring" cx="'+a.x+'" cy="'+a.y+'" r="10" fill="'+col+'" opacity=".55"/>'+
+      (a.status==='RESOLVED'||a.status==='FALSE_POSITIVE'?'':'<circle class="pulse-ring" cx="'+a.x+'" cy="'+a.y+'" r="10" fill="'+col+'" opacity=".55"/>')+
       '<circle cx="'+a.x+'" cy="'+a.y+'" r="6.5" fill="'+col+'" stroke="#0B1B33" stroke-width="2"/>';
     g.addEventListener("click", () => selectAlert(i, true));
     g.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectAlert(i, true); } });
@@ -736,8 +736,8 @@ function selectAlert(i, pan){
   const a = DATA.alerts[i];
   showInfo(DATA.levelText[a.level] + "告警 · " + a.type,
     [["告警级别", DATA.levelText[a.level]], ["事件类型", a.type],
-     ["发生位置", a.loc], ["捕获时间", a.time], ["处置状态", "待签收"]],
-    "alert-workbench.html", "AI 抓图（示例）");
+     ["发生位置", a.loc], ["捕获时间", a.time], ["处置状态", a.status==='RESOLVED'?'已办结':a.status==='PROCESSING'?'处置中':'待核实']],
+    "alert-workbench.html?alert="+encodeURIComponent(a.id), "AI 抓图（示例）");
   if(pan && amap && amapOverlays.alerts[i]) amap.setCenter(amapOverlays.alerts[i].getCenter());
   if(a.level==="red") toast("紧急告警：" + a.type + " · " + a.loc);
 }
@@ -1118,7 +1118,7 @@ async function hydrateSharedState(){
   DATA.fleet = state.drones.map((d,index) => ({id:String(d.id),status:statusMap[d.status]||"offline",task:String(d.task||"机库待命"),
     batt:boundedNumber(d.battery,0,0,100),x:boundedNumber(d.x,120+index*80,0,940),y:boundedNumber(d.y,180+index*70,0,944)}));
   DATA.tasks = state.tasks.slice(0,5).map(t => ({name:String(t.name),pct:boundedNumber(t.progress,0,0,100),overdue:Boolean(t.overdue)}));
-  DATA.alerts = state.alerts.map((a,index) => ({id:String(a.id),level:levelMap[a.level]||"yellow",type:String(a.type),loc:String(a.location),time:String(a.time),
+  DATA.alerts = state.alerts.map((a,index) => ({id:String(a.id),level:levelMap[a.level]||"yellow",type:String(a.type),loc:String(a.location),time:String(a.time),status:String(a.status),
     x:boundedNumber(a.x,180+index*90,0,940),y:boundedNumber(a.y,180+index*70,0,944)}));
   document.querySelector(".poc-badge").title = "数据快照 " + state.snapshotVersion;
 }
