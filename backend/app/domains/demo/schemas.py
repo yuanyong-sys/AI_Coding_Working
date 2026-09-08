@@ -125,6 +125,7 @@ class ReportExportRequest(BaseModel):
     filters: dict[str, Any]
     stats: dict[str, str]
     rows: list[dict[str, Any]]
+    analysisDimensions: dict[str, list[str]] = Field(default_factory=dict)
     operator: str = "王警官"
     simulateFailure: bool = False
 

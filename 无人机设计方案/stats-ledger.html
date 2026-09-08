@@ -989,7 +989,7 @@ $('#export-generate').addEventListener('click',async function(){
   var rows=data.map(function(r){var row={};names.forEach(function(n){row[n]=fieldValue(r,n);});return row;});
   var km=data.reduce(function(s,r){return s+r.km;},0),clues=data.reduce(function(s,r){return s+r.list.length;},0);
   try{
-    var response=await fetch('/api/reports/export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:exportTpl,format:$('#export-format').value,fields:names,filters:state.filters,stats:{'累计任务':data.length+'项','巡查里程':km.toFixed(1)+'km','发现线索':clues+'条'},rows:rows,operator:'王警官',simulateFailure:$('#export-fail').checked})});
+    var response=await fetch('/api/reports/export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:exportTpl,format:$('#export-format').value,fields:names,filters:state.filters,stats:{'累计任务':data.length+'项','巡查里程':km.toFixed(1)+'km','发现线索':clues+'条'},rows:rows,analysisDimensions:{dates:Array.from(new Set(data.map(function(r){return r.date;}))).sort(),districts:Array.from(new Set(data.map(function(r){return r.district;}))).sort()},operator:'王警官',simulateFailure:$('#export-fail').checked})});
     if(!response.ok)throw new Error((await response.json()).detail||'生成失败');
     bar.querySelector('i').style.width='100%';var blob=await response.blob();var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='巡检研判报表.'+$('#export-format').value;a.click();URL.revokeObjectURL(url);
     closeExport();toast(exportTpl+'生成成功');

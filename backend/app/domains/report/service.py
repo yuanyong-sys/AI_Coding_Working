@@ -11,10 +11,10 @@ def template_analysis(request: object) -> list[str]:
     if request.template == "日报":
         return [f"当日执行：任务 {len(request.rows)} 项，重点展示逐任务处置明细"]
     if request.template == "周报":
-        dates = sorted({str(row.get("日期", "未标注")) for row in request.rows})
+        dates = request.analysisDimensions.get("dates", [])
         return [f"七日趋势：覆盖 {len(dates)} 个有数据日期", "日期分布：" + "、".join(dates)]
     if request.template == "月报":
-        districts = sorted({str(row.get("辖区", "未标注")) for row in request.rows})
+        districts = request.analysisDimensions.get("districts", [])
         return [f"月度覆盖：涉及 {len(districts)} 个辖区", "辖区分布：" + "、".join(districts)]
     return [f"自定义视图：按当前筛选导出 {len(request.fields)} 个字段、{len(request.rows)} 条记录"]
 

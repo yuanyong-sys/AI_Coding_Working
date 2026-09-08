@@ -337,6 +337,7 @@ async def test_report_export_generates_excel_pdf_and_audits(client: AsyncClient)
         "filters": {"district": "中心老城区"},
         "stats": {"累计任务": "5项", "巡查里程": "62.9km"},
         "rows": [{"台账编号": "TZ-20260905-009", "巡查里程": "12.4"}],
+        "analysisDimensions": {"dates": ["2026-09-01", "2026-09-05"], "districts": ["中心老城区"]},
         "operator": "王警官",
     }
     excel = await client.post("/api/reports/export", json=payload)
@@ -358,6 +359,8 @@ async def test_report_export_generates_excel_pdf_and_audits(client: AsyncClient)
         with ZipFile(BytesIO(rendered.content)) as archive:
             template_sheet = archive.read("xl/worksheets/sheet1.xml").decode()
         assert marker in template_sheet
+        if template == "周报":
+            assert "覆盖 2 个有数据日期" in template_sheet
 
     payload["template"] = "周报"
     payload["format"] = "pdf"
