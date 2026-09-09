@@ -350,6 +350,12 @@ export async function browserEndToEnd() {
     await evaluate(cdp, "document.querySelector('#f-district').value='中心老城区'; document.querySelector('#btn-query').click()");
     await waitFor(cdp, "document.querySelector('#filter-capsules').textContent.includes('辖区：中心老城区')");
     assert.equal(await evaluate(cdp, "document.querySelector('.stat-card .sc-value').textContent.trim()"), "5项");
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('.stat-card'), card => [card.tagName, card.dataset.drill])"), [
+      ["BUTTON", "tasks"], ["BUTTON", "flights"], ["BUTTON", "km"], ["BUTTON", "clues"], ["BUTTON", "rate"]
+    ]);
+    await evaluate(cdp, "document.querySelector('.stat-card[data-drill=\"km\"]').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('[data-arr=\"km\"]').textContent"), "↓");
+    assert.ok((await evaluate(cdp, "document.querySelector('.toast:last-child').textContent")).includes("巡查里程"));
     assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 5 条台账 · 10 条/页");
     await evaluate(cdp, "document.querySelector('#filter-capsules button[data-k=\"district\"]').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 15 条台账 · 10 条/页");

@@ -94,7 +94,10 @@ svg{display:block}
 
 /* ===== 指标卡 ===== */
 .stat-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.stat-card{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.stat-card:hover{border-color:var(--blue-400);box-shadow:0 4px 14px rgba(30,102,210,.1);transform:translateY(-1px)}
+.stat-card:focus-visible{outline:2px solid var(--blue-600);outline-offset:2px}
+.stat-card:active{transform:translateY(0)}
 .stat-card .sc-label{font-size:12px;color:var(--muted)}
 .stat-card .sc-value{font-size:28px;font-weight:700;line-height:1.1}
 .stat-card .sc-value .unit{font-size:12px;font-weight:400;color:var(--muted);margin-left:3px}
@@ -357,7 +360,7 @@ tr.expand-row td{background:#F8FAFD;padding:12px 16px}
       </section>
 
       <!-- ===== 台账明细表 ===== -->
-      <section class="ledger-card" data-od-id="ledger-table">
+      <section class="ledger-card" id="ledger-card" data-od-id="ledger-table" tabindex="-1">
         <div class="ledger-head">
           <span class="ledger-title">巡检台账明细</span>
           <span class="ledger-count" id="ledger-count"></span>
@@ -619,17 +622,22 @@ function renderStats(){
   var km=data.reduce(function(sum,r){return sum+r.km;},0);
   var closed=data.reduce(function(sum,r){return sum+r.list.filter(function(c){return c.status==='已办结';}).length;},0);
   var stats=[
-    {label:'累计任务',value:String(data.length),unit:'项'},
-    {label:'飞行架次',value:String(data.length),unit:'架次'},
-    {label:'巡查里程',value:km.toFixed(1),unit:'km'},
-    {label:'发现线索',value:String(clues),unit:'条'},
-    {label:'办结率',value:(clues?closed/clues*100:0).toFixed(1),unit:'%'}
+    {label:'累计任务',value:String(data.length),unit:'项',drill:'tasks',sort:'date',dir:-1},
+    {label:'飞行架次',value:String(data.length),unit:'架次',drill:'flights',sort:'date',dir:-1},
+    {label:'巡查里程',value:km.toFixed(1),unit:'km',drill:'km',sort:'km',dir:-1},
+    {label:'发现线索',value:String(clues),unit:'条',drill:'clues',sort:'clues',dir:-1},
+    {label:'办结率',value:(clues?closed/clues*100:0).toFixed(1),unit:'%',drill:'rate',sort:'rate',dir:1}
   ];
   stats.forEach(function(s){
-    var card=document.createElement('div');card.className='stat-card';
+    var card=document.createElement('button');card.type='button';card.className='stat-card';card.setAttribute('data-drill',s.drill);card.setAttribute('aria-label','下钻查看'+s.label+'台账明细');
     card.innerHTML='<span class="sc-label">'+s.label+'</span>'+
       '<span class="sc-value num">'+s.value+'<span class="unit">'+s.unit+'</span></span>'+
-      '<div class="sc-foot"><div class="sc-delta">当前筛选结果</div></div>';
+      '<div class="sc-foot"><div class="sc-delta">当前筛选结果 · 点击下钻</div></div>';
+    card.addEventListener('click',function(){
+      state.sort={key:s.sort,dir:s.dir};state.page=1;state.expanded=null;renderTable();
+      var ledger=$('#ledger-card');ledger.scrollIntoView({behavior:'smooth',block:'start'});ledger.focus({preventScroll:true});
+      toast('已下钻至「'+s.label+'」台账明细');
+    });
     wrap.appendChild(card);
   });
 }
