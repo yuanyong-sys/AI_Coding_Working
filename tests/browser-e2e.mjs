@@ -572,6 +572,7 @@ export async function browserEndToEnd() {
     assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video').getAttribute('aria-label')"), /告警回传/);
     assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb video').muted && document.querySelector('#info-thumb video').loop"), true);
     assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video source').getAttribute('src')"), /demo-aerial-1/);
+    assert.match(await evaluate(cdp, "document.querySelector('#info-thumb').textContent"), /POC 模拟/);
     assert.ok(await evaluate(cdp, `(() => {
       const media = document.querySelector('#info-thumb').getBoundingClientRect();
       return Math.abs(media.width / media.height - 16 / 9) < .03;
@@ -599,7 +600,9 @@ export async function browserEndToEnd() {
     for (const index of [1,2,3,4,5,6]) {
       const eventType = await evaluate(cdp, `document.querySelector('.alert-item[data-i="${index}"] .alert-type').textContent`);
       await evaluate(cdp, `document.querySelector('.alert-item[data-i="${index}"]').click()`);
-      assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb .event-scene')?.getAttribute('aria-label')"), `${eventType}动态演示画面`);
+      assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb .event-photo')?.getAttribute('aria-label')"), `${eventType}实景演示图像`);
+      assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#info-thumb .event-photo')).backgroundImage"), /event-scenes-v1\.png/);
+      assert.equal(await evaluate(cdp, `new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth>0&&image.naturalHeight>0);image.onerror=()=>resolve(false);image.src='/prototype-assets/alerts/event-scenes-v1.png?v=photo-1'})`), true);
       assert.match(await evaluate(cdp, "document.querySelector('#info-thumb').textContent"), new RegExp(eventType));
     }
     await evaluate(cdp, "document.querySelector('.layer-ctrl').click()");

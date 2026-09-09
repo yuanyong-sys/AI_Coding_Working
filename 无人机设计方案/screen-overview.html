@@ -174,13 +174,8 @@ a:hover{text-decoration:underline}
   background:color-mix(in srgb,var(--navy-700) 55%, transparent);border:1px dashed var(--border);color:var(--muted);font-size:12px;gap:6px}
 .info-thumb.has-video{position:relative;overflow:hidden;border-style:solid;background:var(--navy-900)}
 .info-thumb video{width:100%;height:100%;display:block;object-fit:cover}
-.event-scene{width:100%;height:100%;display:block;background:#0b1b33}
-.scene-pulse{transform-box:fill-box;transform-origin:center;animation:scenePulse 1.5s ease-in-out infinite}
-.scene-drift{animation:sceneDrift 3.2s ease-in-out infinite alternate}
-.scene-rain{animation:sceneRain 1.1s linear infinite}
-@keyframes scenePulse{50%{opacity:.35;transform:scale(1.12)}}
-@keyframes sceneDrift{to{transform:translate(28px,-10px);opacity:.45}}
-@keyframes sceneRain{to{transform:translateY(36px)}}
+.event-photo{position:absolute;inset:0;background-image:url('/prototype-assets/alerts/event-scenes-v1.png?v=photo-1');
+  background-size:300% auto;background-repeat:no-repeat;background-color:#0b1b33;filter:saturate(.88) contrast(1.04)}
 .info-video-label{position:absolute;left:8px;bottom:6px;padding:3px 6px;border-radius:3px;background:rgba(7,20,39,.82);color:var(--fg);font-size:10px;letter-spacing:.02em}
 .info-video-status{display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:var(--alert-red);vertical-align:1px}
 .info-row{display:flex;font-size:13px;line-height:2}
@@ -722,15 +717,9 @@ function renderMapPoints(){
 
 /* ---- M4 信息卡 ---- */
 function eventScene(type){
-  const road='<path d="M0 122 L320 104" stroke="#29466f" stroke-width="54"/><path d="M0 122 L320 104" stroke="#6b89b4" stroke-width="2" stroke-dasharray="18 14"/>';
-  const label='<text x="12" y="166" fill="#dfeaff" font-size="11">'+escapeHtml(type)+' · 动态回传模拟</text>';
-  let subject='';
-  if(type==="烟雾火情") subject='<g class="scene-drift" fill="#aebbd0" opacity=".75"><circle cx="182" cy="72" r="20"/><circle cx="205" cy="58" r="25"/><circle cx="230" cy="76" r="19"/></g><path d="M195 112 C176 91 205 86 190 65" stroke="#ff7a45" stroke-width="8" fill="none"/>';
-  else if(type==="车辆违停") subject='<g class="scene-pulse"><rect x="142" y="91" width="82" height="39" rx="7" fill="#f76b15"/><rect x="157" y="82" width="47" height="18" rx="5" fill="#8fa3c4"/><circle cx="160" cy="131" r="8" fill="#071427"/><circle cx="207" cy="128" r="8" fill="#071427"/><rect x="133" y="75" width="100" height="66" fill="none" stroke="#f5a623" stroke-width="2"/></g>';
-  else if(type==="行人闯入"||type==="行人聚集") subject='<g class="scene-pulse" stroke="#f5a623" stroke-width="6" stroke-linecap="round"><circle cx="176" cy="72" r="10" fill="#f5a623"/><path d="M176 85v35M176 96l-18 17M176 98l18 13M176 120l-15 25M176 120l18 24"/></g>'+(type==="行人聚集"?'<g stroke="#3dd9eb" stroke-width="5"><circle cx="220" cy="84" r="8" fill="#3dd9eb"/><path d="M220 94v38M245 91v35"/></g>':'');
-  else if(type==="道路积水") subject='<g class="scene-pulse"><ellipse cx="190" cy="119" rx="92" ry="31" fill="#2588d8" opacity=".72"/><path d="M115 118 Q150 99 190 116 T270 114" fill="none" stroke="#7fd9ff" stroke-width="4"/></g><g class="scene-rain" stroke="#7fd9ff" stroke-width="2" opacity=".7"><path d="M90 28l-8 20M130 12l-8 20M175 25l-8 20M220 8l-8 20M266 22l-8 20"/></g>';
-  else subject='<g class="scene-pulse"><rect x="128" y="73" width="118" height="68" fill="#4c9aff" opacity=".25" stroke="#3dd9eb" stroke-width="2"/><path d="M145 124 L174 96 L201 113 L226 85" fill="none" stroke="#3dd9eb" stroke-width="5"/></g>';
-  return '<svg class="event-scene" viewBox="0 0 320 180" role="img" aria-label="'+escapeHtml(type)+'动态演示画面">'+road+subject+label+'</svg><span class="info-video-label"><i class="info-video-status"></i>'+escapeHtml(type)+'回传 · 模拟</span>';
+  const positions={"烟雾火情":"0% 0%","车辆违停":"50% 0%","行人闯入":"100% 0%","道路积水":"0% 100%","行人聚集":"50% 100%","道路巡查异常":"100% 100%"};
+  const position=positions[type]||positions["道路巡查异常"];
+  return '<div class="event-photo" role="img" aria-label="'+escapeHtml(type)+'实景演示图像" style="background-position:'+position+'"></div><span class="info-video-label"><i class="info-video-status"></i>'+escapeHtml(type)+'实景 · POC 模拟</span>';
 }
 function showInfo(title, rows, drillHref, thumbText, eventType){
   $("info-title").textContent = title;
@@ -739,7 +728,7 @@ function showInfo(title, rows, drillHref, thumbText, eventType){
   const media=$("info-thumb");
   if(eventType==="交通事故"){
     media.classList.add("has-video");
-    media.innerHTML='<video autoplay muted loop playsinline preload="metadata" aria-label="交通事故告警回传"><source src="/prototype-assets/alerts/road-incident-demo.mp4?v=demo-aerial-1" type="video/mp4"></video><span class="info-video-label"><i class="info-video-status"></i>交通事故回传 · 模拟</span>';
+    media.innerHTML='<video autoplay muted loop playsinline preload="metadata" aria-label="交通事故告警回传"><source src="/prototype-assets/alerts/road-incident-demo.mp4?v=demo-aerial-1" type="video/mp4"></video><span class="info-video-label"><i class="info-video-status"></i>交通事故回传 · POC 模拟</span>';
     const video=media.querySelector("video");
     video.addEventListener("error",()=>{ media.classList.remove("has-video"); media.textContent="告警视频加载失败 · 请下钻查看证据"; },{once:true});
     video.play().catch(()=>{});
