@@ -521,7 +521,7 @@ export async function browserEndToEnd() {
     assert.equal(await evaluate(cdp, "document.querySelector('#a1-title').textContent"), "本周巡检概览");
     assert.equal(await evaluate(cdp, "document.querySelector('#trend-title').textContent"), "近 7 周任务数 vs 告警数");
     assert.notEqual(await evaluate(cdp, "document.querySelector('#trend-chart polyline').getAttribute('points')"), dayTrend);
-    await evaluate(cdp, "document.querySelector('.fleet-row').click()");
+    await evaluate(cdp, "document.querySelector('.fleet-row[data-i=\"3\"]').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
     assert.ok(await evaluate(cdp, `(() => {
       const card = document.querySelector('#info-card').getBoundingClientRect();
@@ -556,6 +556,12 @@ export async function browserEndToEnd() {
     })()`);
     assert.ok(videoVisibility.meanLuminance >= 45 && videoVisibility.visibleRatio >= .35,
       `expected a clearly visible return-video frame, got ${JSON.stringify(videoVisibility)}`);
+    for (const index of [1,2,3,4,5,6]) {
+      const eventType = await evaluate(cdp, `document.querySelector('.alert-item[data-i="${index}"] .alert-type').textContent`);
+      await evaluate(cdp, `document.querySelector('.alert-item[data-i="${index}"]').click()`);
+      assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb .event-scene')?.getAttribute('aria-label')"), `${eventType}动态演示画面`);
+      assert.match(await evaluate(cdp, "document.querySelector('#info-thumb').textContent"), new RegExp(eventType));
+    }
     await evaluate(cdp, "document.querySelector('.layer-ctrl').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
     await new Promise((resolve) => setTimeout(resolve, 100));
