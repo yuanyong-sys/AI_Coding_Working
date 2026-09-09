@@ -274,7 +274,7 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "Array.from(document.querySelectorAll('.toast')).some(t=>t.textContent.includes('模拟返航指令发送失败'))");
     await evaluate(cdp, "document.querySelector('#mm-link-loss-btn').click()");
     await waitFor(cdp, "document.querySelector('#mm-link-loss-btn').textContent === '完成'");
-    const taskSideAlert = await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.alerts.find(a=>a.missionId==='RW-20260905-012')})()`);
+    const taskSideAlert = await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.alerts.find(a=>a.id==='GJ-AUTO-RW-20260905-012')})()`);
     assert.equal(taskSideAlert.type, "图传断链");
     await evaluate(cdp, "document.querySelector('#monitor-close').click(); document.querySelector('.k-card.clickable').click(); document.querySelector('#mm-stop-btn').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#confirm-mask').classList.contains('open')"), true);
