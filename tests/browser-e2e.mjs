@@ -170,6 +170,10 @@ export async function browserEndToEnd() {
         assert.equal(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), `/prototype/${page}.html`);
       }
     }
+    for (const page of ["dispatch-tasks", "alert-workbench", "stats-ledger"]) {
+      await navigate(cdp, `${baseUrl}/prototype/${page}.html`);
+      assert.deepEqual(await evaluate(cdp, "['resource','system'].map(name=>{const link=document.querySelector(`[data-od-id=nav-${name}]`);return [link.getAttribute('href'),link.getAttribute('target')]})"), [["/resource-management.html","_top"],["/system-management.html","_top"]]);
+    }
 
     // Issue #10: resource and system administration prototypes are first-class routes.
     for (const page of ["resource-management", "system-management", "system-org", "system-roles", "system-config", "system-logs"]) {
