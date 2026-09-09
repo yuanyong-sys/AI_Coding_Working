@@ -145,7 +145,8 @@ export async function browserEndToEnd() {
 
     await navigate(cdp, `${baseUrl}/`);
     assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('main a'), a => a.getAttribute('href'))"), [
-      "/screen-overview.html", "/dispatch-tasks.html", "/alert-workbench.html", "/stats-ledger.html"
+      "/screen-overview.html", "/dispatch-tasks.html", "/alert-workbench.html", "/stats-ledger.html",
+      "/resource-management.html", "/system-management.html"
     ]);
     await evaluate(cdp, "document.querySelector('#reset').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#reset-dialog').open"), true);
@@ -169,6 +170,101 @@ export async function browserEndToEnd() {
         assert.equal(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), `/prototype/${page}.html`);
       }
     }
+
+    // Issue #10: resource and system administration prototypes are first-class routes.
+    for (const page of ["resource-management", "system-management", "system-org", "system-roles", "system-config", "system-logs"]) {
+      await navigate(cdp, `${baseUrl}/${page}.html`);
+      await waitFor(cdp, "Boolean(document.querySelector('iframe.prototype-frame'))");
+      assert.equal(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), `/prototype/${page}.html`);
+      await waitFor(cdp, "Boolean(document.querySelector('iframe').contentDocument?.querySelector('[data-od-id=side-nav]'))");
+    }
+
+    // Issue #10: the agreed browser seam exercises each resource-management flow.
+    await navigate(cdp, `${baseUrl}/prototype/resource-management.html`);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('[data-od-id=resource-tabs] button'),button=>button.textContent.trim())"), ["无人机机队","机场机巢","飞手与排班"]);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('[data-od-id=side-nav] a[href]'),a=>a.target).filter(Boolean)"), ["_top","_top","_top","_top","_top","_top","_top"]);
+    await evaluate(cdp, "document.querySelector('#f-search').value='不存在的无人机'; document.querySelector('#f-search').dispatchEvent(new Event('input',{bubbles:true}))");
+    assert.equal(await evaluate(cdp, "Boolean(document.querySelector('[data-od-id=fleet-empty]'))"), true);
+    await evaluate(cdp, "document.querySelector('#f-search').value='U-01'; document.querySelector('#f-search').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('[data-act=detail]').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#drawer-title').textContent"), /U-01/);
+    await evaluate(cdp, "document.querySelector('#drawer-close').click(); document.querySelector('[data-act=maint]').click(); document.querySelector('#m-date').value=''; document.querySelector('#maint-submit').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#maint-error').hidden"), false);
+    await evaluate(cdp, "document.querySelector('#m-date').value='2026-09-09'; document.querySelector('#maint-submit').click(); document.querySelector('[data-tab=dock]').click(); document.querySelector('[data-dock]').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#dock-modal').classList.contains('open')"), true);
+    await evaluate(cdp, "document.querySelector('#dock-close').click(); document.querySelector('[data-tab=pilot]').click(); document.querySelector('[data-pilot]').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#drawer-title').textContent"), /飞手档案/);
+    await evaluate(cdp, "document.querySelector('#drawer-close').click(); document.querySelector('#btn-schedule-edit').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /演示环境暂不支持修改排班/);
+
+    // Issue #10: system overview, staff, roles, configuration and audit logs remain demonstrable.
+    await navigate(cdp, `${baseUrl}/prototype/system-management.html`);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('[data-od-id=module-nav-grid] a'),a=>a.getAttribute('href'))"), ["/system-org.html","/system-roles.html","/system-config.html","/system-logs.html"]);
+    await navigate(cdp, `${baseUrl}/prototype/system-org.html`);
+    await evaluate(cdp, "document.querySelector('[data-unit=dy]').click(); document.querySelector('#s-role').value='调度员'; document.querySelector('#s-role').dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('#s-status').value='在岗'; document.querySelector('#s-status').dispatchEvent(new Event('change',{bubbles:true}))");
+    assert.ok(await evaluate(cdp, "Array.from(document.querySelectorAll('#staff-tbody tr')).every(row=>row.textContent.includes('都匀')&&row.textContent.includes('调度员')&&row.textContent.includes('在岗'))"));
+    await evaluate(cdp, "document.querySelector('[data-unit=qn]').click(); document.querySelector('#s-role').value='全部'; document.querySelector('#s-role').dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('#s-status').value='全部'; document.querySelector('#s-status').dispatchEvent(new Event('change',{bubbles:true}))");
+    await evaluate(cdp, "document.querySelector('#btn-add-staff').click(); document.querySelector('#staff-submit').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#fw-name').classList.contains('has-err')"), true);
+    await evaluate(cdp, "document.querySelector('#f-name').value='演示人员'; document.querySelector('#f-no').value='399999'; document.querySelector('#f-phone').value='13900000000'; document.querySelector('#staff-submit').click()");
+    assert.ok(await evaluate(cdp, "Array.from(document.querySelectorAll('#staff-tbody tr')).some(row=>row.textContent.includes('演示人员'))"));
+    await evaluate(cdp, "Array.from(document.querySelectorAll('#staff-tbody tr')).find(row=>row.textContent.includes('演示人员')).querySelector('[data-act=edit]').click(); document.querySelector('#f-name').value='演示人员甲'; document.querySelector('#staff-submit').click()");
+    assert.ok(await evaluate(cdp, "Array.from(document.querySelectorAll('#staff-tbody tr')).some(row=>row.textContent.includes('演示人员甲'))"));
+    await evaluate(cdp, "Array.from(document.querySelectorAll('#staff-tbody tr')).find(row=>row.textContent.includes('演示人员甲')).querySelector('[data-act=disable]').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#confirm-modal').classList.contains('open')"), true);
+    await evaluate(cdp, "document.querySelector('#confirm-ok').click(); document.querySelector('#s-search').value='演示人员甲'; document.querySelector('#s-search').dispatchEvent(new Event('input',{bubbles:true}))");
+    assert.match(await evaluate(cdp, "document.querySelector('#staff-tbody').textContent"), /演示人员甲.*停用/s);
+    await navigate(cdp, `${baseUrl}/prototype/system-roles.html`);
+    await evaluate(cdp, "document.querySelector('.btn-edit-perm').click(); document.querySelector('.perm-cb').click(); window.confirm=()=>false; document.querySelector('#drawer-close').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#perm-drawer').classList.contains('open')"), true);
+    await evaluate(cdp, "document.querySelector('#drawer-cancel').click(); document.querySelector('.btn-edit-perm').click(); document.querySelector('#btn-clear-all').click(); document.querySelector('#btn-clear-all').click(); document.querySelector('#drawer-save').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /权限点不能为 0/);
+    await evaluate(cdp, "document.querySelector('#btn-check-all').click(); document.querySelector('#drawer-save').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /权限已保存/);
+    await navigate(cdp, `${baseUrl}/prototype/system-config.html`);
+    assert.equal(await evaluate(cdp, "document.querySelector('#cfg-amap-key').type"), "password");
+    assert.ok(await evaluate(cdp, "document.querySelector('#cfg-amap-key').value.includes('PLACEHOLDER')"));
+    await evaluate(cdp, "document.querySelector('#cfg-amap-key').value='x'; document.querySelector('#btn-save').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /校验失败/);
+    await evaluate(cdp, "document.querySelector('#btn-restore').click(); document.querySelector('#restore-confirm').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /已恢复为默认配置/);
+    await evaluate(cdp, "document.querySelector('#cfg-zoom').value='11'; document.querySelector('#cfg-zoom').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#btn-save').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /配置已保存/);
+    await navigate(cdp, `${baseUrl}/prototype/system-logs.html`);
+    await evaluate(cdp, "document.querySelector('#f-module').value='资源管理'; document.querySelector('#f-module').dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('[data-xp]').click()");
+    assert.equal(await evaluate(cdp, "Boolean(document.querySelector('.detail-row'))"), true);
+    await evaluate(cdp, "document.querySelector('#btn-export-csv').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /已导出.*CSV/);
+    await evaluate(cdp, "document.querySelector('#btn-reset').click(); document.querySelector('[data-range=\"30d\"]').click(); document.querySelector('[data-pg=\"2\"]').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('.pg-info').textContent"), /第 2\//);
+    assert.ok(await evaluate(cdp, "document.body.textContent.includes('U-04')"));
+
+    for (const [page, regions] of [
+      ["resource-management", [".sidenav", ".topbar", ".content"]],
+      ["system-management", [".sidenav", ".topbar", ".mod-grid"]],
+      ["system-org", [".sidenav", ".topbar", ".org-layout"]],
+      ["system-roles", [".sidenav", ".topbar", ".role-grid"]],
+      ["system-config", [".sidenav", ".topbar", ".cfg-grid"]],
+      ["system-logs", [".sidenav", ".topbar", ".table-wrap"]]
+    ]) {
+      await cdp.command("Emulation.setDeviceMetricsOverride", {width:1440,height:900,deviceScaleFactor:1,mobile:false});
+      await navigate(cdp, `${baseUrl}/prototype/${page}.html`);
+      assert.equal(await evaluate(cdp, "document.querySelector('.nav-logo').getAttribute('href')"), "/");
+      assert.equal(await evaluate(cdp, "document.querySelector('.nav-logo').target"), "_top");
+      assert.match(await evaluate(cdp, "document.querySelector('.nav-item.active').textContent.trim()"), page === "resource-management" ? /资源管理/ : /系统管理/);
+      const layout = await evaluate(cdp, `(() => ({overflow:document.documentElement.scrollWidth-innerWidth,regions:${JSON.stringify(regions)}.map(selector=>{const r=document.querySelector(selector)?.getBoundingClientRect();return Boolean(r&&r.width>40&&r.height>20&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight)})}))()`);
+      assert.ok(layout.overflow <= 1, `${page} has ${layout.overflow}px horizontal overflow at 1440x900`);
+      assert.ok(layout.regions.every(Boolean), `${page} has a hidden core region at 1440x900`);
+      const screenshot = await cdp.command("Page.captureScreenshot", {format:"png",captureBeyondViewport:false});
+      const pixels = Buffer.from(screenshot.data, "base64");
+      assert.deepEqual([pixels.readUInt32BE(16),pixels.readUInt32BE(20)], [1440,900]);
+    }
+
+    await navigate(cdp, `${baseUrl}/prototype/resource-management.html`);
+    const resourceVocabulary = await evaluate(cdp, "document.body.textContent");
+    await navigate(cdp, `${baseUrl}/prototype/system-logs.html`);
+    const logVocabulary = await evaluate(cdp, "document.body.textContent");
+    assert.ok(resourceVocabulary.includes("U-04") && logVocabulary.includes("U-04"));
+    assert.ok(resourceVocabulary.includes("兰海高速都匀段") && logVocabulary.includes("兰海高速都匀段"));
 
     // AC10: externally controlled failures expose reason, last-valid information and a retry action.
     await fetch(`${baseUrl}/api/demo/control`, { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({advanceMinutes:3,failures:["data"]}) });

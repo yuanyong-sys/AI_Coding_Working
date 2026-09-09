@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统管理 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#1A2333; --muted:#5A6B85; --border:#E2E8F2;
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit; font-size:inherit}
+a{color:var(--blue-600); text-decoration:none}
+:focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:2px}
+::placeholder{color:#9AA9C2}
+
+/* ===== 左侧深色导航 ===== */
+.layout{display:flex; min-height:100vh}
+.sidenav{width:232px; flex:none; background:var(--navy-900); color:#EAF1FB; display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh}
+.nav-logo{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid rgba(76,154,255,.18); color:#EAF1FB}
+.nav-logo:hover{background:rgba(76,154,255,.08)}
+.nav-logo .t1{font-size:15px; font-weight:700; letter-spacing:1px}
+.nav-logo .t2{font-size:11px; color:#8FA3C4; margin-top:2px}
+.nav-menu{padding:12px 10px; display:flex; flex-direction:column; gap:2px}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px;
+  font-size:14px; color:#B9C8E0; transition:background .15s,color .15s}
+.nav-item:hover{background:rgba(76,154,255,.12); color:#EAF1FB}
+.nav-item.active{background:var(--blue-600); color:#fff; font-weight:600}
+.nav-item svg{flex:none}
+.nav-foot{margin-top:auto; padding:14px 16px; font-size:11px; color:#5E7295; border-top:1px solid rgba(76,154,255,.14); line-height:1.7}
+
+/* ===== 主列 ===== */
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+.topbar{height:56px; flex:none; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:20}
+.crumb{font-size:14px; color:var(--muted)}
+.crumb b{color:var(--fg); font-weight:600}
+.crumb .sep{margin:0 8px; color:#C3CEDF}
+.top-right{display:flex; align-items:center; gap:18px}
+.top-search{display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border);
+  border-radius:6px; padding:0 10px; height:32px; width:220px; color:var(--muted)}
+.top-search input{border:none; background:none; outline:none; flex:1; font-size:13px; color:var(--fg); font-family:inherit}
+.bell{position:relative; width:34px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.bell:hover{background:var(--bg); color:var(--fg)}
+.bell .badge{position:absolute; top:2px; right:2px; min-width:16px; height:16px; border-radius:8px; background:var(--alert-red);
+  color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-weight:600}
+.top-time{font-size:13px; color:var(--muted)}
+.top-user{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg)}
+.top-user .avatar{width:30px; height:30px; border-radius:50%; background:var(--navy-700); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600}
+
+/* ===== 模块二级导航（药丸式） ===== */
+.subnav{display:flex; align-items:center; gap:8px; padding:12px 24px 0; flex-wrap:wrap}
+.subnav a{height:32px; display:inline-flex; align-items:center; padding:0 16px; border-radius:16px;
+  font-size:13px; color:var(--muted); background:var(--surface); border:1px solid var(--border);
+  transition:background .15s,color .15s,border-color .15s}
+.subnav a:hover{color:var(--fg); border-color:#C7D3E6; background:#F2F7FF}
+.subnav a.on{background:var(--navy-700); border-color:var(--navy-700); color:#fff; font-weight:600}
+
+/* ===== 内容区 ===== */
+.content{flex:1; padding:20px 24px 32px; min-width:0}
+.page-head{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap}
+.page-head h1{font-size:20px; font-weight:700; line-height:1.4}
+.page-head .sub{font-size:12px; color:var(--muted); margin-top:3px}
+.seg{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden}
+.seg button{height:34px; padding:0 16px; font-size:13px; color:var(--muted); transition:background .15s,color .15s}
+.seg button:hover{color:var(--fg); background:#EEF3FA}
+.seg button.on{background:var(--navy-700); color:#fff; font-weight:600}
+
+.toolbar{display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap}
+.select, .input{height:34px; border:1px solid var(--border); border-radius:6px; background:var(--surface);
+  font-size:13px; color:var(--fg); padding:0 10px; font-family:inherit; transition:border-color .15s}
+.select:hover, .input:hover{border-color:#C7D3E6}
+.select:focus, .input:focus{outline:none; border-color:var(--blue-600); box-shadow:0 0 0 2px rgba(31,111,235,.15)}
+.input{width:220px}
+.btn{height:34px; padding:0 14px; border-radius:6px; font-size:13px; display:inline-flex; align-items:center; gap:6px;
+  transition:all .15s; border:1px solid transparent}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{background:var(--blue-600); color:#fff; font-weight:600}
+.btn-primary:hover{background:#1A63D4}
+.btn-outline{border-color:var(--border); color:var(--fg); background:var(--surface)}
+.btn-outline:hover{border-color:var(--blue-600); color:var(--blue-600); background:#F2F7FF}
+.spacer{flex:1}
+
+/* ===== 指标卡 ===== */
+.metric-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px}
+.metric-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+  display:flex; align-items:center; gap:12px; transition:box-shadow .15s, border-color .15s}
+.metric-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.metric-card .mi{width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none}
+.metric-card .mk{font-size:12px; color:var(--muted)}
+.metric-card .mv{font-size:24px; font-weight:700; line-height:1.3}
+.metric-card .mu{font-size:11px; color:var(--muted); font-weight:400; margin-left:3px}
+.mi-blue{background:#E8F1FF; color:var(--blue-600)}
+.mi-green{background:#E6F6EE; color:var(--safe-green)}
+.mi-navy{background:#E4EDFF; color:var(--navy-700)}
+.mi-yellow{background:#FFF3E3; color:var(--warn-orange)}
+
+/* ===== 表格 ===== */
+.table-tools{display:flex; align-items:center; gap:12px; margin-bottom:10px; min-height:34px}
+.table-info{font-size:13px; color:var(--muted)}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto}
+table{width:100%; border-collapse:collapse; min-width:960px}
+th{font-size:12px; color:var(--muted); font-weight:600; text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); background:#F8FAFD; white-space:nowrap}
+td{font-size:13px; padding:10px 12px; border-bottom:1px solid #EEF2F8; white-space:nowrap; line-height:1.45}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:#F7FAFF}
+tbody tr:last-child td{border-bottom:none}
+td.ell{max-width:220px; overflow:hidden; text-overflow:ellipsis}
+.empty-row td{text-align:center; color:var(--muted); padding:34px 12px; font-size:13px}
+.badge{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:11px; font-size:12px; font-weight:600}
+.badge i{width:6px; height:6px; border-radius:50%; display:inline-block}
+.b-online{background:#E6F6EE; color:var(--safe-green)} .b-online i{background:var(--safe-green)}
+.b-offline{background:#EEF2F8; color:var(--muted)} .b-offline i{background:#8FA3C4}
+.b-warn{background:#FFF3E3; color:#B25E09} .b-warn i{background:var(--caution-yellow)}
+.b-fail{background:#FDECEC; color:var(--alert-red)} .b-fail i{background:var(--alert-red)}
+.tag{display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:3px; font-size:11px; font-weight:600; flex:none}
+.tag-sensor{background:#E8F1FF; color:var(--blue-600)}
+.tag-green{background:#E6F6EE; color:var(--safe-green)}
+.tag-orange{background:#FFF3E3; color:#B25E09}
+.op-link{font-size:13px; color:var(--blue-600); padding:2px 4px; border-radius:3px}
+.op-link:hover{background:#EEF4FF}
+.op-link.danger{color:var(--alert-red)}
+.op-link.danger:hover{background:#FDEDED}
+
+/* ===== 面板 ===== */
+.panel{background:var(--surface); border:1px solid var(--border); border-radius:8px; display:flex; flex-direction:column}
+.panel-head{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:14px 18px; border-bottom:1px solid var(--border)}
+.panel-title{font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px}
+.panel-title::before{content:""; width:3px; height:12px; border-radius:2px; background:var(--blue-600)}
+.panel-link{font-size:13px; color:var(--blue-600); padding:2px 4px; border-radius:3px}
+.panel-link:hover{background:#EEF4FF}
+.hint{font-size:12px; color:var(--muted); margin-top:6px}
+
+/* ===== 模块导航卡 ===== */
+.mod-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px}
+.mod-card{display:flex; flex-direction:column; gap:10px; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:16px; color:var(--fg); transition:box-shadow .15s, border-color .15s, transform .15s}
+.mod-card:hover{border-color:var(--blue-600); box-shadow:0 4px 14px rgba(11,27,51,.10); transform:translateY(-2px)}
+.mod-card:active{transform:translateY(0)}
+.mc-head{display:flex; align-items:center; gap:10px}
+.mc-icon{width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none}
+.mc-name{font-size:15px; font-weight:700}
+.mc-desc{font-size:12px; color:var(--muted); line-height:1.6; min-height:38px}
+.mc-nums{display:flex; gap:14px; border-top:1px dashed var(--border); padding-top:10px}
+.mc-nums .n{display:flex; flex-direction:column}
+.mc-nums .nv{font-size:17px; font-weight:700}
+.mc-nums .nk{font-size:11px; color:var(--muted)}
+.mc-go{margin-top:auto; font-size:13px; color:var(--blue-600); font-weight:600; display:flex; align-items:center; gap:4px}
+.mod-card:hover .mc-go{text-decoration:underline}
+
+/* ===== 总览双栏 ===== */
+.overview-grid{display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr); gap:14px; align-items:start}
+.log-list{display:flex; flex-direction:column}
+.log-item{display:flex; align-items:center; gap:12px; padding:11px 18px; border-bottom:1px solid #EEF2F8; font-size:13px}
+.log-item:last-child{border-bottom:none}
+.log-item .lt{width:58px; flex:none; color:var(--muted)}
+.log-item .lo{width:76px; flex:none; font-weight:600}
+.log-item .la{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.log-foot{border-top:1px solid var(--border); padding:10px 18px; text-align:right}
+.status-list{display:flex; flex-direction:column; padding:6px 0}
+.status-item{display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px dashed #EEF2F8; font-size:13px}
+.status-item:last-child{border-bottom:none}
+.status-item .dot{width:8px; height:8px; border-radius:50%; flex:none; background:var(--safe-green); box-shadow:0 0 0 3px rgba(48,164,108,.15)}
+.status-item .s-name{width:120px; flex:none; font-weight:600}
+.status-item .s-desc{flex:1; min-width:0; color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.status-item .badge{flex:none}
+
+/* ===== 开关 ===== */
+.switch{position:relative; width:38px; height:20px; flex:none; display:inline-block}
+.switch input{position:absolute; inset:0; width:100%; height:100%; opacity:0; margin:0; cursor:pointer}
+.switch .tr{position:absolute; inset:0; border-radius:10px; background:#CBD5E4; transition:background .15s; pointer-events:none}
+.switch .tr::after{content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+  background:#fff; transition:left .15s; box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch input:checked + .tr{background:var(--blue-600)}
+.switch input:checked + .tr::after{left:20px}
+.switch input:focus-visible + .tr{outline:2px solid var(--blue-600); outline-offset:2px}
+
+/* ===== Toast ===== */
+#toast-box{position:fixed; top:20px; right:20px; z-index:99; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--navy-800); border:1px solid var(--blue-400); border-left:4px solid var(--blue-400); color:#EAF1FB;
+  border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  animation:toastIn .2s ease-out; max-width:340px; line-height:1.5}
+.toast.warn{border-color:var(--warn-orange); border-left-color:var(--warn-orange)}
+.toast.err{border-color:var(--alert-red); border-left-color:var(--alert-red)}
+.toast.ok{border-color:var(--safe-green); border-left-color:var(--safe-green)}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0; transform:translateX(20px)}to{opacity:1; transform:none}}
+@keyframes toastOut{to{opacity:0; transform:translateX(20px)}}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ===== 左侧导航 ===== -->
+  <aside class="sidenav" data-od-id="side-nav">
+    <a class="nav-logo" href="/" target="_top">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4C9AFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/>
+        <path d="M12 8v5M9.5 10.5h5"/>
+      </svg>
+      <span><span class="t1">无人机低空智慧调度平台</span><br><span class="t2">公安交管 · 低空巡检</span></span>
+    </a>
+    <nav class="nav-menu">
+      <a class="nav-item" href="/screen-overview.html" target="_top" data-od-id="nav-screen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        态势一张图
+      </a>
+      <a class="nav-item" href="/dispatch-tasks.html" target="_top" data-od-id="nav-dispatch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 5l1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
+        任务调度
+      </a>
+      <a class="nav-item" href="/alert-workbench.html" target="_top" data-od-id="nav-alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+        告警线索
+      </a>
+      <a class="nav-item" href="/stats-ledger.html" target="_top" data-od-id="nav-ledger">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        台账统计
+      </a>
+      <a class="nav-item" href="/resource-management.html" target="_top" data-od-id="nav-resource">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        资源管理
+      </a>
+      <a class="nav-item active" href="/system-management.html" target="_top" data-od-id="nav-system">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg>
+        系统管理
+      </a>
+    </nav>
+    <div class="nav-foot">v1.0 · 数据均为演示示例<br>数据日期 2026-09-07</div>
+  </aside>
+
+  <!-- ===== 主列 ===== -->
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <div class="crumb">系统管理<span class="sep">/</span><b>总览</b></div>
+      <div class="top-right">
+        <div class="top-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" placeholder="全局搜索" aria-label="全局搜索">
+        </div>
+        <button class="bell" aria-label="告警通知" id="bell-btn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span class="badge num">5</span>
+        </button>
+        <span class="top-time num" id="top-clock">--:--</span>
+        <span class="top-user"><span class="avatar">王</span>王警官</span>
+      </div>
+    </header>
+
+    <!-- ===== 模块二级导航 ===== -->
+    <nav class="subnav" data-od-id="system-subnav" aria-label="系统管理二级导航">
+      <a class="on" href="/system-management.html" target="_top" aria-current="page">总览</a>
+      <a href="/system-org.html" target="_top" data-od-id="subnav-org">组织与人员</a>
+      <a href="/system-roles.html" target="_top" data-od-id="subnav-roles">角色权限</a>
+      <a href="/system-config.html" target="_top" data-od-id="subnav-config">平台配置</a>
+      <a href="/system-logs.html" target="_top" data-od-id="subnav-logs">操作日志</a>
+    </nav>
+
+    <div class="content">
+      <div class="page-head" data-od-id="page-head">
+        <div>
+          <h1>系统管理总览</h1>
+          <p class="sub">黔南布依族苗族自治州 · 组织账号、角色权限、平台配置与日志审计一览（数据均为演示示例）</p>
+        </div>
+      </div>
+
+      <!-- ===== 指标卡 ===== -->
+      <div class="metric-grid" data-od-id="overview-metrics">
+        <div class="metric-card" data-od-id="metric-staff">
+          <span class="mi mi-blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20a7.5 7.5 0 0115 0"/></svg></span>
+          <span><span class="mk">在编人员</span><br><span class="mv num">128</span><span class="mu">人</span></span>
+        </div>
+        <div class="metric-card" data-od-id="metric-roles">
+          <span class="mi mi-navy"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/><path d="M9 12l2 2 4-4"/></svg></span>
+          <span><span class="mk">系统角色</span><br><span class="mv num">6</span><span class="mu">个</span></span>
+        </div>
+        <div class="metric-card" data-od-id="metric-config">
+          <span class="mi mi-green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg></span>
+          <span><span class="mk">启用配置项</span><br><span class="mv num">18</span><span class="mu">/ 22 项</span></span>
+        </div>
+        <div class="metric-card" data-od-id="metric-logs">
+          <span class="mi mi-yellow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8l-5-5z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
+          <span><span class="mk">今日操作日志</span><br><span class="mv num">47</span><span class="mu">条</span></span>
+        </div>
+      </div>
+
+      <!-- ===== 模块导航卡 ===== -->
+      <div class="mod-grid" data-od-id="module-nav-grid">
+        <a class="mod-card" href="/system-org.html" target="_top" data-od-id="mod-card-org">
+          <div class="mc-head">
+            <span class="mc-icon mi-blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 19a6.5 6.5 0 0113 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16 13.2a5.4 5.4 0 015.5 5.3"/></svg></span>
+            <span class="mc-name">组织与人员</span>
+          </div>
+          <p class="mc-desc">维护州局及 12 县市大队组织架构、在编账号与登录状态。</p>
+          <div class="mc-nums">
+            <span class="n"><span class="nv num">128</span><span class="nk">在编人员</span></span>
+            <span class="n"><span class="nv num">13</span><span class="nk">覆盖单位</span></span>
+            <span class="n"><span class="nv num">121</span><span class="nk">启用账号</span></span>
+          </div>
+          <span class="mc-go">进入管理 →</span>
+        </a>
+        <a class="mod-card" href="/system-roles.html" target="_top" data-od-id="mod-card-roles">
+          <div class="mc-head">
+            <span class="mc-icon mi-navy"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/><path d="M9 12l2 2 4-4"/></svg></span>
+            <span class="mc-name">角色权限</span>
+          </div>
+          <p class="mc-desc">配置角色与各业务模块的操作权限，矩阵化勾选即时生效。</p>
+          <div class="mc-nums">
+            <span class="n"><span class="nv num">6</span><span class="nk">系统角色</span></span>
+            <span class="n"><span class="nv num">6</span><span class="nk">权限模块</span></span>
+            <span class="n"><span class="nv num">128</span><span class="nk">已授权账号</span></span>
+          </div>
+          <span class="mc-go">进入管理 →</span>
+        </a>
+        <a class="mod-card" href="/system-config.html" target="_top" data-od-id="mod-card-config">
+          <div class="mc-head">
+            <span class="mc-icon mi-green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg></span>
+            <span class="mc-name">平台配置</span>
+          </div>
+          <p class="mc-desc">管理高德底图接入、AI 识别阈值、告警升级规则与通知渠道。</p>
+          <div class="mc-nums">
+            <span class="n"><span class="nv num">22</span><span class="nk">配置项</span></span>
+            <span class="n"><span class="nv num">18</span><span class="nk">已启用</span></span>
+            <span class="n"><span class="nv num">3</span><span class="nk">通知渠道</span></span>
+          </div>
+          <span class="mc-go">进入管理 →</span>
+        </a>
+        <a class="mod-card" href="/system-logs.html" target="_top" data-od-id="mod-card-logs">
+          <div class="mc-head">
+            <span class="mc-icon mi-yellow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8l-5-5z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
+            <span class="mc-name">操作日志</span>
+          </div>
+          <p class="mc-desc">审计全平台账号操作行为，支持多维筛选与 CSV 导出。</p>
+          <div class="mc-nums">
+            <span class="n"><span class="nv num">47</span><span class="nk">今日新增</span></span>
+            <span class="n"><span class="nv num">2,316</span><span class="nk">累计条数</span></span>
+            <span class="n"><span class="nv num">0</span><span class="nk">今日失败</span></span>
+          </div>
+          <span class="mc-go">进入管理 →</span>
+        </a>
+      </div>
+
+      <!-- ===== 最近操作 + 平台运行状态 ===== -->
+      <div class="overview-grid">
+        <section class="panel" data-od-id="recent-logs-panel" aria-label="最近操作">
+          <div class="panel-head">
+            <span class="panel-title">最近操作</span>
+            <a class="panel-link" href="/system-logs.html" target="_top" data-od-id="link-all-logs">查看全部日志 →</a>
+          </div>
+          <div class="log-list">
+            <div class="log-item">
+              <span class="lt num">14:32</span><span class="lo">王警官</span>
+              <span class="la">更新平台配置：AI 识别「违停」置信度阈值 0.75 → 0.80</span>
+              <span class="badge b-online"><i></i>成功</span>
+            </div>
+            <div class="log-item">
+              <span class="lt num">13:58</span><span class="lo">李秀英</span>
+              <span class="la">新增人员：独山县交管大队 · 莫建军（线索研判员）</span>
+              <span class="badge b-online"><i></i>成功</span>
+            </div>
+            <div class="log-item">
+              <span class="lt num">11:47</span><span class="lo">陈国华</span>
+              <span class="la">调整角色权限：数据分析师开放「台账统计 · 导出」权限</span>
+              <span class="badge b-warn"><i></i>变更</span>
+            </div>
+            <div class="log-item">
+              <span class="lt num">10:26</span><span class="lo">王警官</span>
+              <span class="la">停用账号：罗甸县交管大队 · 罗正强（长期未登录）</span>
+              <span class="badge b-warn"><i></i>变更</span>
+            </div>
+            <div class="log-item">
+              <span class="lt num">09:52</span><span class="lo">杨胜兰</span>
+              <span class="la">开启通知渠道：告警升级时短信同步值班领导</span>
+              <span class="badge b-online"><i></i>成功</span>
+            </div>
+            <div class="log-item">
+              <span class="lt num">08:15</span><span class="lo">系统</span>
+              <span class="la">每日巡检：高德底图连通性检测失败 1 次，已自动重试恢复</span>
+              <span class="badge b-fail"><i></i>异常</span>
+            </div>
+          </div>
+          <div class="log-foot">
+            <a class="panel-link" href="/system-logs.html" target="_top" data-od-id="link-all-logs-bottom">查看全部日志 →</a>
+          </div>
+        </section>
+
+        <section class="panel" data-od-id="platform-status-panel" aria-label="平台运行状态">
+          <div class="panel-head">
+            <span class="panel-title">平台运行状态</span>
+            <span class="badge b-online"><i></i>整体正常</span>
+          </div>
+          <div class="status-list">
+            <div class="status-item" data-od-id="status-service">
+              <span class="dot"></span>
+              <span class="s-name">平台核心服务</span>
+              <span class="s-desc">调度、告警、台账服务运行正常</span>
+              <span class="badge b-online"><i></i>正常</span>
+            </div>
+            <div class="status-item" data-od-id="status-ai">
+              <span class="dot"></span>
+              <span class="s-name">AI 识别服务</span>
+              <span class="s-desc">违停 / 事故 / 占道识别模型在线</span>
+              <span class="badge b-online"><i></i>在线</span>
+            </div>
+            <div class="status-item" data-od-id="status-map">
+              <span class="dot"></span>
+              <span class="s-name">高德底图</span>
+              <span class="s-desc">JS API 已接入，指挥大屏加载正常</span>
+              <span class="badge b-online"><i></i>已接入</span>
+            </div>
+            <div class="status-item" data-od-id="status-notify">
+              <span class="dot"></span>
+              <span class="s-name">通知通道</span>
+              <span class="s-desc">短信 / 政务微信 / 站内信全部可用</span>
+              <span class="badge b-online"><i></i>正常</span>
+            </div>
+          </div>
+          <div class="log-foot">
+            <span class="table-info">状态每 5 分钟自动巡检（演示为前端模拟）</span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ===== 顶部时钟 ===== */
+  var clock = document.getElementById('top-clock');
+  function pad(n){ return n < 10 ? '0' + n : '' + n; }
+  function tick(){
+    var d = new Date();
+    clock.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  /* ===== Toast ===== */
+  var toastBox = document.getElementById('toast-box');
+  function toast(msg, type){
+    var el = document.createElement('div');
+    el.className = 'toast' + (type ? ' ' + type : '');
+    el.textContent = msg;
+    toastBox.appendChild(el);
+    setTimeout(function(){
+      el.classList.add('hide');
+      el.addEventListener('animationend', function(){ el.remove(); }, { once:true });
+    }, 2600);
+  }
+
+  /* ===== 顶部通知 ===== */
+  document.getElementById('bell-btn').addEventListener('click', function(){
+    toast('您有 5 条未读告警通知，请前往「告警线索」处理', 'warn');
+  });
+
+  /* ===== 全局搜索（前端模拟） ===== */
+  var searchInput = document.querySelector('.top-search input');
+  searchInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      var kw = searchInput.value.trim();
+      if(!kw){ toast('请输入搜索关键词', 'warn'); return; }
+      toast('已检索「' + kw + '」，演示环境暂无匹配结果');
+    }
+  });
+})();
+</script>
+</body>
+</html>

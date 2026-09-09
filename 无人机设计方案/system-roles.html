@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>角色权限 · 系统管理 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#1A2333; --muted:#5A6B85; --border:#E2E8F2;
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit; font-size:inherit}
+a{color:var(--blue-600); text-decoration:none}
+:focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:2px}
+::placeholder{color:#9AA9C2}
+
+/* ===== 左侧深色导航 ===== */
+.layout{display:flex; min-height:100vh}
+.sidenav{width:232px; flex:none; background:var(--navy-900); color:#EAF1FB; display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh}
+.nav-logo{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid rgba(76,154,255,.18); color:#EAF1FB}
+.nav-logo:hover{background:rgba(76,154,255,.08)}
+.nav-logo .t1{font-size:15px; font-weight:700; letter-spacing:1px}
+.nav-logo .t2{font-size:11px; color:#8FA3C4; margin-top:2px}
+.nav-menu{padding:12px 10px; display:flex; flex-direction:column; gap:2px}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px;
+  font-size:14px; color:#B9C8E0; transition:background .15s,color .15s}
+.nav-item:hover{background:rgba(76,154,255,.12); color:#EAF1FB}
+.nav-item.active{background:var(--blue-600); color:#fff; font-weight:600}
+.nav-item svg{flex:none}
+.nav-foot{margin-top:auto; padding:14px 16px; font-size:11px; color:#5E7295; border-top:1px solid rgba(76,154,255,.14); line-height:1.7}
+
+/* ===== 主列 ===== */
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+.topbar{height:56px; flex:none; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:20}
+.crumb{font-size:14px; color:var(--muted)}
+.crumb b{color:var(--fg); font-weight:600}
+.crumb .sep{margin:0 8px; color:#C3CEDF}
+.top-right{display:flex; align-items:center; gap:18px}
+.top-search{display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border);
+  border-radius:6px; padding:0 10px; height:32px; width:220px; color:var(--muted)}
+.top-search input{border:none; background:none; outline:none; flex:1; font-size:13px; color:var(--fg); font-family:inherit}
+.bell{position:relative; width:34px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.bell:hover{background:var(--bg); color:var(--fg)}
+.bell .badge{position:absolute; top:2px; right:2px; min-width:16px; height:16px; border-radius:8px; background:var(--alert-red);
+  color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-weight:600}
+.top-time{font-size:13px; color:var(--muted)}
+.top-user{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg)}
+.top-user .avatar{width:30px; height:30px; border-radius:50%; background:var(--navy-700); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600}
+
+/* ===== 模块二级导航（药丸式） ===== */
+.subnav{display:flex; gap:6px; padding:10px 24px; background:var(--surface); border-bottom:1px solid var(--border);
+  position:sticky; top:56px; z-index:15; overflow-x:auto}
+.subnav a{display:inline-flex; align-items:center; height:30px; padding:0 14px; border-radius:15px;
+  font-size:13px; color:var(--muted); border:1px solid transparent; transition:background .15s,color .15s,border-color .15s; white-space:nowrap}
+.subnav a:hover{color:var(--fg); background:#EEF3FA}
+.subnav a.on{background:var(--navy-700); color:#fff; font-weight:600}
+.subnav a.on:hover{background:var(--navy-700); color:#fff}
+
+/* ===== 内容区 ===== */
+.content{flex:1; padding:20px 24px 32px; min-width:0}
+.page-head{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap}
+.page-head h1{font-size:20px; font-weight:700; line-height:1.4}
+.page-head .sub{font-size:12px; color:var(--muted); margin-top:3px}
+.seg{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden}
+.seg button{height:34px; padding:0 16px; font-size:13px; color:var(--muted); transition:background .15s,color .15s}
+.seg button:hover{color:var(--fg); background:#EEF3FA}
+.seg button.on{background:var(--navy-700); color:#fff; font-weight:600}
+
+.toolbar{display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap}
+.select, .input{height:34px; border:1px solid var(--border); border-radius:6px; background:var(--surface);
+  font-size:13px; color:var(--fg); padding:0 10px; font-family:inherit; transition:border-color .15s}
+.select:hover, .input:hover{border-color:#C7D3E6}
+.select:focus, .input:focus{outline:none; border-color:var(--blue-600); box-shadow:0 0 0 2px rgba(31,111,235,.15)}
+.input{width:220px}
+.btn{height:34px; padding:0 14px; border-radius:6px; font-size:13px; display:inline-flex; align-items:center; gap:6px;
+  transition:all .15s; border:1px solid transparent}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{background:var(--blue-600); color:#fff; font-weight:600}
+.btn-primary:hover{background:#1A63D4}
+.btn-outline{border-color:var(--border); color:var(--fg); background:var(--surface)}
+.btn-outline:hover{border-color:var(--blue-600); color:var(--blue-600); background:#F2F7FF}
+.btn-danger-ghost{border-color:var(--border); color:var(--alert-red); background:var(--surface)}
+.btn-danger-ghost:hover{border-color:var(--alert-red); background:#FDEDED}
+.btn-danger-ghost.confirming{background:var(--alert-red); border-color:var(--alert-red); color:#fff}
+.spacer{flex:1}
+
+/* ===== 指标卡 ===== */
+.metric-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px}
+.metric-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+  display:flex; align-items:center; gap:12px; transition:box-shadow .15s, border-color .15s}
+.metric-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.metric-card .mi{width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none}
+.metric-card .mk{font-size:12px; color:var(--muted)}
+.metric-card .mv{font-size:24px; font-weight:700; line-height:1.3}
+.metric-card .mu{font-size:11px; color:var(--muted); font-weight:400; margin-left:3px}
+.mi-blue{background:#E8F1FF; color:var(--blue-600)}
+.mi-green{background:#E6F6EE; color:var(--safe-green)}
+.mi-navy{background:#E4EDFF; color:var(--navy-700)}
+.mi-yellow{background:#FFF3E3; color:var(--warn-orange)}
+
+/* ===== 表格 ===== */
+.table-tools{display:flex; align-items:center; gap:12px; margin-bottom:10px; min-height:34px}
+.table-info{font-size:13px; color:var(--muted)}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto}
+table{width:100%; border-collapse:collapse; min-width:960px}
+th{font-size:12px; color:var(--muted); font-weight:600; text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); background:#F8FAFD; white-space:nowrap}
+td{font-size:13px; padding:10px 12px; border-bottom:1px solid #EEF2F8; white-space:nowrap; line-height:1.45}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:#F7FAFF}
+tbody tr:last-child td{border-bottom:none}
+td.ell{max-width:220px; overflow:hidden; text-overflow:ellipsis}
+.empty-row td{text-align:center; color:var(--muted); padding:34px 12px; font-size:13px}
+.badge{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:11px; font-size:12px; font-weight:600}
+.badge i{width:6px; height:6px; border-radius:50%; display:inline-block}
+.b-online{background:#E6F6EE; color:var(--safe-green)} .b-online i{background:var(--safe-green)}
+.b-offline{background:#EEF2F8; color:var(--muted)} .b-offline i{background:#8FA3C4}
+.b-warn{background:#FFF3E3; color:#B25E09} .b-warn i{background:var(--caution-yellow)}
+.b-fail{background:#FDECEC; color:var(--alert-red)} .b-fail i{background:var(--alert-red)}
+.tag{display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:3px; font-size:11px; font-weight:600; flex:none}
+.tag-sensor{background:#E8F1FF; color:var(--blue-600)}
+.tag-green{background:#E6F6EE; color:var(--safe-green)}
+.tag-orange{background:#FFF3E3; color:#B25E09}
+.op-link{font-size:13px; color:var(--blue-600); padding:2px 4px; border-radius:3px}
+.op-link:hover{background:#EEF4FF}
+.op-link.danger{color:var(--alert-red)}
+.op-link.danger:hover{background:#FDEDED}
+
+/* ===== 角色卡片 ===== */
+.role-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:18px}
+.role-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+  display:flex; flex-direction:column; gap:10px; transition:box-shadow .15s, border-color .15s}
+.role-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.rc-top{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.rc-name{font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px}
+.rc-count{font-size:11px; color:var(--muted)}
+.rc-desc{font-size:12px; color:var(--muted); line-height:1.6; min-height:38px}
+.rc-tags{display:flex; flex-wrap:wrap; gap:6px}
+.rc-stats{display:flex; gap:16px; font-size:12px; color:var(--muted)}
+.rc-stats b{color:var(--fg); font-size:15px; margin-right:3px}
+.rc-foot{display:flex; align-items:center; justify-content:space-between; gap:8px; border-top:1px dashed var(--border); padding-top:10px}
+.rc-active{font-size:12px; color:var(--muted); display:flex; align-items:center; gap:5px}
+.rc-active i{width:6px; height:6px; border-radius:50%; background:var(--safe-green); display:inline-block}
+.rc-active b{color:var(--safe-green)}
+
+/* ===== 权限矩阵 ===== */
+.perm-mini{display:inline-flex; align-items:center; gap:3px; margin-right:10px; font-size:12px; color:var(--muted); cursor:pointer; white-space:nowrap}
+.perm-mini:last-child{margin-right:0}
+.perm-mini input{accent-color:var(--blue-600); width:14px; height:14px; cursor:pointer; margin:0}
+td.perm-cell{white-space:normal}
+#perm-matrix th.mod-h{text-align:center; border-left:1px solid var(--border); font-size:13px; color:var(--fg)}
+#perm-matrix th.sub-h{text-align:center; font-weight:400; padding:6px 8px; border-left:1px dashed #EEF2F8}
+#perm-matrix td.perm-cell{text-align:center; border-left:1px dashed #EEF2F8; padding:8px}
+.pm-dot{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; font-size:12px}
+.pm-full{background:#E8F1FF; color:var(--blue-600); font-weight:700}
+.pm-none{background:#F1F4F9; color:#B4C1D6}
+.pm-role{font-weight:600}
+.pm-role .tag{margin-left:6px}
+.matrix-legend{display:flex; align-items:center; gap:16px; font-size:12px; color:var(--muted)}
+
+/* ===== 开关 ===== */
+.switch{position:relative; width:38px; height:20px; flex:none; display:inline-block}
+.switch input{position:absolute; inset:0; width:100%; height:100%; opacity:0; margin:0; cursor:pointer}
+.switch .tr{position:absolute; inset:0; border-radius:10px; background:#CBD5E4; transition:background .15s; pointer-events:none}
+.switch .tr::after{content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+  background:#fff; transition:left .15s; box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch input:checked + .tr{background:var(--blue-600)}
+.switch input:checked + .tr::after{left:20px}
+.switch input:focus-visible + .tr{outline:2px solid var(--blue-600); outline-offset:2px}
+
+/* ===== 抽屉 ===== */
+.mask{position:fixed; inset:0; background:rgba(11,27,51,.45); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s}
+.mask.open{opacity:1; pointer-events:auto}
+.drawer{position:fixed; top:0; right:0; width:560px; max-width:94vw; height:100vh; background:var(--surface); z-index:50;
+  box-shadow:-8px 0 28px rgba(11,27,51,.18); transform:translateX(100%); transition:transform .25s ease;
+  display:flex; flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer-head{flex:none; display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border)}
+.drawer-head h3{font-size:16px}
+.x-btn{width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.x-btn:hover{background:var(--bg); color:var(--fg)}
+.drawer-body{flex:1; overflow-y:auto; padding:20px}
+.drawer-foot{flex:none; display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+.sec-t{font-size:13px; font-weight:600; margin:20px 0 10px; display:flex; align-items:center; gap:6px}
+.sec-t:first-child{margin-top:0}
+.sec-t::before{content:""; width:3px; height:12px; border-radius:2px; background:var(--blue-600)}
+.sum-list{border:1px solid var(--border); border-radius:8px; overflow:hidden}
+.sum-row{display:flex; font-size:13px; padding:10px 14px; border-bottom:1px solid #EEF2F8}
+.sum-row:last-child{border-bottom:none}
+.sum-row .k{width:96px; color:var(--muted); flex:none}
+.perm-edit-row{display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 12px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px; font-size:13px}
+.perm-edit-row .m-name{font-weight:600}
+
+/* ===== 抽屉权限树 ===== */
+.drawer-tools{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+.drawer-tools .table-info{font-size:12px}
+.perm-group{border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden}
+.perm-group-head{display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 14px; background:#F8FAFD; border-bottom:1px solid var(--border)}
+.perm-group-head .g-name{font-size:13px; font-weight:600}
+.perm-group-head .g-cnt{font-size:11px; color:var(--muted); margin-left:8px; font-weight:400}
+.perm-items{padding:8px 14px 10px; display:grid; grid-template-columns:1fr 1fr; gap:4px 14px}
+.perm-item{display:flex; align-items:center; gap:7px; font-size:13px; padding:5px 2px; border-radius:4px; cursor:pointer}
+.perm-item:hover{background:#F2F7FF}
+.perm-item input{accent-color:var(--blue-600); width:14px; height:14px; cursor:pointer; margin:0; flex:none}
+.perm-item .tier{font-size:10px; color:var(--muted); margin-left:auto; flex:none}
+
+/* ===== Toast ===== */
+#toast-box{position:fixed; top:20px; right:20px; z-index:99; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--navy-800); border:1px solid var(--blue-400); border-left:4px solid var(--blue-400); color:#EAF1FB;
+  border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  animation:toastIn .2s ease-out; max-width:340px; line-height:1.5}
+.toast.warn{border-color:var(--warn-orange); border-left-color:var(--warn-orange)}
+.toast.err{border-color:var(--alert-red); border-left-color:var(--alert-red)}
+.toast.ok{border-color:var(--safe-green); border-left-color:var(--safe-green)}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0; transform:translateX(20px)}to{opacity:1; transform:none}}
+@keyframes toastOut{to{opacity:0; transform:translateX(20px)}}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ===== 左侧导航 ===== -->
+  <aside class="sidenav" data-od-id="side-nav">
+    <a class="nav-logo" href="/" target="_top">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4C9AFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/>
+        <path d="M12 8v5M9.5 10.5h5"/>
+      </svg>
+      <span><span class="t1">无人机低空智慧调度平台</span><br><span class="t2">公安交管 · 低空巡检</span></span>
+    </a>
+    <nav class="nav-menu">
+      <a class="nav-item" href="/screen-overview.html" target="_top" data-od-id="nav-screen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        态势一张图
+      </a>
+      <a class="nav-item" href="/dispatch-tasks.html" target="_top" data-od-id="nav-dispatch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 5l1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
+        任务调度
+      </a>
+      <a class="nav-item" href="/alert-workbench.html" target="_top" data-od-id="nav-alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+        告警线索
+      </a>
+      <a class="nav-item" href="/stats-ledger.html" target="_top" data-od-id="nav-ledger">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        台账统计
+      </a>
+      <a class="nav-item" href="/resource-management.html" target="_top" data-od-id="nav-resource">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        资源管理
+      </a>
+      <a class="nav-item active" href="/system-management.html" target="_top" data-od-id="nav-system">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg>
+        系统管理
+      </a>
+    </nav>
+    <div class="nav-foot">v1.0 · 数据均为演示示例<br>数据日期 2026-09-07</div>
+  </aside>
+
+  <!-- ===== 主列 ===== -->
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <div class="crumb">系统管理<span class="sep">/</span><b>角色权限</b></div>
+      <div class="top-right">
+        <div class="top-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" placeholder="全局搜索" aria-label="全局搜索">
+        </div>
+        <button class="bell" aria-label="告警通知" id="bell-btn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span class="badge num">5</span>
+        </button>
+        <span class="top-time num" id="top-clock">--:--</span>
+        <span class="top-user"><span class="avatar">王</span>王警官</span>
+      </div>
+    </header>
+
+    <!-- ===== 系统管理二级导航 ===== -->
+    <nav class="subnav" data-od-id="system-subnav" aria-label="系统管理二级导航">
+      <a href="/system-management.html" target="_top" data-od-id="subnav-overview">总览</a>
+      <a href="/system-org.html" target="_top" data-od-id="subnav-org">组织与人员</a>
+      <a class="on" href="/system-roles.html" target="_top" data-od-id="subnav-roles" aria-current="page">角色权限</a>
+      <a href="/system-config.html" target="_top" data-od-id="subnav-config">平台配置</a>
+      <a href="/system-logs.html" target="_top" data-od-id="subnav-logs">操作日志</a>
+    </nav>
+
+    <div class="content">
+      <div class="page-head" data-od-id="page-head">
+        <div>
+          <h1>角色权限</h1>
+          <p class="sub">黔南布依族苗族自治州 · 全州统一角色体系与模块授权（数据均为演示示例，保存为前端模拟）</p>
+        </div>
+        <span class="table-info">权限变更即时写入操作日志</span>
+      </div>
+
+      <!-- ===== 角色卡片网格 ===== -->
+      <div class="role-grid" data-od-id="role-grid" id="role-grid"></div>
+
+      <!-- ===== 权限矩阵 ===== -->
+      <div class="table-tools" data-od-id="matrix-tools">
+        <span class="table-info">权限矩阵（角色 × 模块，只读展示；修改请点卡片「编辑权限」）</span>
+        <span class="spacer"></span>
+        <div class="matrix-legend">
+          <span><span class="pm-dot pm-full">✓</span> 已授予</span>
+          <span><span class="pm-dot pm-none">○</span> 未授予</span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table data-od-id="perm-matrix" id="perm-matrix"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 角色权限编辑抽屉 ===== -->
+<div class="mask" id="drawer-mask"></div>
+<aside class="drawer" id="perm-drawer" data-od-id="perm-drawer" aria-label="编辑角色权限">
+  <div class="drawer-head">
+    <h3 id="drawer-title">编辑权限</h3>
+    <button class="x-btn" id="drawer-close" aria-label="关闭">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-tools" data-od-id="drawer-tools">
+      <button class="btn btn-outline" id="btn-check-all" data-od-id="btn-check-all">全选</button>
+      <button class="btn btn-danger-ghost" id="btn-clear-all" data-od-id="btn-clear-all">清空</button>
+      <span class="spacer"></span>
+      <span class="table-info">已选 <b class="num" id="checked-count">0</b> 项权限点</span>
+    </div>
+    <div id="perm-tree"></div>
+    <div class="hint" style="font-size:12px;color:var(--muted)">勾选后点击「保存权限」生效；权限级别按 查看 → 操作 → 管理 递进判定。</div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-outline" id="drawer-cancel">取消</button>
+    <button class="btn btn-primary" id="drawer-save" data-od-id="btn-perm-save">保存权限</button>
+  </div>
+</aside>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+
+<script>
+"use strict";
+/* ===== 模块与权限点定义（tier：1 查看 / 2 操作 / 3 管理） ===== */
+const MODULES = [
+  { key:"screen",   name:"低空运行态势", points:[
+    { key:"screen-view",   name:"查看大屏态势", tier:1 },
+    { key:"screen-layer",  name:"切换图层与历史回放", tier:2 },
+    { key:"screen-layout", name:"大屏布局配置", tier:3 } ] },
+  { key:"dispatch", name:"任务调度", points:[
+    { key:"dispatch-view",   name:"查看任务", tier:1 },
+    { key:"dispatch-create", name:"创建下发", tier:2 },
+    { key:"dispatch-route",  name:"调整计划航线", tier:2 },
+    { key:"dispatch-cancel", name:"取消任务", tier:2 },
+    { key:"dispatch-tpl",    name:"任务模板管理", tier:3 } ] },
+  { key:"alert",    name:"告警处置", points:[
+    { key:"alert-view",  name:"查看告警", tier:1 },
+    { key:"alert-handle",name:"认领处置", tier:2 },
+    { key:"alert-false", name:"误报标记", tier:2 },
+    { key:"alert-rule",  name:"告警规则配置", tier:3 } ] },
+  { key:"ledger",   name:"台账统计", points:[
+    { key:"ledger-view",   name:"查看台账", tier:1 },
+    { key:"ledger-export", name:"导出报表", tier:2 },
+    { key:"ledger-caliber",name:"统计口径配置", tier:3 } ] },
+  { key:"resource", name:"资源管理", points:[
+    { key:"resource-view",  name:"查看资源", tier:1 },
+    { key:"resource-maint", name:"设备登记维护", tier:2 },
+    { key:"resource-deploy",name:"机库机场调配", tier:3 } ] },
+  { key:"system",   name:"系统管理", points:[
+    { key:"system-view",  name:"查看组织与日志", tier:1 },
+    { key:"system-staff", name:"人员与角色维护", tier:2 },
+    { key:"system-cfg",   name:"平台参数配置", tier:3 } ] },
+];
+const ALL_KEYS = MODULES.flatMap(m => m.points.map(p => p.key));
+const TIER_NAMES = { 1:"查看", 2:"操作", 3:"管理" };
+
+/* ===== 角色数据（与系统管理现有设定保持一致） ===== */
+const ROLES = [
+  { id:"admin",      name:"系统管理员", builtin:true,  members:2,  active7d:2,
+    desc:"内置最高权限角色，负责平台参数、账号与角色体系维护，不可编辑。",
+    perms:new Set(ALL_KEYS) },
+  { id:"commander",  name:"指挥长", builtin:false, members:4,  active7d:3,
+    desc:"州局带班领导（都匀），统筹全州低空巡检指挥，可跨模块查看并审批调度与处置。",
+    perms:new Set(["screen-view","screen-layer","dispatch-view","dispatch-route","alert-view","alert-handle","ledger-view","ledger-export","resource-view","system-view"]) },
+  { id:"dispatcher", name:"调度员", builtin:false, members:12, active7d:9,
+    desc:"州局及各县市大队值班调度，负责巡检任务创建下发、计划航线调整与异常取消。",
+    perms:new Set(["screen-view","dispatch-view","dispatch-create","dispatch-route","dispatch-cancel","alert-view","resource-view"]) },
+  { id:"handler",    name:"线索研判员", builtin:false, members:18, active7d:14,
+    desc:"一线告警处置力量，负责告警认领、现场核查反馈与误报标记。",
+    perms:new Set(["screen-view","alert-view","alert-handle","alert-false","ledger-view"]) },
+  { id:"analyst",    name:"分析员", builtin:false, members:6,  active7d:5,
+    desc:"负责巡检数据统计分析、台账导出与专题研判，支撑领导决策。",
+    perms:new Set(["screen-view","screen-layer","alert-view","ledger-view","ledger-export"]) },
+  { id:"viewer",     name:"态势查看者", builtin:false, members:23, active7d:11,
+    desc:"面向县市大队相关人员的只读账号，可查看各模块数据，无任何操作权限。",
+    perms:new Set(["screen-view","dispatch-view","alert-view","ledger-view","resource-view","system-view"]) },
+];
+
+/* ===== 工具 ===== */
+const $ = s => document.querySelector(s);
+function toast(msg, type){
+  const box = $("#toast-box");
+  const el = document.createElement("div");
+  el.className = "toast" + (type ? " " + type : "");
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add("hide"); setTimeout(() => el.remove(), 260); }, 2600);
+}
+function permCount(role){ return role.perms.size; }
+function moduleLevel(role, mod){
+  let lv = 0;
+  mod.points.forEach(p => { if (role.perms.has(p.key)) lv = Math.max(lv, p.tier); });
+  return lv;
+}
+
+/* ===== 角色卡片 ===== */
+function renderRoles(){
+  const grid = $("#role-grid");
+  grid.innerHTML = "";
+  ROLES.forEach(role => {
+    const cnt = permCount(role);
+    const card = document.createElement("div");
+    card.className = "role-card";
+    card.setAttribute("data-od-id", "role-card-" + role.id);
+    const grantedMods = MODULES.filter(m => moduleLevel(role, m) > 0).map(m => m.name);
+    card.innerHTML = `
+      <div class="rc-top">
+        <span class="rc-name">${role.name}${role.builtin ? '<span class="tag tag-orange">内置角色</span>' : ""}</span>
+        <span class="rc-count num">成员 ${role.members} 人</span>
+      </div>
+      <p class="rc-desc">${role.desc}</p>
+      <div class="rc-tags">
+        ${cnt === 0 ? '<span class="tag tag-orange">未授予任何权限</span>'
+          : grantedMods.map(n => `<span class="tag tag-sensor">${n}</span>`).join("")}
+      </div>
+      <div class="rc-stats">
+        <span><b class="num">${cnt}</b>项权限点</span>
+        <span><b class="num">${grantedMods.length}</b>个模块</span>
+      </div>
+      <div class="rc-foot">
+        <span class="rc-active"><i></i>近 7 天活跃 <b class="num">${role.active7d}</b> 人</span>
+        ${role.builtin
+          ? '<button class="btn btn-outline" disabled title="内置角色不可编辑">不可编辑</button>'
+          : `<button class="btn btn-primary btn-edit-perm" data-role="${role.id}" data-od-id="btn-edit-${role.id}">编辑权限</button>`}
+      </div>`;
+    grid.appendChild(card);
+  });
+  grid.querySelectorAll(".btn-edit-perm").forEach(btn => {
+    btn.addEventListener("click", () => openDrawer(btn.dataset.role));
+  });
+}
+
+/* ===== 权限矩阵 ===== */
+function renderMatrix(){
+  const tbl = $("#perm-matrix");
+  let html = `<thead>
+    <tr><th rowspan="2">角色</th>${MODULES.map(m => `<th class="mod-h" colspan="3">${m.name}</th>`).join("")}</tr>
+    <tr>${MODULES.map(() => `<th class="sub-h">查看</th><th class="sub-h">操作</th><th class="sub-h">管理</th>`).join("")}</tr>
+  </thead><tbody>`;
+  ROLES.forEach(role => {
+    html += `<tr><td class="pm-role">${role.name}${role.builtin ? '<span class="tag tag-orange">内置</span>' : ""}</td>`;
+    MODULES.forEach(m => {
+      const lv = moduleLevel(role, m);
+      for (let t = 1; t <= 3; t++){
+        html += `<td class="perm-cell">${lv >= t
+          ? '<span class="pm-dot pm-full" title="已授予">✓</span>'
+          : '<span class="pm-dot pm-none" title="未授予">○</span>'}</td>`;
+      }
+    });
+    html += "</tr>";
+  });
+  html += "</tbody>";
+  tbl.innerHTML = html;
+}
+
+/* ===== 权限编辑抽屉 ===== */
+let editingRole = null;
+let draftPerms = new Set();
+let clearArmed = false, clearTimer = null;
+
+function openDrawer(roleId){
+  const role = ROLES.find(r => r.id === roleId);
+  if (!role || role.builtin) return;
+  editingRole = role;
+  draftPerms = new Set(role.perms);
+  $("#drawer-title").textContent = "编辑权限 · " + role.name;
+  renderPermTree();
+  $("#drawer-mask").classList.add("open");
+  $("#perm-drawer").classList.add("open");
+}
+function hasUnsavedPermissions(){
+  if (!editingRole || editingRole.perms.size !== draftPerms.size) return Boolean(editingRole);
+  return Array.from(editingRole.perms).some(key => !draftPerms.has(key));
+}
+function closeDrawer(force){
+  if (!force && hasUnsavedPermissions() && !window.confirm("当前权限修改尚未保存，确定放弃修改吗？")) return;
+  $("#drawer-mask").classList.remove("open");
+  $("#perm-drawer").classList.remove("open");
+  editingRole = null;
+  disarmClear();
+}
+function updateCheckedCount(){
+  $("#checked-count").textContent = draftPerms.size;
+}
+function renderPermTree(){
+  const tree = $("#perm-tree");
+  tree.innerHTML = "";
+  MODULES.forEach(mod => {
+    const checkedInMod = mod.points.filter(p => draftPerms.has(p.key)).length;
+    const group = document.createElement("div");
+    group.className = "perm-group";
+    group.setAttribute("data-od-id", "perm-group-" + mod.key);
+    group.innerHTML = `
+      <div class="perm-group-head">
+        <span class="g-name">${mod.name}<span class="g-cnt num">${checkedInMod}/${mod.points.length}</span></span>
+        <label class="perm-mini">
+          <input type="checkbox" class="mod-toggle" data-mod="${mod.key}" ${checkedInMod === mod.points.length ? "checked" : ""}>
+          全选本模块
+        </label>
+      </div>
+      <div class="perm-items">
+        ${mod.points.map(p => `
+          <label class="perm-item">
+            <input type="checkbox" class="perm-cb" data-key="${p.key}" ${draftPerms.has(p.key) ? "checked" : ""}>
+            ${p.name}<span class="tier">${TIER_NAMES[p.tier]}</span>
+          </label>`).join("")}
+      </div>`;
+    tree.appendChild(group);
+  });
+  tree.querySelectorAll(".perm-cb").forEach(cb => {
+    cb.addEventListener("change", () => {
+      cb.checked ? draftPerms.add(cb.dataset.key) : draftPerms.delete(cb.dataset.key);
+      refreshGroupState();
+    });
+  });
+  tree.querySelectorAll(".mod-toggle").forEach(tg => {
+    tg.addEventListener("change", () => {
+      const mod = MODULES.find(m => m.key === tg.dataset.mod);
+      mod.points.forEach(p => tg.checked ? draftPerms.add(p.key) : draftPerms.delete(p.key));
+      renderPermTree();
+    });
+  });
+  updateCheckedCount();
+}
+function refreshGroupState(){
+  /* 单项勾选变化后，只更新计数与模块全选状态，不打断焦点 */
+  $("#perm-tree").querySelectorAll(".perm-group").forEach((groupEl, i) => {
+    const mod = MODULES[i];
+    const checkedInMod = mod.points.filter(p => draftPerms.has(p.key)).length;
+    groupEl.querySelector(".g-cnt").textContent = `${checkedInMod}/${mod.points.length}`;
+    groupEl.querySelector(".mod-toggle").checked = checkedInMod === mod.points.length;
+  });
+  updateCheckedCount();
+}
+function disarmClear(){
+  clearArmed = false;
+  clearTimeout(clearTimer);
+  const btn = $("#btn-clear-all");
+  btn.classList.remove("confirming");
+  btn.textContent = "清空";
+}
+
+/* 抽屉按钮事件 */
+$("#btn-check-all").addEventListener("click", () => {
+  ALL_KEYS.forEach(k => draftPerms.add(k));
+  renderPermTree();
+});
+$("#btn-clear-all").addEventListener("click", function(){
+  if (!clearArmed){
+    /* 危险操作二次确认：3 秒内再次点击才执行 */
+    clearArmed = true;
+    this.classList.add("confirming");
+    this.textContent = "确认清空全部权限？";
+    clearTimer = setTimeout(disarmClear, 3000);
+    return;
+  }
+  draftPerms.clear();
+  disarmClear();
+  renderPermTree();
+  toast("已清空勾选，保存后生效", "warn");
+});
+$("#drawer-save").addEventListener("click", () => {
+  if (!editingRole) return;
+  if (draftPerms.size === 0){
+    toast("权限点不能为 0 项，请至少保留一项查看权限", "err");
+    return;
+  }
+  editingRole.perms = new Set(draftPerms);
+  const name = editingRole.name, cnt = editingRole.perms.size;
+  closeDrawer(true);
+  renderRoles();
+  renderMatrix();
+  toast(`「${name}」权限已保存，共 ${cnt} 项权限点`, "ok");
+});
+$("#drawer-cancel").addEventListener("click", () => closeDrawer(true));
+$("#drawer-close").addEventListener("click", () => closeDrawer());
+$("#drawer-mask").addEventListener("click", () => closeDrawer());
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("#perm-drawer").classList.contains("open")) closeDrawer();
+});
+
+/* ===== 顶部时钟与铃铛 ===== */
+function tickClock(){
+  const d = new Date();
+  $("#top-clock").textContent =
+    String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0") + ":" + String(d.getSeconds()).padStart(2,"0");
+}
+tickClock();
+setInterval(tickClock, 1000);
+$("#bell-btn").addEventListener("click", () => toast("当前有 5 条未读告警线索，请前往「告警线索」模块处置", "warn"));
+
+/* ===== 初始化 ===== */
+renderRoles();
+renderMatrix();
+</script>
+</body>
+</html>

@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>组织与人员 · 系统管理 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#1A2333; --muted:#5A6B85; --border:#E2E8F2;
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit; font-size:inherit}
+a{color:var(--blue-600); text-decoration:none}
+:focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:2px}
+::placeholder{color:#9AA9C2}
+
+/* ===== 左侧深色导航 ===== */
+.layout{display:flex; min-height:100vh}
+.sidenav{width:232px; flex:none; background:var(--navy-900); color:#EAF1FB; display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh}
+.nav-logo{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid rgba(76,154,255,.18); color:#EAF1FB}
+.nav-logo:hover{background:rgba(76,154,255,.08)}
+.nav-logo .t1{font-size:15px; font-weight:700; letter-spacing:1px}
+.nav-logo .t2{font-size:11px; color:#8FA3C4; margin-top:2px}
+.nav-menu{padding:12px 10px; display:flex; flex-direction:column; gap:2px}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px;
+  font-size:14px; color:#B9C8E0; transition:background .15s,color .15s}
+.nav-item:hover{background:rgba(76,154,255,.12); color:#EAF1FB}
+.nav-item.active{background:var(--blue-600); color:#fff; font-weight:600}
+.nav-item svg{flex:none}
+.nav-foot{margin-top:auto; padding:14px 16px; font-size:11px; color:#5E7295; border-top:1px solid rgba(76,154,255,.14); line-height:1.7}
+
+/* ===== 主列 ===== */
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+.topbar{height:56px; flex:none; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:20}
+.crumb{font-size:14px; color:var(--muted)}
+.crumb b{color:var(--fg); font-weight:600}
+.crumb .sep{margin:0 8px; color:#C3CEDF}
+.top-right{display:flex; align-items:center; gap:18px}
+.top-search{display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border);
+  border-radius:6px; padding:0 10px; height:32px; width:220px; color:var(--muted)}
+.top-search input{border:none; background:none; outline:none; flex:1; font-size:13px; color:var(--fg); font-family:inherit}
+.bell{position:relative; width:34px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.bell:hover{background:var(--bg); color:var(--fg)}
+.bell .badge{position:absolute; top:2px; right:2px; min-width:16px; height:16px; border-radius:8px; background:var(--alert-red);
+  color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-weight:600}
+.top-time{font-size:13px; color:var(--muted)}
+.top-user{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg)}
+.top-user .avatar{width:30px; height:30px; border-radius:50%; background:var(--navy-700); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600}
+
+/* ===== 内容区 ===== */
+.content{flex:1; padding:20px 24px 32px; min-width:0}
+.page-head{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; flex-wrap:wrap}
+.page-head h1{font-size:20px; font-weight:700; line-height:1.4}
+.page-head .sub{font-size:12px; color:var(--muted); margin-top:3px}
+.seg{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden}
+.seg button{height:34px; padding:0 16px; font-size:13px; color:var(--muted); transition:background .15s,color .15s}
+.seg button:hover{color:var(--fg); background:#EEF3FA}
+.seg button.on{background:var(--navy-700); color:#fff; font-weight:600}
+
+/* ===== 模块内二级导航（药丸式） ===== */
+.subnav{display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap}
+.sub-link{display:inline-flex; align-items:center; height:32px; padding:0 15px; border-radius:16px;
+  border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--muted);
+  transition:background .15s,color .15s,border-color .15s}
+.sub-link:hover{color:var(--fg); border-color:#C7D3E6; background:#F2F7FF}
+.sub-link.on{background:var(--navy-700); border-color:var(--navy-700); color:#fff; font-weight:600}
+
+.toolbar{display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap}
+.select, .input{height:34px; border:1px solid var(--border); border-radius:6px; background:var(--surface);
+  font-size:13px; color:var(--fg); padding:0 10px; font-family:inherit; transition:border-color .15s}
+.select:hover, .input:hover{border-color:#C7D3E6}
+.select:focus, .input:focus{outline:none; border-color:var(--blue-600); box-shadow:0 0 0 2px rgba(31,111,235,.15)}
+.select.err, .input.err{border-color:var(--alert-red)}
+.select.err:focus, .input.err:focus{box-shadow:0 0 0 2px rgba(229,72,77,.15)}
+.input{width:220px}
+.btn{height:34px; padding:0 14px; border-radius:6px; font-size:13px; display:inline-flex; align-items:center; gap:6px;
+  transition:all .15s; border:1px solid transparent}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{background:var(--blue-600); color:#fff; font-weight:600}
+.btn-primary:hover{background:#1A63D4}
+.btn-outline{border-color:var(--border); color:var(--fg); background:var(--surface)}
+.btn-outline:hover{border-color:var(--blue-600); color:var(--blue-600); background:#F2F7FF}
+.btn-danger{background:var(--alert-red); color:#fff; font-weight:600}
+.btn-danger:hover{background:#CE3B40}
+.spacer{flex:1}
+
+/* ===== 指标卡 ===== */
+.metric-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px}
+.metric-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+  display:flex; align-items:center; gap:12px; transition:box-shadow .15s, border-color .15s}
+.metric-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.metric-card .mi{width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none}
+.metric-card .mk{font-size:12px; color:var(--muted)}
+.metric-card .mv{font-size:24px; font-weight:700; line-height:1.3}
+.metric-card .mu{font-size:11px; color:var(--muted); font-weight:400; margin-left:3px}
+.mi-blue{background:#E8F1FF; color:var(--blue-600)}
+.mi-green{background:#E6F6EE; color:var(--safe-green)}
+.mi-navy{background:#E4EDFF; color:var(--navy-700)}
+.mi-yellow{background:#FFF3E3; color:var(--warn-orange)}
+
+/* ===== 表格 ===== */
+.table-info{font-size:13px; color:var(--muted)}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto}
+table{width:100%; border-collapse:collapse; min-width:900px}
+th{font-size:12px; color:var(--muted); font-weight:600; text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); background:#F8FAFD; white-space:nowrap}
+td{font-size:13px; padding:10px 12px; border-bottom:1px solid #EEF2F8; white-space:nowrap; line-height:1.45}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:#F7FAFF}
+tbody tr:last-child td{border-bottom:none}
+td.ell{max-width:220px; overflow:hidden; text-overflow:ellipsis}
+.empty-row td{text-align:center; color:var(--muted); padding:34px 12px; font-size:13px}
+.badge{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:11px; font-size:12px; font-weight:600}
+.badge i{width:6px; height:6px; border-radius:50%; display:inline-block}
+.b-online{background:#E6F6EE; color:var(--safe-green)} .b-online i{background:var(--safe-green)}
+.b-offline{background:#EEF2F8; color:var(--muted)} .b-offline i{background:#8FA3C4}
+.b-warn{background:#FFF3E3; color:#B25E09} .b-warn i{background:var(--caution-yellow)}
+.b-fail{background:#FDECEC; color:var(--alert-red)} .b-fail i{background:var(--alert-red)}
+.tag{display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:3px; font-size:11px; font-weight:600; flex:none}
+.tag-sensor{background:#E8F1FF; color:var(--blue-600)}
+.tag-green{background:#E6F6EE; color:var(--safe-green)}
+.tag-orange{background:#FFF3E3; color:#B25E09}
+.tag-navy{background:#E4EDFF; color:var(--navy-700)}
+.tag-gray{background:#EEF2F8; color:var(--muted)}
+.op-link{font-size:13px; color:var(--blue-600); padding:2px 4px; border-radius:3px}
+.op-link:hover{background:#EEF4FF}
+.op-link.danger{color:var(--alert-red)}
+.op-link.danger:hover{background:#FDEDED}
+.name-link{color:var(--fg); font-weight:600; padding:2px 4px; border-radius:3px}
+.name-link:hover{color:var(--blue-600); background:#EEF4FF}
+
+/* ===== 组织树 ===== */
+.org-layout{display:grid; grid-template-columns:250px minmax(0,1fr); gap:14px; align-items:start}
+.tree-panel{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 8px; position:sticky; top:76px}
+.tree-title{font-size:12px; color:var(--muted); font-weight:600; padding:4px 10px 8px}
+.tree-node{display:flex; align-items:center; gap:4px; width:100%; text-align:left; padding:7px 8px; border-radius:6px;
+  font-size:13px; color:var(--fg); transition:background .12s}
+.tree-node:hover{background:#F2F7FF}
+.tree-node.on{background:#E8F1FF; color:var(--blue-600); font-weight:600}
+.tree-node .tname{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.tree-caret{width:16px; height:16px; flex:none; display:flex; align-items:center; justify-content:center; color:var(--muted); transition:transform .15s}
+.tree-caret svg{transition:transform .15s}
+.tree-node.closed .tree-caret svg{transform:rotate(-90deg)}
+.tree-caret.leaf{visibility:hidden}
+.tree-node .cnt{margin-left:auto; flex:none; min-width:20px; height:18px; padding:0 6px; border-radius:9px;
+  background:#EEF2F8; color:var(--muted); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center}
+.tree-node.on .cnt{background:var(--blue-600); color:#fff}
+.tree-root{font-weight:700}
+.tree-kids{overflow:hidden}
+.tree-kids[hidden]{display:none}
+
+/* ===== 抽屉 ===== */
+.mask{position:fixed; inset:0; background:rgba(11,27,51,.45); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s}
+.mask.open{opacity:1; pointer-events:auto}
+.drawer{position:fixed; top:0; right:0; width:520px; max-width:94vw; height:100vh; background:var(--surface); z-index:50;
+  box-shadow:-8px 0 28px rgba(11,27,51,.18); transform:translateX(100%); transition:transform .25s ease;
+  display:flex; flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer-head{flex:none; display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border)}
+.drawer-head h3{font-size:16px}
+.x-btn{width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.x-btn:hover{background:var(--bg); color:var(--fg)}
+.drawer-body{flex:1; overflow-y:auto; padding:20px}
+.drawer-foot{flex:none; display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+.sec-t{font-size:13px; font-weight:600; margin:20px 0 10px; display:flex; align-items:center; gap:6px}
+.sec-t:first-child{margin-top:0}
+.sec-t::before{content:""; width:3px; height:12px; border-radius:2px; background:var(--blue-600)}
+.sum-list{border:1px solid var(--border); border-radius:8px; overflow:hidden}
+.sum-row{display:flex; font-size:13px; padding:10px 14px; border-bottom:1px solid #EEF2F8}
+.sum-row:last-child{border-bottom:none}
+.sum-row .k{width:96px; color:var(--muted); flex:none}
+.ops-list{border:1px solid var(--border); border-radius:8px; overflow:hidden}
+.ops-row{display:flex; gap:12px; font-size:13px; padding:10px 14px; border-bottom:1px solid #EEF2F8; align-items:baseline}
+.ops-row:last-child{border-bottom:none}
+.ops-row .t{color:var(--muted); flex:none; font-size:12px}
+.ops-row .m-tag{flex:none}
+
+/* ===== 弹窗 ===== */
+.modal-wrap{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(11,27,51,.55)}
+.modal-wrap.open{display:flex}
+.modal-box{width:480px; max-width:92vw; max-height:92vh; background:var(--surface); border-radius:10px; overflow:hidden;
+  display:flex; flex-direction:column; box-shadow:0 18px 50px rgba(11,27,51,.35)}
+.modal-box.sm{width:400px}
+.mm-head{display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border)}
+.mm-head h3{font-size:15px}
+.mm-body{padding:16px 20px; overflow-y:auto}
+.mm-foot{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label{display:block; font-size:13px; font-weight:600; margin-bottom:6px}
+.field label .req{color:var(--alert-red); margin-left:2px}
+.field .hint{font-size:12px; color:var(--muted); margin-top:5px; font-weight:400}
+.field .err-msg{font-size:12px; color:var(--alert-red); margin-top:5px; display:none}
+.field.has-err .err-msg{display:block}
+.w-full{width:100%}
+.confirm-text{font-size:13px; line-height:1.7}
+.confirm-text b{color:var(--alert-red)}
+
+/* ===== Toast ===== */
+#toast-box{position:fixed; top:20px; right:20px; z-index:99; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--navy-800); border:1px solid var(--blue-400); border-left:4px solid var(--blue-400); color:#EAF1FB;
+  border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  animation:toastIn .2s ease-out; max-width:340px; line-height:1.5}
+.toast.warn{border-color:var(--warn-orange); border-left-color:var(--warn-orange)}
+.toast.err{border-color:var(--alert-red); border-left-color:var(--alert-red)}
+.toast.ok{border-color:var(--safe-green); border-left-color:var(--safe-green)}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0; transform:translateX(20px)}to{opacity:1; transform:none}}
+@keyframes toastOut{to{opacity:0; transform:translateX(20px)}}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ===== 左侧导航 ===== -->
+  <aside class="sidenav" data-od-id="side-nav">
+    <a class="nav-logo" href="/" target="_top">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4C9AFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/>
+        <path d="M12 8v5M9.5 10.5h5"/>
+      </svg>
+      <span><span class="t1">无人机低空智慧调度平台</span><br><span class="t2">公安交管 · 低空巡检</span></span>
+    </a>
+    <nav class="nav-menu">
+      <a class="nav-item" href="/screen-overview.html" target="_top" data-od-id="nav-screen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        态势一张图
+      </a>
+      <a class="nav-item" href="/dispatch-tasks.html" target="_top" data-od-id="nav-dispatch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 5l1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
+        任务调度
+      </a>
+      <a class="nav-item" href="/alert-workbench.html" target="_top" data-od-id="nav-alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+        告警线索
+      </a>
+      <a class="nav-item" href="/stats-ledger.html" target="_top" data-od-id="nav-ledger">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        台账统计
+      </a>
+      <a class="nav-item" href="/resource-management.html" target="_top" data-od-id="nav-resource">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        资源管理
+      </a>
+      <a class="nav-item active" href="/system-management.html" target="_top" data-od-id="nav-system">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg>
+        系统管理
+      </a>
+    </nav>
+    <div class="nav-foot">v1.0 · 数据均为演示示例<br>数据日期 2026-09-07</div>
+  </aside>
+
+  <!-- ===== 主列 ===== -->
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <div class="crumb">系统管理<span class="sep">/</span><b>组织与人员</b></div>
+      <div class="top-right">
+        <div class="top-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" placeholder="全局搜索" aria-label="全局搜索">
+        </div>
+        <button class="bell" aria-label="告警通知" id="bell-btn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span class="badge num">5</span>
+        </button>
+        <span class="top-time num" id="top-clock">--:--</span>
+        <span class="top-user"><span class="avatar">王</span>王警官</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h1>组织与人员</h1>
+          <p class="sub">黔南布依族苗族自治州公安交通管理局 · 单位架构与人员账号管理（数据均为演示示例）</p>
+        </div>
+      </div>
+
+      <!-- ===== 模块内二级导航 ===== -->
+      <nav class="subnav" data-od-id="system-subnav" aria-label="系统管理二级导航">
+        <a class="sub-link" href="/system-management.html" target="_top" data-od-id="subnav-overview">总览</a>
+        <a class="sub-link on" href="/system-org.html" target="_top" data-od-id="subnav-org" aria-current="page">组织与人员</a>
+        <a class="sub-link" href="/system-roles.html" target="_top" data-od-id="subnav-roles">角色权限</a>
+        <a class="sub-link" href="/system-config.html" target="_top" data-od-id="subnav-config">平台配置</a>
+        <a class="sub-link" href="/system-logs.html" target="_top" data-od-id="subnav-logs">操作日志</a>
+      </nav>
+
+      <!-- ===== 指标卡 ===== -->
+      <div class="metric-grid" data-od-id="org-metrics">
+        <div class="metric-card" data-od-id="metric-staff">
+          <span class="mi mi-blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20a7.5 7.5 0 0115 0"/></svg></span>
+          <span><span class="mk">在编人员</span><br><span class="mv num" id="m-total">0</span><span class="mu">人</span></span>
+        </div>
+        <div class="metric-card" data-od-id="metric-onduty">
+          <span class="mi mi-green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+          <span><span class="mk">今日在岗</span><br><span class="mv num" id="m-onduty">0</span><span class="mu">人</span></span>
+        </div>
+        <div class="metric-card" data-od-id="metric-units">
+          <span class="mi mi-navy"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5a1 1 0 011-1h8a1 1 0 011 1v16M15 9h4a1 1 0 011 1v11M8 8h3M8 12h3M8 16h3"/></svg></span>
+          <span><span class="mk">覆盖单位</span><br><span class="mv num" id="m-units">0</span><span class="mu">个</span></span>
+        </div>
+        <div class="metric-card" data-od-id="metric-disabled">
+          <span class="mi mi-yellow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></span>
+          <span><span class="mk">停用账号</span><br><span class="mv num" id="m-disabled">0</span><span class="mu">人</span></span>
+        </div>
+      </div>
+
+      <div class="org-layout">
+        <!-- ===== 组织树 ===== -->
+        <div class="tree-panel" data-od-id="org-tree-panel">
+          <div class="tree-title">组织架构</div>
+          <div id="org-tree"></div>
+        </div>
+
+        <!-- ===== 人员列表 ===== -->
+        <div>
+          <div class="toolbar" data-od-id="staff-filter-bar">
+            <input class="input" id="s-search" type="text" placeholder="搜索姓名 / 警号 / 手机号" aria-label="关键字搜索">
+            <select class="select" id="s-unit" aria-label="单位筛选"></select>
+            <select class="select" id="s-role" aria-label="角色筛选">
+              <option value="全部">全部角色</option>
+              <option>系统管理员</option><option>指挥长</option><option>调度员</option>
+              <option>线索研判员</option><option>分析员</option>
+            </select>
+            <select class="select" id="s-status" aria-label="状态筛选">
+              <option value="全部">全部状态</option>
+              <option>在岗</option><option>休假</option><option>停用</option>
+            </select>
+            <span class="spacer"></span>
+            <span class="table-info num" id="staff-count"></span>
+            <button class="btn btn-primary" id="btn-add-staff" data-od-id="btn-add-staff">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              新增人员
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table data-od-id="staff-table">
+              <thead><tr>
+                <th>姓名</th><th>警号</th><th>所属单位</th><th>角色</th><th>手机号</th><th>状态</th><th>操作</th>
+              </tr></thead>
+              <tbody id="staff-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 人员详情抽屉 ===== -->
+<div class="mask" id="drawer-mask"></div>
+<aside class="drawer" id="staff-drawer" data-od-id="staff-drawer" aria-label="人员详情">
+  <div class="drawer-head">
+    <h3 id="drawer-title">人员详情</h3>
+    <button class="x-btn" id="drawer-close" aria-label="关闭">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="sec-t">基础信息</div>
+    <div class="sum-list" id="drawer-base"></div>
+    <div class="sec-t">近 30 天操作摘要</div>
+    <div class="ops-list" id="drawer-ops"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-outline" id="drawer-cancel">关闭</button>
+    <button class="btn btn-primary" id="drawer-edit" data-od-id="btn-drawer-edit">编辑人员</button>
+  </div>
+</aside>
+
+<!-- ===== 新增 / 编辑人员弹窗 ===== -->
+<div class="modal-wrap" id="staff-modal">
+  <div class="modal-box" data-od-id="staff-modal" role="dialog" aria-label="人员表单">
+    <div class="mm-head">
+      <h3 id="staff-modal-title">新增人员</h3>
+      <button class="x-btn" id="staff-close" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mm-body">
+      <div class="field" id="fw-name">
+        <label for="f-name">姓名<span class="req">*</span></label>
+        <input class="input w-full" id="f-name" type="text" placeholder="请输入姓名" maxlength="12">
+        <div class="err-msg">请输入姓名</div>
+      </div>
+      <div class="field" id="fw-no">
+        <label for="f-no">警号<span class="req">*</span></label>
+        <input class="input w-full num" id="f-no" type="text" placeholder="6 位数字警号" maxlength="6">
+        <div class="hint">警号在全州范围内唯一，格式为 6 位数字</div>
+        <div class="err-msg" id="f-no-err">警号须为 6 位数字</div>
+      </div>
+      <div class="field" id="fw-unit">
+        <label for="f-unit">所属单位<span class="req">*</span></label>
+        <select class="select w-full" id="f-unit"></select>
+        <div class="hint">与左侧组织树联动，默认选中当前树节点单位</div>
+      </div>
+      <div class="field" id="fw-role">
+        <label for="f-role">角色<span class="req">*</span></label>
+        <select class="select w-full" id="f-role">
+          <option>系统管理员</option><option>指挥长</option><option>调度员</option>
+          <option>线索研判员</option><option>分析员</option>
+        </select>
+      </div>
+      <div class="field" id="fw-phone">
+        <label for="f-phone">手机号<span class="req">*</span></label>
+        <input class="input w-full num" id="f-phone" type="text" placeholder="11 位手机号" maxlength="11">
+        <div class="err-msg">手机号格式不正确，须为 11 位大陆手机号</div>
+      </div>
+      <div class="field" id="fw-status">
+        <label for="f-status">初始状态<span class="req">*</span></label>
+        <select class="select w-full" id="f-status">
+          <option>在岗</option><option>休假</option><option>停用</option>
+        </select>
+      </div>
+    </div>
+    <div class="mm-foot">
+      <button class="btn btn-outline" id="staff-cancel">取消</button>
+      <button class="btn btn-primary" id="staff-submit" data-od-id="btn-staff-submit">确认新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 停用二次确认弹窗 ===== -->
+<div class="modal-wrap" id="confirm-modal">
+  <div class="modal-box sm" data-od-id="confirm-modal" role="alertdialog" aria-label="停用确认">
+    <div class="mm-head">
+      <h3>停用账号确认</h3>
+      <button class="x-btn" id="confirm-close" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mm-body">
+      <p class="confirm-text" id="confirm-text"></p>
+    </div>
+    <div class="mm-foot">
+      <button class="btn btn-outline" id="confirm-cancel">取消</button>
+      <button class="btn btn-danger" id="confirm-ok" data-od-id="btn-confirm-disable">确认停用</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+<script>
+/* ================= 组织架构数据 ================= */
+const ORG = {
+  id:'qn', name:'黔南州公安交通管理局', children:[
+    { id:'jg', name:'州局机关', children:[
+      { id:'zhzx', name:'指挥中心' },
+      { id:'ywks', name:'业务科室' }
+    ]},
+    { id:'xs', name:'县市大队', children:[
+      { id:'dy', name:'都匀市大队' }, { id:'fq', name:'福泉市大队' },
+      { id:'gd', name:'贵定县大队' }, { id:'ds', name:'独山县大队' },
+      { id:'lb', name:'荔波县大队' }, { id:'hs', name:'惠水县大队' },
+      { id:'sd', name:'三都县大队' }, { id:'ll', name:'龙里县大队' },
+      { id:'wa', name:'瓮安县大队' }, { id:'pt', name:'平塘县大队' },
+      { id:'ld', name:'罗甸县大队' }, { id:'cs', name:'长顺县大队' }
+    ]}
+  ]
+};
+const UNIT_NAME = {};
+(function walk(n){ UNIT_NAME[n.id]=n.name; (n.children||[]).forEach(walk); })(ORG);
+function leafIds(n){ return n.children ? n.children.flatMap(leafIds) : [n.id]; }
+
+/* ================= 人员示例数据（31 人） ================= */
+let PEOPLE = [
+  {id:1, name:'王建国', no:'301001', unit:'zhzx', role:'指挥长',     phone:'13885410021', status:'在岗', created:'2023-04-10', last:'2026-09-07 08:12'},
+  {id:2, name:'李明轩', no:'301002', unit:'zhzx', role:'调度员',     phone:'13985420033', status:'在岗', created:'2023-06-18', last:'2026-09-07 08:35'},
+  {id:3, name:'张雨桐', no:'301003', unit:'zhzx', role:'调度员',     phone:'13785430145', status:'在岗', created:'2024-01-05', last:'2026-09-06 21:40'},
+  {id:4, name:'陈志强', no:'301004', unit:'zhzx', role:'系统管理员', phone:'13885440157', status:'在岗', created:'2022-11-22', last:'2026-09-07 07:58'},
+  {id:5, name:'刘雅琴', no:'301005', unit:'ywks', role:'分析员',     phone:'13685450269', status:'在岗', created:'2023-09-01', last:'2026-09-06 18:22'},
+  {id:6, name:'杨国栋', no:'301006', unit:'ywks', role:'分析员',     phone:'13585460371', status:'在岗', created:'2023-03-15', last:'2026-09-07 08:05'},
+  {id:7, name:'黄志远', no:'301007', unit:'ywks', role:'线索研判员',     phone:'13885470483', status:'休假', created:'2024-05-20', last:'2026-09-01 17:30'},
+  {id:8, name:'罗明辉', no:'301008', unit:'dy',   role:'指挥长',     phone:'13985480595', status:'在岗', created:'2022-08-11', last:'2026-09-07 08:20'},
+  {id:9, name:'韦小丽', no:'301009', unit:'dy',   role:'调度员',     phone:'13785490607', status:'在岗', created:'2023-12-03', last:'2026-09-07 08:41'},
+  {id:10,name:'吴永刚', no:'301010', unit:'fq',   role:'线索研判员',     phone:'13885500719', status:'在岗', created:'2023-02-27', last:'2026-09-06 19:14'},
+  {id:11,name:'周海燕', no:'301011', unit:'fq',   role:'调度员',     phone:'13685510821', status:'在岗', created:'2024-02-14', last:'2026-09-07 08:02'},
+  {id:12,name:'赵文斌', no:'301012', unit:'gd',   role:'线索研判员',     phone:'13585520933', status:'在岗', created:'2023-07-09', last:'2026-09-06 20:47'},
+  {id:13,name:'宋佳怡', no:'301013', unit:'gd',   role:'分析员',     phone:'13885531045', status:'在岗', created:'2024-08-26', last:'2026-09-07 07:55'},
+  {id:14,name:'莫俊杰', no:'301014', unit:'ds',   role:'指挥长',     phone:'13985541157', status:'在岗', created:'2022-10-19', last:'2026-09-07 08:30'},
+  {id:15,name:'何雪梅', no:'301015', unit:'ds',   role:'调度员',     phone:'13785551269', status:'在岗', created:'2023-11-08', last:'2026-09-06 22:03'},
+  {id:16,name:'潘长江', no:'301016', unit:'lb',   role:'线索研判员',     phone:'13685561371', status:'在岗', created:'2023-04-25', last:'2026-09-07 08:15'},
+  {id:17,name:'蒙晓燕', no:'301017', unit:'lb',   role:'调度员',     phone:'13585571483', status:'在岗', created:'2024-03-17', last:'2026-09-07 08:27'},
+  {id:18,name:'罗成军', no:'301018', unit:'hs',   role:'线索研判员',     phone:'13885581595', status:'在岗', created:'2023-05-30', last:'2026-09-06 18:56'},
+  {id:19,name:'白静怡', no:'301019', unit:'hs',   role:'分析员',     phone:'13985591607', status:'在岗', created:'2024-06-11', last:'2026-09-07 08:09'},
+  {id:20,name:'韦国忠', no:'301020', unit:'sd',   role:'指挥长',     phone:'13785601719', status:'在岗', created:'2022-12-07', last:'2026-09-07 08:18'},
+  {id:21,name:'潘晓丽', no:'301021', unit:'sd',   role:'调度员',     phone:'13685611821', status:'休假', created:'2023-08-21', last:'2026-08-28 16:42'},
+  {id:22,name:'唐永强', no:'301022', unit:'ll',   role:'线索研判员',     phone:'13585621933', status:'在岗', created:'2023-10-13', last:'2026-09-07 08:24'},
+  {id:23,name:'金梦琪', no:'301023', unit:'ll',   role:'调度员',     phone:'13885632045', status:'在岗', created:'2024-04-08', last:'2026-09-06 21:18'},
+  {id:24,name:'犹俊杰', no:'301024', unit:'wa',   role:'线索研判员',     phone:'13985642157', status:'在岗', created:'2023-01-16', last:'2026-09-07 08:06'},
+  {id:25,name:'任丽娟', no:'301025', unit:'wa',   role:'分析员',     phone:'13785652269', status:'在岗', created:'2024-07-02', last:'2026-09-06 17:49'},
+  {id:26,name:'石开明', no:'301026', unit:'pt',   role:'线索研判员',     phone:'13685662371', status:'停用', created:'2022-09-05', last:'2026-06-14 10:31'},
+  {id:27,name:'索晓芳', no:'301027', unit:'pt',   role:'调度员',     phone:'13585672483', status:'在岗', created:'2023-12-19', last:'2026-09-07 08:13'},
+  {id:28,name:'王正华', no:'301028', unit:'ld',   role:'线索研判员',     phone:'13885682595', status:'在岗', created:'2023-03-28', last:'2026-09-06 20:05'},
+  {id:29,name:'岑晓燕', no:'301029', unit:'ld',   role:'调度员',     phone:'13985692607', status:'在岗', created:'2024-09-15', last:'2026-09-07 08:38'},
+  {id:30,name:'班永富', no:'301030', unit:'cs',   role:'线索研判员',     phone:'13785702719', status:'停用', created:'2022-07-24', last:'2026-05-30 09:12'},
+  {id:31,name:'梁晓静', no:'301031', unit:'cs',   role:'调度员',     phone:'13685712821', status:'在岗', created:'2024-10-21', last:'2026-09-07 08:22'}
+];
+let NEXT_ID = 32;
+
+/* ================= 通用工具 ================= */
+const $ = s => document.querySelector(s);
+function maskPhone(p){ return p.length===11 ? p.slice(0,3)+'****'+p.slice(7) : p; }
+function toast(msg, type){
+  const box = $('#toast-box');
+  const t = document.createElement('div');
+  t.className = 'toast' + (type ? ' '+type : '');
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(()=>{ t.classList.add('hide'); setTimeout(()=>t.remove(), 260); }, 2800);
+}
+function tickClock(){
+  const d = new Date();
+  $('#top-clock').textContent =
+    String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+}
+tickClock(); setInterval(tickClock, 1000);
+$('#bell-btn').addEventListener('click', ()=>toast('当前有 5 条未读告警通知，请前往「告警线索」处置','warn'));
+
+const ROLE_TAG = {'系统管理员':'tag-sensor','指挥长':'tag-orange','调度员':'tag-green','线索研判员':'tag-navy','分析员':'tag-gray'};
+const STATUS_BADGE = {'在岗':'b-online','休假':'b-warn','停用':'b-offline'};
+
+/* ================= 筛选状态 ================= */
+const F = { kw:'', unit:'all', role:'全部', status:'全部' };
+const collapsed = new Set();          // 收起的树节点
+let selectedNode = 'qn';              // 组织树当前选中节点（qn = 全部）
+
+/* ================= 组织树渲染 ================= */
+function subtreeCount(n){
+  const ids = new Set(leafIds(n));
+  return PEOPLE.filter(p=>ids.has(p.unit)).length;
+}
+function renderTree(){
+  const host = $('#org-tree');
+  host.innerHTML = '';
+  host.appendChild(buildNode(ORG, 0, true));
+}
+function buildNode(n, depth, isRoot){
+  const wrap = document.createElement('div');
+  const hasKids = !!(n.children && n.children.length);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'tree-node' + (isRoot?' tree-root':'') + (selectedNode===n.id?' on':'')
+                + (collapsed.has(n.id)?' closed':'');
+  btn.style.paddingLeft = (8 + depth*18) + 'px';
+  btn.setAttribute('data-unit', n.id);
+  btn.setAttribute('aria-label', n.name + '，' + subtreeCount(n) + ' 人');
+  const caret = hasKids
+    ? '<span class="tree-caret"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>'
+    : '<span class="tree-caret leaf"></span>';
+  btn.innerHTML = caret + '<span class="tname">'+n.name+'</span><span class="cnt num">'+subtreeCount(n)+'</span>';
+  btn.addEventListener('click', e=>{
+    // 点击箭头区域：展开/收起；其余区域：选中过滤
+    if (hasKids && e.target.closest('.tree-caret')){
+      collapsed.has(n.id) ? collapsed.delete(n.id) : collapsed.add(n.id);
+    } else {
+      selectedNode = n.id;
+      F.unit = 'all';
+      $('#s-unit').value = 'all';
+    }
+    renderTree(); renderTable();
+  });
+  wrap.appendChild(btn);
+  if (hasKids){
+    const kids = document.createElement('div');
+    kids.className = 'tree-kids';
+    if (collapsed.has(n.id)) kids.hidden = true;
+    n.children.forEach(c=>kids.appendChild(buildNode(c, depth+1, false)));
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+/* ================= 单位下拉（树同步） ================= */
+function fillUnitSelects(){
+  const opts = ['<option value="all">全部单位</option>'];
+  (function walk(n, depth){
+    if (n.id !== 'qn') opts.push('<option value="'+n.id+'">'+'　'.repeat(depth-1)+n.name+'</option>');
+    (n.children||[]).forEach(c=>walk(c, depth+1));
+  })(ORG, 0);
+  $('#s-unit').innerHTML = opts.join('');
+  // 表单内单位下拉：仅可选叶子单位（实际编制所在）
+  const leafOpts = [];
+  (function walk(n, depth){
+    if (!n.children) leafOpts.push('<option value="'+n.id+'">'+UNIT_NAME[n.id]+'</option>');
+    else n.children.forEach(c=>walk(c, depth+1));
+  })(ORG, 0);
+  $('#f-unit').innerHTML = leafOpts.join('');
+}
+
+/* ================= 指标卡 ================= */
+function renderMetrics(){
+  $('#m-total').textContent = PEOPLE.length;
+  $('#m-onduty').textContent = PEOPLE.filter(p=>p.status==='在岗').length;
+  $('#m-units').textContent = new Set(PEOPLE.map(p=>p.unit)).size;
+  $('#m-disabled').textContent = PEOPLE.filter(p=>p.status==='停用').length;
+}
+
+/* ================= 人员表 ================= */
+function unitScopeIds(){
+  if (F.unit !== 'all'){
+    return new Set(leafIds(findNode(ORG, F.unit)));
+  }
+  if (selectedNode !== 'qn'){
+    return new Set(leafIds(findNode(ORG, selectedNode)));
+  }
+  return null; // 全部
+}
+function findNode(n, id){
+  if (n.id===id) return n;
+  for (const c of (n.children||[])){ const r = findNode(c, id); if (r) return r; }
+  return null;
+}
+function filteredPeople(){
+  const scope = unitScopeIds();
+  return PEOPLE.filter(p=>{
+    if (scope && !scope.has(p.unit)) return false;
+    if (F.role!=='全部' && p.role!==F.role) return false;
+    if (F.status!=='全部' && p.status!==F.status) return false;
+    if (F.kw){
+      const k = F.kw.toLowerCase();
+      if (!(p.name.includes(k) || p.no.includes(k) || p.phone.includes(k))) return false;
+    }
+    return true;
+  });
+}
+function renderTable(){
+  const rows = filteredPeople();
+  const scopeName = F.unit!=='all' ? UNIT_NAME[F.unit]
+                  : selectedNode!=='qn' ? UNIT_NAME[selectedNode] : '全局';
+  $('#staff-count').textContent = scopeName + ' · 共 ' + rows.length + ' 人';
+  const tb = $('#staff-tbody');
+  if (!rows.length){
+    tb.innerHTML = '<tr class="empty-row"><td colspan="7">暂无符合条件的人员，请调整筛选条件或点击右上角「新增人员」</td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.map(p=>
+    '<tr data-id="'+p.id+'">'
+    +'<td><button type="button" class="name-link" data-act="detail">'+p.name+'</button></td>'
+    +'<td class="num">'+p.no+'</td>'
+    +'<td>'+UNIT_NAME[p.unit]+'</td>'
+    +'<td><span class="tag '+ROLE_TAG[p.role]+'">'+p.role+'</span></td>'
+    +'<td class="num">'+maskPhone(p.phone)+'</td>'
+    +'<td><span class="badge '+STATUS_BADGE[p.status]+'"><i></i>'+p.status+'</span></td>'
+    +'<td>'
+      +'<button type="button" class="op-link" data-act="edit">编辑</button>'
+      +(p.status==='停用'
+        ? '<button type="button" class="op-link" data-act="enable">启用</button>'
+        : '<button type="button" class="op-link danger" data-act="disable">停用</button>')
+    +'</td></tr>'
+  ).join('');
+}
+$('#staff-tbody').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = +btn.closest('tr').dataset.id;
+  const p = PEOPLE.find(x=>x.id===id);
+  if (!p) return;
+  const act = btn.dataset.act;
+  if (act==='detail') openDrawer(p);
+  else if (act==='edit') openStaffModal(p);
+  else if (act==='disable') openConfirm(p);
+  else if (act==='enable'){
+    p.status = '在岗';
+    renderAll();
+    toast('已启用账号：'+p.name+'（警号 '+p.no+'）','ok');
+  }
+});
+
+/* ================= 筛选联动 ================= */
+$('#s-search').addEventListener('input', e=>{ F.kw = e.target.value.trim(); renderTable(); });
+$('#s-unit').addEventListener('change', e=>{
+  F.unit = e.target.value;
+  selectedNode = F.unit==='all' ? 'qn' : F.unit;
+  renderTree(); renderTable();
+});
+$('#s-role').addEventListener('change', e=>{ F.role = e.target.value; renderTable(); });
+$('#s-status').addEventListener('change', e=>{ F.status = e.target.value; renderTable(); });
+
+/* ================= 详情抽屉 ================= */
+let drawerPerson = null;
+function opsOf(p){
+  // 由警号确定性生成近 30 天操作摘要（演示数据）
+  const seed = +p.no;
+  const pool = {
+    '系统管理员':[['平台配置','调整告警升级时限'],['角色权限','更新调度员权限矩阵'],['系统管理','新增人员账号'],['操作日志','导出审计日志']],
+    '指挥长':[['任务调度','签发跨区域支援任务'],['告警线索','批示紧急告警处置'],['态势一张图','调阅全州巡检态势'],['台账统计','审阅周度勤务台账']],
+    '调度员':[['任务调度','创建无人机巡检任务'],['任务调度','调整计划航线并下发'],['告警线索','派发告警处置工单'],['资源管理','申请机库无人机调配']],
+    '线索研判员':[['告警线索','签收并到场处置'],['告警线索','回传现场处置结果'],['任务调度','执行应急抵近侦察'],['台账统计','补录处置回执']],
+    '分析员':[['台账统计','生成事故热力分析报表'],['台账统计','导出月度统计台账'],['告警线索','复核 AI 识别误报'],['态势一张图','标注重点关注路段']]
+  }[p.role];
+  const out = [];
+  for (let i=0;i<4;i++){
+    const day = 1 + ((seed*7 + i*11) % 30);            // 8/9 - 9/7 之间
+    const date = day > 7 ? '2026-08-'+String(day).padStart(2,'0') : '2026-09-0'+day;
+    const hh = String(8 + (seed + i*3) % 12).padStart(2,'0');
+    const mm = String((seed*13 + i*17) % 60).padStart(2,'0');
+    const op = pool[(seed + i) % pool.length];
+    out.push({t:date+' '+hh+':'+mm, m:op[0], text:op[1]});
+  }
+  return out.sort((a,b)=>b.t.localeCompare(a.t));
+}
+function openDrawer(p){
+  drawerPerson = p;
+  $('#drawer-title').textContent = '人员详情 · ' + p.name;
+  $('#drawer-base').innerHTML =
+    row('姓名', p.name) + row('警号', '<span class="num">'+p.no+'</span>')
+    + row('所属单位', UNIT_NAME[p.unit]) + row('角色', '<span class="tag '+ROLE_TAG[p.role]+'">'+p.role+'</span>')
+    + row('手机号', '<span class="num">'+maskPhone(p.phone)+'</span>')
+    + row('状态', '<span class="badge '+STATUS_BADGE[p.status]+'"><i></i>'+p.status+'</span>')
+    + row('账号创建', p.created) + row('最近登录', '<span class="num">'+p.last+'</span>');
+  $('#drawer-ops').innerHTML = opsOf(p).map(o=>
+    '<div class="ops-row"><span class="t num">'+o.t+'</span><span class="m-tag tag tag-gray">'+o.m+'</span><span>'+o.text+'</span></div>'
+  ).join('');
+  $('#drawer-mask').classList.add('open');
+  $('#staff-drawer').classList.add('open');
+}
+function row(k, v){ return '<div class="sum-row"><span class="k">'+k+'</span><span>'+v+'</span></div>'; }
+function closeDrawer(){
+  $('#drawer-mask').classList.remove('open');
+  $('#staff-drawer').classList.remove('open');
+}
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#drawer-cancel').addEventListener('click', closeDrawer);
+$('#drawer-mask').addEventListener('click', closeDrawer);
+$('#drawer-edit').addEventListener('click', ()=>{
+  const p = drawerPerson; closeDrawer();
+  if (p) openStaffModal(p);
+});
+
+/* ================= 新增 / 编辑弹窗 ================= */
+let editingId = null;
+function clearErr(){
+  document.querySelectorAll('.field.has-err').forEach(f=>f.classList.remove('has-err'));
+  document.querySelectorAll('.input.err,.select.err').forEach(i=>i.classList.remove('err'));
+}
+function setErr(fw, input, msg){
+  $('#'+fw).classList.add('has-err');
+  if (input) $('#'+input).classList.add('err');
+  if (msg) $('#'+fw+' .err-msg').textContent = msg;
+}
+function openStaffModal(p){
+  clearErr();
+  editingId = p ? p.id : null;
+  $('#staff-modal-title').textContent = p ? '编辑人员' : '新增人员';
+  $('#staff-submit').textContent = p ? '保存修改' : '确认新增';
+  $('#f-name').value = p ? p.name : '';
+  $('#f-no').value = p ? p.no : '';
+  $('#f-unit').value = p ? p.unit
+    : (leafIds(findNode(ORG, selectedNode))[0] || 'zhzx');
+  $('#f-role').value = p ? p.role : '调度员';
+  $('#f-phone').value = p ? p.phone : '';
+  $('#f-status').value = p ? p.status : '在岗';
+  $('#staff-modal').classList.add('open');
+  setTimeout(()=>$('#f-name').focus(), 50);
+}
+function closeStaffModal(){ $('#staff-modal').classList.remove('open'); }
+$('#btn-add-staff').addEventListener('click', ()=>openStaffModal(null));
+$('#staff-close').addEventListener('click', closeStaffModal);
+$('#staff-cancel').addEventListener('click', closeStaffModal);
+$('#staff-modal').addEventListener('click', e=>{ if (e.target.id==='staff-modal') closeStaffModal(); });
+
+$('#staff-submit').addEventListener('click', ()=>{
+  clearErr();
+  const name = $('#f-name').value.trim();
+  const no = $('#f-no').value.trim();
+  const unit = $('#f-unit').value;
+  const role = $('#f-role').value;
+  const phone = $('#f-phone').value.trim();
+  const status = $('#f-status').value;
+  let ok = true;
+  if (!name){ setErr('fw-name','f-name'); ok = false; }
+  if (!/^\d{6}$/.test(no)){
+    setErr('fw-no','f-no','警号须为 6 位数字'); ok = false;
+  } else if (PEOPLE.some(p=>p.no===no && p.id!==editingId)){
+    setErr('fw-no','f-no','警号 '+no+' 已存在（'+PEOPLE.find(p=>p.no===no).name+'），警号须全州唯一'); ok = false;
+  }
+  if (!/^1[3-9]\d{9}$/.test(phone)){ setErr('fw-phone','f-phone'); ok = false; }
+  if (!ok){ toast('表单校验未通过，请检查标红字段','err'); return; }
+
+  if (editingId){
+    const p = PEOPLE.find(x=>x.id===editingId);
+    Object.assign(p, {name, no, unit, role, phone, status});
+    toast('已保存修改：'+name+'（'+UNIT_NAME[unit]+'）','ok');
+  } else {
+    PEOPLE.push({id:NEXT_ID++, name, no, unit, role, phone, status,
+      created:'2026-09-07', last:'—'});
+    toast('新增人员成功：'+name+'（'+UNIT_NAME[unit]+' · '+role+'）','ok');
+  }
+  closeStaffModal();
+  renderAll();
+});
+
+/* ================= 停用二次确认 ================= */
+let confirmTarget = null;
+function openConfirm(p){
+  confirmTarget = p;
+  $('#confirm-text').innerHTML =
+    '确定停用账号 <b>'+p.name+'</b>（警号 <span class="num">'+p.no+'</span>，'+UNIT_NAME[p.unit]+' · '+p.role+'）吗？<br>'
+    +'停用后该账号将立即无法登录平台，名下未完成任务需另行指派。';
+  $('#confirm-modal').classList.add('open');
+}
+function closeConfirm(){ $('#confirm-modal').classList.remove('open'); confirmTarget = null; }
+$('#confirm-close').addEventListener('click', closeConfirm);
+$('#confirm-cancel').addEventListener('click', closeConfirm);
+$('#confirm-modal').addEventListener('click', e=>{ if (e.target.id==='confirm-modal') closeConfirm(); });
+$('#confirm-ok').addEventListener('click', ()=>{
+  if (confirmTarget){
+    confirmTarget.status = '停用';
+    toast('已停用账号：'+confirmTarget.name+'（警号 '+confirmTarget.no+'）','warn');
+  }
+  closeConfirm();
+  renderAll();
+});
+
+/* ================= 初始化 ================= */
+function renderAll(){ renderMetrics(); renderTree(); renderTable(); }
+fillUnitSelects();
+renderAll();
+</script>
+</body>
+</html>

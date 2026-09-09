@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资源管理 · 无人机低空智慧调度平台</title>
+<style>
+:root{
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#1A2333; --muted:#5A6B85; --border:#E2E8F2;
+  --navy-900:#0B1B33; --navy-800:#12294A; --navy-700:#1E3A61;
+  --blue-600:#1F6FEB; --blue-400:#4C9AFF;
+  --alert-red:#E5484D; --warn-orange:#F76B15; --caution-yellow:#F5A623;
+  --safe-green:#30A46C; --info-cyan:#3DD9EB;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"DIN Alternate","Bahnschrift","SF Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+button{font-family:inherit; cursor:pointer; background:none; border:none; color:inherit; font-size:inherit}
+a{color:var(--blue-600); text-decoration:none}
+:focus-visible{outline:2px solid var(--blue-600); outline-offset:2px; border-radius:2px}
+::placeholder{color:#9AA9C2}
+
+/* ===== 左侧深色导航 ===== */
+.layout{display:flex; min-height:100vh}
+.sidenav{width:232px; flex:none; background:var(--navy-900); color:#EAF1FB; display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh}
+.nav-logo{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid rgba(76,154,255,.18); color:#EAF1FB}
+.nav-logo:hover{background:rgba(76,154,255,.08)}
+.nav-logo .t1{font-size:15px; font-weight:700; letter-spacing:1px}
+.nav-logo .t2{font-size:11px; color:#8FA3C4; margin-top:2px}
+.nav-menu{padding:12px 10px; display:flex; flex-direction:column; gap:2px}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px;
+  font-size:14px; color:#B9C8E0; transition:background .15s,color .15s}
+.nav-item:hover{background:rgba(76,154,255,.12); color:#EAF1FB}
+.nav-item.active{background:var(--blue-600); color:#fff; font-weight:600}
+.nav-item svg{flex:none}
+.nav-foot{margin-top:auto; padding:14px 16px; font-size:11px; color:#5E7295; border-top:1px solid rgba(76,154,255,.14); line-height:1.7}
+
+/* ===== 主列 ===== */
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+.topbar{height:56px; flex:none; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:20}
+.crumb{font-size:14px; color:var(--muted)}
+.crumb b{color:var(--fg); font-weight:600}
+.crumb .sep{margin:0 8px; color:#C3CEDF}
+.top-right{display:flex; align-items:center; gap:18px}
+.top-search{display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border);
+  border-radius:6px; padding:0 10px; height:32px; width:220px; color:var(--muted)}
+.top-search input{border:none; background:none; outline:none; flex:1; font-size:13px; color:var(--fg); font-family:inherit}
+.bell{position:relative; width:34px; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.bell:hover{background:var(--bg); color:var(--fg)}
+.bell .badge{position:absolute; top:2px; right:2px; min-width:16px; height:16px; border-radius:8px; background:var(--alert-red);
+  color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-weight:600}
+.top-time{font-size:13px; color:var(--muted)}
+.top-user{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg)}
+.top-user .avatar{width:30px; height:30px; border-radius:50%; background:var(--navy-700); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600}
+
+/* ===== 内容区 ===== */
+.content{flex:1; padding:20px 24px 32px; min-width:0}
+.page-head{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap}
+.page-head h1{font-size:20px; font-weight:700; line-height:1.4}
+.page-head .sub{font-size:12px; color:var(--muted); margin-top:3px}
+.seg{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden}
+.seg button{height:34px; padding:0 16px; font-size:13px; color:var(--muted); transition:background .15s,color .15s}
+.seg button:hover{color:var(--fg); background:#EEF3FA}
+.seg button.on{background:var(--navy-700); color:#fff; font-weight:600}
+
+.toolbar{display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap}
+.select, .input{height:34px; border:1px solid var(--border); border-radius:6px; background:var(--surface);
+  font-size:13px; color:var(--fg); padding:0 10px; font-family:inherit; transition:border-color .15s}
+.select:hover, .input:hover{border-color:#C7D3E6}
+.select:focus, .input:focus{outline:none; border-color:var(--blue-600); box-shadow:0 0 0 2px rgba(31,111,235,.15)}
+.input{width:220px}
+textarea.input{height:auto; padding:8px 10px; resize:vertical; line-height:1.6}
+.btn{height:34px; padding:0 14px; border-radius:6px; font-size:13px; display:inline-flex; align-items:center; gap:6px;
+  transition:all .15s; border:1px solid transparent}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{background:var(--blue-600); color:#fff; font-weight:600}
+.btn-primary:hover{background:#1A63D4}
+.btn-outline{border-color:var(--border); color:var(--fg); background:var(--surface)}
+.btn-outline:hover{border-color:var(--blue-600); color:var(--blue-600); background:#F2F7FF}
+.spacer{flex:1}
+
+/* ===== 指标卡 ===== */
+.metric-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px}
+.metric-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+  display:flex; align-items:center; gap:12px; transition:box-shadow .15s, border-color .15s}
+.metric-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.metric-card .mi{width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none}
+.metric-card .mk{font-size:12px; color:var(--muted)}
+.metric-card .mv{font-size:24px; font-weight:700; line-height:1.3}
+.metric-card .mu{font-size:11px; color:var(--muted); font-weight:400; margin-left:3px}
+.mi-blue{background:#E8F1FF; color:var(--blue-600)}
+.mi-green{background:#E6F6EE; color:var(--safe-green)}
+.mi-navy{background:#E4EDFF; color:var(--navy-700)}
+.mi-yellow{background:#FFF3E3; color:var(--warn-orange)}
+
+/* ===== 表格 ===== */
+.table-tools{display:flex; align-items:center; gap:12px; margin-bottom:10px; min-height:34px}
+.table-info{font-size:13px; color:var(--muted)}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto}
+table{width:100%; border-collapse:collapse; min-width:960px}
+th{font-size:12px; color:var(--muted); font-weight:600; text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); background:#F8FAFD; white-space:nowrap}
+td{font-size:13px; padding:10px 12px; border-bottom:1px solid #EEF2F8; white-space:nowrap; line-height:1.45}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:#F7FAFF}
+tbody tr:last-child td{border-bottom:none}
+td.ell{max-width:220px; overflow:hidden; text-overflow:ellipsis}
+.empty-row td{text-align:center; color:var(--muted); padding:34px 12px; font-size:13px}
+.badge{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:11px; font-size:12px; font-weight:600}
+.badge i{width:6px; height:6px; border-radius:50%; display:inline-block}
+.b-online{background:#E6F6EE; color:var(--safe-green)} .b-online i{background:var(--safe-green)}
+.b-task{background:#E4EDFF; color:var(--blue-600)} .b-task i{background:var(--blue-600)}
+.b-standby{background:#E0F7FA; color:#0E7C8C} .b-standby i{background:#3DD9EB}
+.b-maint{background:#FFF3E3; color:#B25E09} .b-maint i{background:var(--caution-yellow)}
+.b-offline{background:#EEF2F8; color:var(--muted)} .b-offline i{background:#8FA3C4}
+.tag{display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:3px; font-size:11px; font-weight:600; flex:none}
+.tag-sensor{background:#E8F1FF; color:var(--blue-600)}
+.row-prog{display:flex; align-items:center; gap:8px; width:120px}
+.prog-bar{flex:1; height:5px; border-radius:3px; background:#E8EDF5; overflow:hidden}
+.prog-fill{height:100%; border-radius:3px; background:var(--blue-600)}
+.prog-fill.low{background:var(--caution-yellow)}
+.row-prog .num{font-size:11px; color:var(--muted)}
+.op-link{font-size:13px; color:var(--blue-600); padding:2px 4px; border-radius:3px}
+.op-link:hover{background:#EEF4FF}
+
+/* ===== 机巢卡片 ===== */
+.dock-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px}
+.dock-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+  display:flex; flex-direction:column; gap:10px; transition:box-shadow .15s, border-color .15s}
+.dock-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
+.dc-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px}
+.dc-name{font-size:14px; font-weight:600; line-height:1.4}
+.dc-code{font-size:11px; color:var(--muted); margin-top:2px}
+.dc-meta{display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; font-size:12px; color:var(--muted)}
+.dc-meta .v{color:var(--fg); font-weight:600}
+.dc-task{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);
+  border-top:1px dashed var(--border); padding-top:10px}
+.dc-task span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dc-foot{display:flex; justify-content:flex-end}
+
+/* ===== 排班表 ===== */
+.sched-wrap{background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow-x:auto}
+.sched{width:100%; border-collapse:collapse; min-width:900px}
+.sched th{font-size:12px; color:var(--muted); font-weight:600; text-align:center; padding:10px 8px; border-bottom:1px solid var(--border); background:#F8FAFD; white-space:nowrap}
+.sched th .d{font-size:11px; font-weight:400; color:#8FA3C4}
+.sched th.today{background:#EEF4FF; color:var(--blue-600)}
+.sched th.today .d{color:var(--blue-400)}
+.sched td{padding:8px; border-bottom:1px solid #EEF2F8; text-align:center}
+.sched td.p-name{text-align:left; font-size:13px; font-weight:600; white-space:nowrap; padding-left:14px}
+.sched td.p-name .u{display:block; font-size:11px; color:var(--muted); font-weight:400}
+.sched tr:last-child td{border-bottom:none}
+.sched td.today{background:#F5F9FF}
+.shift{display:inline-flex; align-items:center; justify-content:center; height:24px; padding:0 10px; border-radius:4px; font-size:12px; font-weight:600; white-space:nowrap}
+.s-early{background:#E8F1FF; color:var(--blue-600)}
+.s-late{background:#E9ECFB; color:#3B4CC0}
+.s-standby{background:#FFF3E3; color:#B25E09}
+.s-rest{background:#EEF2F8; color:var(--muted)}
+
+/* ===== 抽屉 ===== */
+.mask{position:fixed; inset:0; background:rgba(11,27,51,.45); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s}
+.mask.open{opacity:1; pointer-events:auto}
+.drawer{position:fixed; top:0; right:0; width:560px; max-width:94vw; height:100vh; background:var(--surface); z-index:50;
+  box-shadow:-8px 0 28px rgba(11,27,51,.18); transform:translateX(100%); transition:transform .25s ease;
+  display:flex; flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer-head{flex:none; display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border)}
+.drawer-head h3{font-size:16px}
+.x-btn{width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted)}
+.x-btn:hover{background:var(--bg); color:var(--fg)}
+.drawer-body{flex:1; overflow-y:auto; padding:20px}
+.sec-t{font-size:13px; font-weight:600; margin:20px 0 10px; display:flex; align-items:center; gap:6px}
+.sec-t:first-child{margin-top:0}
+.sec-t::before{content:""; width:3px; height:12px; border-radius:2px; background:var(--blue-600)}
+.sum-list{border:1px solid var(--border); border-radius:8px; overflow:hidden}
+.sum-row{display:flex; font-size:13px; padding:10px 14px; border-bottom:1px solid #EEF2F8}
+.sum-row:last-child{border-bottom:none}
+.sum-row .k{width:96px; color:var(--muted); flex:none}
+.mini-table{width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:8px; overflow:hidden}
+.mini-table th{padding:8px 10px; font-size:11px}
+.mini-table td{padding:8px 10px; font-size:12px; white-space:normal}
+.mini-table td.ell{max-width:180px; white-space:nowrap}
+.sensor-tags{display:flex; flex-wrap:wrap; gap:6px}
+
+/* ===== 弹窗 ===== */
+.modal-wrap{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(11,27,51,.55)}
+.modal-wrap.open{display:flex}
+.modal-box{width:480px; max-width:92vw; max-height:92vh; background:var(--surface); border-radius:10px; overflow:hidden;
+  display:flex; flex-direction:column; box-shadow:0 18px 50px rgba(11,27,51,.35)}
+.modal-box.wide{width:640px}
+.mm-head{display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border)}
+.mm-head h3{font-size:15px}
+.mm-body{padding:16px 20px; overflow-y:auto}
+.mm-foot{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+.field{margin-bottom:14px}
+.field label{display:block; font-size:13px; font-weight:600; margin-bottom:6px}
+.field label .req{color:var(--alert-red); margin-left:2px}
+.field .hint{font-size:12px; color:var(--muted); margin-top:5px; font-weight:400}
+.w-full{width:100%}
+.trend-box{background:#F8FAFD; border:1px solid var(--border); border-radius:8px; padding:12px}
+.trend-box svg{display:block; width:100%; height:auto}
+
+/* ===== Toast ===== */
+#toast-box{position:fixed; top:20px; right:20px; z-index:99; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--navy-800); border:1px solid var(--blue-400); border-left:4px solid var(--blue-400); color:#EAF1FB;
+  border-radius:6px; padding:10px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  animation:toastIn .2s ease-out; max-width:340px; line-height:1.5}
+.toast.warn{border-color:var(--warn-orange); border-left-color:var(--warn-orange)}
+.toast.err{border-color:var(--alert-red); border-left-color:var(--alert-red)}
+.toast.ok{border-color:var(--safe-green); border-left-color:var(--safe-green)}
+.toast.hide{animation:toastOut .25s ease-in forwards}
+@keyframes toastIn{from{opacity:0; transform:translateX(20px)}to{opacity:1; transform:none}}
+@keyframes toastOut{to{opacity:0; transform:translateX(20px)}}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- ===== 左侧导航 ===== -->
+  <aside class="sidenav" data-od-id="side-nav">
+    <a class="nav-logo" href="/" target="_top">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4C9AFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z"/>
+        <path d="M12 8v5M9.5 10.5h5"/>
+      </svg>
+      <span><span class="t1">无人机低空智慧调度平台</span><br><span class="t2">公安交管 · 低空巡检</span></span>
+    </a>
+    <nav class="nav-menu">
+      <a class="nav-item" href="/screen-overview.html" target="_top" data-od-id="nav-screen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        态势一张图
+      </a>
+      <a class="nav-item" href="/dispatch-tasks.html" target="_top" data-od-id="nav-dispatch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 5l1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
+        任务调度
+      </a>
+      <a class="nav-item" href="/alert-workbench.html" target="_top" data-od-id="nav-alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+        告警线索
+      </a>
+      <a class="nav-item" href="/stats-ledger.html" target="_top" data-od-id="nav-ledger">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        台账统计
+      </a>
+      <a class="nav-item active" href="/resource-management.html" target="_top" data-od-id="nav-resource">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        资源管理
+      </a>
+      <a class="nav-item" href="/system-management.html" target="_top" data-od-id="nav-system">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0019 12z"/></svg>
+        系统管理
+      </a>
+    </nav>
+    <div class="nav-foot">v1.0 · 数据均为演示示例<br>数据日期 2026-09-07</div>
+  </aside>
+
+  <!-- ===== 主列 ===== -->
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <div class="crumb">资源管理<span class="sep">/</span><b id="crumb-tab">无人机机队</b></div>
+      <div class="top-right">
+        <div class="top-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" placeholder="全局搜索" aria-label="全局搜索">
+        </div>
+        <button class="bell" aria-label="告警通知" id="bell-btn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span class="badge num">5</span>
+        </button>
+        <span class="top-time num" id="top-clock">--:--</span>
+        <span class="top-user"><span class="avatar">王</span>王警官</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h1>资源管理</h1>
+          <p class="sub">黔南布依族苗族自治州 · 机队、机巢与飞手资源台账（数据均为演示示例）</p>
+        </div>
+        <div class="seg" data-od-id="resource-tabs" role="tablist" aria-label="资源类型切换">
+          <button class="on" data-tab="fleet" role="tab" aria-selected="true">无人机机队</button>
+          <button data-tab="dock" role="tab" aria-selected="false">机场机巢</button>
+          <button data-tab="pilot" role="tab" aria-selected="false">飞手与排班</button>
+        </div>
+      </div>
+
+      <!-- ========== Tab 1：无人机机队 ========== -->
+      <section id="tab-fleet">
+        <div class="metric-grid" data-od-id="fleet-metrics">
+          <div class="metric-card" data-od-id="metric-total">
+            <span class="mi mi-blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8 8l8 8M16 8l-8 8"/></svg></span>
+            <span><span class="mk">机队总数</span><br><span class="mv num">12</span></span>
+          </div>
+          <div class="metric-card" data-od-id="metric-online">
+            <span class="mi mi-green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+            <span><span class="mk">在线（含任务中/待机）</span><br><span class="mv num">9</span></span>
+          </div>
+          <div class="metric-card" data-od-id="metric-tasking">
+            <span class="mi mi-navy"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.1-7-11a7 7 0 0114 0c0 5.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+            <span><span class="mk">任务中</span><br><span class="mv num">4</span></span>
+          </div>
+          <div class="metric-card" data-od-id="metric-maint">
+            <span class="mi mi-yellow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 105.4 5.4L21 10.6V21h-2.5l-9-9a4 4 0 015.2-5.7z"/><path d="M3 21l6.5-6.5"/></svg></span>
+            <span><span class="mk">维保 / 故障</span><br><span class="mv num">2</span></span>
+          </div>
+        </div>
+
+        <div class="toolbar" data-od-id="fleet-filter-bar">
+          <select class="select" id="f-status" aria-label="状态筛选">
+            <option value="全部">全部状态</option>
+            <option>在线</option><option>任务中</option><option>待机</option><option>维保中</option><option>离线</option>
+          </select>
+          <select class="select" id="f-district" aria-label="辖区筛选">
+            <option value="全部">全部辖区</option>
+            <option>都匀</option><option>福泉</option><option>贵定</option><option>独山</option><option>三都</option>
+            <option>荔波</option><option>惠水</option><option>瓮安</option><option>平塘</option><option>罗甸</option>
+            <option>长顺</option><option>龙里</option>
+          </select>
+          <input class="input" id="f-search" type="text" placeholder="搜索编号 / 型号 / 辖区" aria-label="搜索无人机">
+          <span class="spacer"></span>
+          <span class="table-info num" id="fleet-count"></span>
+        </div>
+
+        <div class="table-wrap">
+          <table data-od-id="fleet-table">
+            <thead><tr>
+              <th>编号</th><th>型号</th><th>所属辖区</th><th>状态</th><th>电量</th>
+              <th>累计飞行时长</th><th>最近维保日期</th><th>操作</th>
+            </tr></thead>
+            <tbody id="fleet-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========== Tab 2：机场机巢 ========== -->
+      <section id="tab-dock" hidden>
+        <div class="dock-grid" data-od-id="dock-grid" id="dock-grid"></div>
+      </section>
+
+      <!-- ========== Tab 3：飞手与排班 ========== -->
+      <section id="tab-pilot" hidden>
+        <div class="table-tools">
+          <span class="table-info">飞手档案（AOPA 持证人员）</span>
+          <span class="spacer"></span>
+          <button class="btn btn-outline" id="btn-schedule-edit" data-od-id="btn-schedule-edit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            调整排班
+          </button>
+        </div>
+        <div class="table-wrap" style="margin-bottom:20px">
+          <table data-od-id="pilot-table">
+            <thead><tr>
+              <th>姓名</th><th>警号</th><th>资质等级</th><th>所属大队</th><th>状态</th><th>本月飞行时长</th><th>操作</th>
+            </tr></thead>
+            <tbody id="pilot-tbody"></tbody>
+          </table>
+        </div>
+        <div class="sec-t" style="margin-top:0">本周排班（2026-09-07 至 2026-09-13）</div>
+        <div class="sched-wrap" data-od-id="schedule-grid">
+          <table class="sched" id="sched-table"></table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 详情抽屉（无人机 / 飞手档案共用） ===== -->
+<div class="mask" id="drawer-mask"></div>
+<aside class="drawer" id="detail-drawer" data-od-id="detail-drawer" aria-label="详情">
+  <div class="drawer-head">
+    <h3 id="drawer-title">详情</h3>
+    <button class="x-btn" id="drawer-close" aria-label="关闭">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<!-- ===== 维保登记弹窗 ===== -->
+<div class="modal-wrap" id="maint-modal">
+  <div class="modal-box" data-od-id="maint-modal" role="dialog" aria-label="维保登记">
+    <div class="mm-head">
+      <h3>维保登记 <span style="font-size:12px;color:var(--muted);font-weight:400" id="maint-drone"></span></h3>
+      <button class="x-btn" id="maint-close" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mm-body">
+      <div class="field">
+        <label>维保类型<span class="req">*</span></label>
+        <select class="select w-full" id="m-type">
+          <option>例行保养</option><option>桨叶更换</option><option>电池更换</option>
+          <option>云台检修</option><option>固件升级</option><option>故障维修</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>维保日期<span class="req">*</span></label>
+        <input class="input w-full" id="m-date" type="date" value="2026-09-07">
+        <div class="hint" id="maint-error" role="alert" hidden style="color:var(--danger)">请填写维保日期并选择经办人</div>
+      </div>
+      <div class="field">
+        <label>经办人<span class="req">*</span></label>
+        <select class="select w-full" id="m-owner">
+          <option>王振</option><option>李强</option><option>王敏</option>
+          <option>赵磊</option><option>陈晨</option><option>刘洋</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>备注</label>
+        <textarea class="input w-full" id="m-note" rows="3" placeholder="维保内容、更换件、注意事项等"></textarea>
+        <div class="hint">提交后自动更新该机「最近维保日期」（演示为前端模拟）</div>
+      </div>
+    </div>
+    <div class="mm-foot">
+      <button class="btn btn-outline" id="maint-cancel">取消</button>
+      <button class="btn btn-primary" id="maint-submit" data-od-id="btn-maint-submit">提交登记</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 机巢详情弹窗 ===== -->
+<div class="modal-wrap" id="dock-modal">
+  <div class="modal-box wide" data-od-id="dock-modal" role="dialog" aria-label="机巢详情">
+    <div class="mm-head">
+      <h3 id="dock-modal-title">机巢详情</h3>
+      <button class="x-btn" id="dock-close" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mm-body" id="dock-modal-body"></div>
+  </div>
+</div>
+
+<div id="toast-box" data-od-id="toast-box"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ================= Toast ================= */
+function toast(msg, kind){
+  const box = $('#toast-box');
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 260); }, 3000);
+}
+
+/* ================= 顶部时钟 ================= */
+function tickClock(){
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  $('#top-clock').textContent = p(d.getHours()) + ':' + p(d.getMinutes());
+}
+tickClock(); setInterval(tickClock, 1000);
+$('#bell-btn').addEventListener('click', () => toast('您有 5 条未读告警，请前往「告警线索」工作台处置', 'warn'));
+
+/* ================= Tab 切换 ================= */
+const TAB_NAMES = {fleet:'无人机机队', dock:'机场机巢', pilot:'飞手与排班'};
+$$('[data-od-id="resource-tabs"] button').forEach(b => b.addEventListener('click', () => {
+  $$('[data-od-id="resource-tabs"] button').forEach(x => {
+    const on = x === b;
+    x.classList.toggle('on', on);
+    x.setAttribute('aria-selected', on);
+  });
+  Object.keys(TAB_NAMES).forEach(k => { $('#tab-' + k).hidden = k !== b.dataset.tab; });
+  $('#crumb-tab').textContent = TAB_NAMES[b.dataset.tab];
+}));
+
+/* ================= 数据：无人机机队（与大屏 U-01~U-08 口径一致，扩展至 12 架） ================= */
+const DRONES = [
+  {id:'U-01', model:'M350 RTK', district:'都匀', status:'在线',   batt:82,  hours:326.5, maint:'2026-08-20', dock:'都匀机动大队机巢'},
+  {id:'U-02', model:'M30T',     district:'惠水', status:'在线',   batt:76,  hours:214.0, maint:'2026-08-26', dock:'都匀机动大队机巢'},
+  {id:'U-03', model:'M350 RTK', district:'福泉', status:'任务中', batt:45,  hours:402.3, maint:'2026-08-15', dock:'福泉马场坪机巢'},
+  {id:'U-04', model:'M30T',     district:'都匀', status:'任务中', batt:61,  hours:289.7, maint:'2026-08-30', dock:'都匀机动大队机巢', note:'告警处置中'},
+  {id:'U-05', model:'M350 RTK', district:'独山', status:'在线',   batt:88,  hours:356.1, maint:'2026-09-02', dock:'独山互通机巢'},
+  {id:'U-06', model:'M30T',     district:'贵定', status:'离线',   batt:100, hours:198.4, maint:'2026-08-08', dock:'贵定昌明机巢', note:'机库待命 · 链路中断'},
+  {id:'U-07', model:'M350 RTK', district:'贵定', status:'在线',   batt:69,  hours:377.9, maint:'2026-08-22', dock:'贵定昌明机巢'},
+  {id:'U-08', model:'M30T',     district:'三都', status:'任务中', batt:34,  hours:265.2, maint:'2026-08-18', dock:'三都周覃机巢'},
+  {id:'U-09', model:'M350 RTK', district:'荔波', status:'在线',   batt:91,  hours:152.6, maint:'2026-09-01', dock:'三都周覃机巢'},
+  {id:'U-10', model:'M30T',     district:'瓮安', status:'待机',   batt:97,  hours:121.3, maint:'2026-08-28', dock:'瓮安银盏机巢'},
+  {id:'U-11', model:'M350 RTK', district:'平塘', status:'任务中', batt:58,  hours:233.8, maint:'2026-08-24', dock:'瓮安银盏机巢'},
+  {id:'U-12', model:'M350 RTK', district:'龙里', status:'维保中', batt:null,hours:310.4, maint:'2026-09-06', dock:'贵定昌明机巢', note:'电机检修中'},
+];
+const ST_CLS = {'在线':'b-online','任务中':'b-task','待机':'b-standby','维保中':'b-maint','离线':'b-offline'};
+const SENSORS = {
+  'M350 RTK':['禅思 H20T 四传感器云台','广角相机 4K','23 倍混合变焦','红外热成像','激光测距 1200m','RTK 厘米级定位'],
+  'M30T':['广角+变焦双光相机','48MP 变焦','红外热成像 640×512','激光测距 1200m','IP55 防护'],
+};
+const ROUTE_POOL = ['贵北高速惠水段','沪昆高速贵定段','厦蓉高速三都段','兰海高速都匀段','都匀城区中心路段','福泉马场坪段','独山互通连接线','荔波樟江大道沿线','瓮安银盏工业园周边','平塘克度镇周边','罗甸红水河大道','龙里谷脚物流园'];
+
+function flightsOf(d, idx){
+  return [0,1,2,3,4].map(k => ({
+    date:'2026-09-0' + (6 - k),
+    name:ROUTE_POOL[(idx + k * 3) % ROUTE_POOL.length] + (k % 2 ? ' 夜间巡查' : ' 常态巡查'),
+    dur:(28 + (idx * 7 + k * 11) % 42) + ' min',
+    result:(d.id === 'U-04' && k === 1) ? '事故现场取证 · 证据已归档' : '正常完成',
+  }));
+}
+function maintOf(d, idx){
+  return [
+    {date:d.maint, type:idx % 3 === 0 ? '桨叶更换' : '例行保养', owner:['王振','李强','王敏','赵磊','陈晨','刘洋'][idx % 6], note:'按手册完成 ' + (idx % 3 === 0 ? '全套桨叶更换与动平衡校验' : '500 项例行点检')},
+    {date:'2026-07-' + String(10 + idx).padStart(2,'0'), type:'电池循环检测', owner:'刘洋', note:'电池健康度 ' + (88 + idx % 9) + '%，正常'},
+  ];
+}
+
+/* ================= Tab 1：机队表格 + 筛选 ================= */
+let fStatus = '全部', fDistrict = '全部', fSearch = '';
+
+function matchDrone(d){
+  if (fStatus !== '全部' && d.status !== fStatus) return false;
+  if (fDistrict !== '全部' && d.district !== fDistrict) return false;
+  if (fSearch){
+    const q = fSearch.toLowerCase();
+    return (d.id + d.model + d.district + d.status).toLowerCase().includes(q);
+  }
+  return true;
+}
+
+function battCell(d){
+  if (d.batt === null) return '<span style="color:var(--muted)">—</span>';
+  const low = d.batt < 40 ? ' low' : '';
+  return `<div class="row-prog"><div class="prog-bar"><div class="prog-fill${low}" style="width:${d.batt}%"></div></div><span class="num">${d.batt}%</span></div>`;
+}
+
+function renderFleet(){
+  const rows = DRONES.filter(matchDrone);
+  $('#fleet-count').textContent = `共 ${rows.length} 架`;
+  $('#fleet-tbody').innerHTML = rows.length ? rows.map(d => `
+    <tr data-od-id="drone-row-${d.id.toLowerCase().replace('-','')}">
+      <td><b class="num">${d.id}</b>${d.note ? `<div style="font-size:11px;color:var(--muted)">${esc(d.note)}</div>` : ''}</td>
+      <td>${d.model}</td>
+      <td>${d.district}</td>
+      <td><span class="badge ${ST_CLS[d.status]}"><i></i>${d.status}</span></td>
+      <td>${battCell(d)}</td>
+      <td><span class="num">${d.hours.toFixed(1)}</span> h</td>
+      <td class="num">${d.maint}</td>
+      <td>
+        <button class="op-link" data-act="detail" data-id="${d.id}">详情</button>
+        <button class="op-link" data-act="maint" data-id="${d.id}">维保登记</button>
+      </td>
+    </tr>`).join('')
+    : '<tr class="empty-row" data-od-id="fleet-empty"><td colspan="8">暂无匹配数据，请调整筛选条件</td></tr>';
+}
+
+$('#f-status').addEventListener('change', e => { fStatus = e.target.value; renderFleet(); });
+$('#f-district').addEventListener('change', e => { fDistrict = e.target.value; renderFleet(); });
+$('#f-search').addEventListener('input', e => { fSearch = e.target.value.trim(); renderFleet(); });
+
+/* ================= 抽屉（无人机详情 / 飞手档案） ================= */
+function openDrawer(title, html){
+  $('#drawer-title').textContent = title;
+  $('#drawer-body').innerHTML = html;
+  $('#drawer-mask').classList.add('open');
+  $('#detail-drawer').classList.add('open');
+}
+function closeDrawer(){
+  $('#drawer-mask').classList.remove('open');
+  $('#detail-drawer').classList.remove('open');
+}
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#drawer-mask').addEventListener('click', closeDrawer);
+
+function openDroneDetail(id){
+  const idx = DRONES.findIndex(d => d.id === id);
+  const d = DRONES[idx];
+  const flights = flightsOf(d, idx);
+  const maints = maintOf(d, idx);
+  openDrawer(`${d.id} · ${d.model} 详情`, `
+    <div class="sec-t">基础信息</div>
+    <div class="sum-list">
+      <div class="sum-row"><span class="k">设备编号</span><span class="num">${d.id}</span></div>
+      <div class="sum-row"><span class="k">机型</span><span>DJI ${d.model}（行业版）</span></div>
+      <div class="sum-row"><span class="k">所属辖区</span><span>${d.district} · ${esc(d.dock)}</span></div>
+      <div class="sum-row"><span class="k">当前状态</span><span><span class="badge ${ST_CLS[d.status]}"><i></i>${d.status}</span>${d.note ? ' ' + esc(d.note) : ''}</span></div>
+      <div class="sum-row"><span class="k">当前电量</span><span class="num">${d.batt === null ? '—（检修中）' : d.batt + ' %'}</span></div>
+      <div class="sum-row"><span class="k">累计飞行</span><span class="num">${d.hours.toFixed(1)} h</span></div>
+    </div>
+    <div class="sec-t">传感器配置</div>
+    <div class="sensor-tags">${SENSORS[d.model].map(s => `<span class="tag tag-sensor">${s}</span>`).join('')}</div>
+    <div class="sec-t">近 5 次飞行记录</div>
+    <table class="mini-table">
+      <thead><tr><th>日期</th><th>任务</th><th>时长</th><th>结果</th></tr></thead>
+      <tbody>${flights.map(f => `<tr><td class="num">${f.date}</td><td class="ell" title="${esc(f.name)}">${esc(f.name)}</td><td class="num">${f.dur}</td><td>${esc(f.result)}</td></tr>`).join('')}</tbody>
+    </table>
+    <div class="sec-t">维保记录</div>
+    <table class="mini-table">
+      <thead><tr><th>日期</th><th>类型</th><th>经办人</th><th>备注</th></tr></thead>
+      <tbody>${maints.map(m => `<tr><td class="num">${m.date}</td><td>${m.type}</td><td>${m.owner}</td><td class="ell" title="${esc(m.note)}">${esc(m.note)}</td></tr>`).join('')}</tbody>
+    </table>`);
+}
+
+/* ================= 维保登记弹窗 ================= */
+let maintTarget = null;
+function openMaint(id){
+  maintTarget = id;
+  $('#maint-drone').textContent = '· ' + id;
+  $('#maint-error').hidden = true;
+  $('#maint-modal').classList.add('open');
+}
+function closeMaint(){ $('#maint-modal').classList.remove('open'); maintTarget = null; }
+$('#maint-close').addEventListener('click', closeMaint);
+$('#maint-cancel').addEventListener('click', closeMaint);
+$('#maint-modal').addEventListener('click', e => { if (e.target.id === 'maint-modal') closeMaint(); });
+$('#maint-submit').addEventListener('click', () => {
+  const d = DRONES.find(x => x.id === maintTarget);
+  if (!d) return;
+  if (!$('#m-date').value || !$('#m-owner').value) {
+    $('#maint-error').hidden = false;
+    toast('表单校验未通过，请填写必填项', 'err');
+    return;
+  }
+  d.maint = $('#m-date').value || d.maint;
+  closeMaint();
+  renderFleet();
+  toast(`${d.id} 维保登记成功：${$('#m-type').value} · 经办人 ${$('#m-owner').value}`, 'ok');
+});
+
+/* ================= Tab 1 表格操作委托 ================= */
+$('#fleet-tbody').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  if (btn.dataset.act === 'detail') openDroneDetail(btn.dataset.id);
+  else if (btn.dataset.act === 'maint') openMaint(btn.dataset.id);
+});
+
+/* ================= 数据：机场机巢 ================= */
+const DOCKS = [
+  {id:'J-01', name:'都匀机动大队机巢', status:'运行中', drones:['U-01','U-02','U-04'], temp:'24.5', wx:'多云 · 东南风 2 级', today:14, task:'贵北高速惠水段航线巡检', pos:'都匀市公安交管局机动大队营区', radius:'10 km', trend:[8,10,12,9,14,11,14]},
+  {id:'J-02', name:'福泉马场坪机巢', status:'运行中', drones:['U-03'], temp:'25.1', wx:'晴 · 南风 1 级', today:9, task:'福泉马场坪段危化品通道巡查', pos:'福泉市马场坪街道检查站旁', radius:'8 km', trend:[6,7,8,7,9,8,9]},
+  {id:'J-03', name:'独山互通机巢', status:'运行中', drones:['U-05'], temp:'23.8', wx:'阴 · 无持续风向 2 级', today:7, task:'兰海高速独山段秩序巡查', pos:'兰海高速独山互通收费站旁', radius:'8 km', trend:[5,6,6,8,7,6,7]},
+  {id:'J-04', name:'三都周覃机巢', status:'运行中', drones:['U-08','U-09'], temp:'26.2', wx:'小雨 · 东风 2 级', today:6, task:'厦蓉高速三都至荔波段秩序巡查', pos:'厦蓉高速三都段周覃服务区', radius:'12 km', trend:[4,5,7,6,5,8,6]},
+  {id:'J-05', name:'瓮安银盏机巢', status:'维护中', drones:['U-10','U-11'], temp:'22.0', wx:'舱内除湿维护中', today:0, task:'计划：瓮安银盏工业园周边巡查', pos:'瓮安县银盏镇工业园区', radius:'10 km', trend:[7,8,6,9,7,0,0]},
+  {id:'J-06', name:'贵定昌明机巢', status:'离线', drones:['U-06','U-07','U-12'], temp:null, wx:'链路中断 · 气象不可用', today:0, task:'沪昆高速贵定段连接线隐患排查（暂停）', pos:'沪昆高速贵定段昌明收费站', radius:'10 km', trend:[9,8,10,7,6,0,0]},
+];
+const DOCK_ST_CLS = {'运行中':'b-online','维护中':'b-maint','离线':'b-offline'};
+
+function renderDocks(){
+  $('#dock-grid').innerHTML = DOCKS.map(k => `
+    <div class="dock-card" data-od-id="dock-card-${k.id.toLowerCase()}">
+      <div class="dc-top">
+        <div><div class="dc-name">${esc(k.name)}</div><div class="dc-code num">${k.id}</div></div>
+        <span class="badge ${DOCK_ST_CLS[k.status]}"><i></i>${k.status}</span>
+      </div>
+      <div class="dc-meta">
+        <span>驻守无人机</span><span class="v num">${k.drones.join('、')}</span>
+        <span>舱内温度</span><span class="v num">${k.temp === null ? '—' : k.temp + ' ℃'}</span>
+        <span>气象</span><span class="v">${esc(k.wx)}</span>
+        <span>今日起降</span><span class="v"><span class="num">${k.today}</span> 架次</span>
+      </div>
+      <div class="dc-task" title="${esc(k.task)}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 5l1 1 2-2"/></svg>
+        <span>最近巡检：${esc(k.task)}</span>
+      </div>
+      <div class="dc-foot">
+        <button class="btn btn-outline" data-dock="${k.id}" data-od-id="btn-dock-${k.id.toLowerCase()}">查看详情</button>
+      </div>
+    </div>`).join('');
+}
+
+function trendSvg(trend){
+  const W = 560, H = 150, pad = 30, bw = 26, gap = (W - pad * 2 - bw * 7) / 6;
+  const max = Math.max(...trend, 1);
+  const days = ['09-01','09-02','09-03','09-04','09-05','09-06','09-07'];
+  let bars = '', labels = '', area = `M ${pad} ${H - 22}`;
+  trend.forEach((v, i) => {
+    const x = pad + i * (bw + gap), h = Math.max(v / max * (H - 55), v > 0 ? 6 : 2), y = H - 22 - h;
+    const fill = v === 0 ? '#C9D4E6' : (i === 6 ? 'var(--blue-600)' : 'var(--blue-400)');
+    bars += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="3" fill="${fill}"/>` +
+      `<text x="${x + bw / 2}" y="${y - 5}" font-size="11" fill="#5A6B85" text-anchor="middle" font-family="inherit">${v}</text>`;
+    labels += `<text x="${x + bw / 2}" y="${H - 6}" font-size="10" fill="#8FA3C4" text-anchor="middle" font-family="inherit">${days[i]}</text>`;
+    area += ` L ${x + bw / 2} ${y}`;
+  });
+  area += ` L ${pad + 6 * (bw + gap) + bw} ${H - 22} Z`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="近 7 日起降架次趋势">
+    <line x1="${pad}" y1="${H - 22}" x2="${W - pad}" y2="${H - 22}" stroke="#E2E8F2" stroke-width="1"/>
+    <path d="${area}" fill="rgba(76,154,255,.14)" stroke="none"/>${bars}${labels}
+  </svg>`;
+}
+
+function openDockDetail(id){
+  const k = DOCKS.find(x => x.id === id);
+  if (!k) return;
+  $('#dock-modal-title').textContent = `${k.name}（${k.id}）`;
+  $('#dock-modal-body').innerHTML = `
+    <div class="sum-list" style="margin-bottom:14px">
+      <div class="sum-row"><span class="k">运行状态</span><span><span class="badge ${DOCK_ST_CLS[k.status]}"><i></i>${k.status}</span></span></div>
+      <div class="sum-row"><span class="k">部署位置</span><span>${esc(k.pos)}</span></div>
+      <div class="sum-row"><span class="k">覆盖半径</span><span class="num">${k.radius}</span></div>
+      <div class="sum-row"><span class="k">驻机清单</span><span class="num">${k.drones.join('、')}</span></div>
+      <div class="sum-row"><span class="k">舱内环境</span><span>${k.temp === null ? '—' : `温度 <span class="num">${k.temp} ℃</span>`} · ${esc(k.wx)}</span></div>
+      <div class="sum-row"><span class="k">今日起降</span><span><span class="num">${k.today}</span> 架次</span></div>
+    </div>
+    <div class="sec-t" style="margin-top:0">近 7 日起降趋势（架次）</div>
+    <div class="trend-box">${trendSvg(k.trend)}</div>`;
+  $('#dock-modal').classList.add('open');
+}
+function closeDock(){ $('#dock-modal').classList.remove('open'); }
+$('#dock-close').addEventListener('click', closeDock);
+$('#dock-modal').addEventListener('click', e => { if (e.target.id === 'dock-modal') closeDock(); });
+$('#dock-grid').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-dock]');
+  if (btn) openDockDetail(btn.dataset.dock);
+});
+
+/* ================= 数据：飞手与排班 ================= */
+const PILOTS = [
+  {name:'王振', no:'085221', level:'AOPA 机长',   unit:'州局机动大队', status:'在岗',   hours:42.5},
+  {name:'李强', no:'085236', level:'AOPA 驾驶员', unit:'都匀大队',     status:'在岗',   hours:38.0},
+  {name:'王敏', no:'085247', level:'AOPA 机长',   unit:'福泉大队',     status:'在岗',   hours:35.5},
+  {name:'赵磊', no:'085259', level:'AOPA 驾驶员', unit:'独山大队',     status:'培训中', hours:12.0},
+  {name:'陈晨', no:'085263', level:'AOPA 机长',   unit:'三都大队',     status:'休息',   hours:29.5},
+  {name:'刘洋', no:'085278', level:'AOPA 驾驶员', unit:'贵定大队',     status:'在岗',   hours:33.0},
+];
+const PILOT_ST_CLS = {'在岗':'b-online','休息':'b-offline','培训中':'b-maint'};
+
+function renderPilots(){
+  $('#pilot-tbody').innerHTML = PILOTS.map(p => `
+    <tr data-od-id="pilot-row-${p.no}">
+      <td><b>${p.name}</b></td>
+      <td class="num">${p.no}</td>
+      <td>${p.level}</td>
+      <td>${p.unit}</td>
+      <td><span class="badge ${PILOT_ST_CLS[p.status]}"><i></i>${p.status}</span></td>
+      <td><span class="num">${p.hours.toFixed(1)}</span> h</td>
+      <td><button class="op-link" data-pilot="${p.no}">查看档案</button></td>
+    </tr>`).join('');
+}
+
+function openPilotDetail(no){
+  const i = PILOTS.findIndex(p => p.no === no);
+  const p = PILOTS[i];
+  openDrawer(`${p.name} · 飞手档案`, `
+    <div class="sum-list">
+      <div class="sum-row"><span class="k">姓名</span><span>${p.name}</span></div>
+      <div class="sum-row"><span class="k">警号</span><span class="num">${p.no}</span></div>
+      <div class="sum-row"><span class="k">资质等级</span><span>${p.level}</span></div>
+      <div class="sum-row"><span class="k">证书有效期</span><span class="num">2025-03-15 至 2028-03-14</span></div>
+      <div class="sum-row"><span class="k">所属大队</span><span>${p.unit}</span></div>
+      <div class="sum-row"><span class="k">当前状态</span><span><span class="badge ${PILOT_ST_CLS[p.status]}"><i></i>${p.status}</span></span></div>
+      <div class="sum-row"><span class="k">本月飞行</span><span class="num">${p.hours.toFixed(1)} h</span></div>
+      <div class="sum-row"><span class="k">累计飞行</span><span class="num">${(p.hours * 9.6 + 120).toFixed(1)} h</span></div>
+    </div>
+    <div class="sec-t">准驾机型</div>
+    <div class="sensor-tags"><span class="tag tag-sensor">M350 RTK</span><span class="tag tag-sensor">M30T</span></div>
+    <div class="sec-t">本月执勤摘要</div>
+    <table class="mini-table">
+      <thead><tr><th>日期</th><th>任务</th><th>架次</th></tr></thead>
+      <tbody>${[0,1,2].map(k => `<tr><td class="num">2026-09-0${5 - k}</td><td class="ell" title="${esc(ROUTE_POOL[(i + k * 2) % 12])}巡查">${esc(ROUTE_POOL[(i + k * 2) % 12])}巡查</td><td class="num">${2 + (i + k) % 3}</td></tr>`).join('')}</tbody>
+    </table>`);
+}
+$('#pilot-tbody').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-pilot]');
+  if (btn) openPilotDetail(btn.dataset.pilot);
+});
+
+/* ================= 本周排班 ================= */
+const WEEK_DAYS = ['周一','周二','周三','周四','周五','周六','周日'];
+const WEEK_DATES = ['09-07','09-08','09-09','09-10','09-11','09-12','09-13'];
+const TODAY_COL = 0; /* 2026-09-07 周一 */
+const SHIFTS = [
+  ['早班','早班','晚班','早班','早班','备勤','休息'],
+  ['晚班','早班','早班','晚班','早班','休息','早班'],
+  ['早班','晚班','早班','早班','休息','早班','晚班'],
+  ['备勤','休息','早班','备勤','晚班','早班','休息'],
+  ['休息','晚班','备勤','休息','早班','晚班','早班'],
+  ['早班','备勤','休息','早班','晚班','休息','备勤'],
+];
+const SHIFT_CLS = {'早班':'s-early','晚班':'s-late','备勤':'s-standby','休息':'s-rest'};
+const SHIFT_TIME = {'早班':'07:00–15:00','晚班':'15:00–23:00','备勤':'备勤待命','休息':'调休'};
+
+function renderSchedule(){
+  const head = `<thead><tr><th style="text-align:left;padding-left:14px">飞手</th>${WEEK_DAYS.map((d, i) =>
+    `<th class="${i === TODAY_COL ? 'today' : ''}">${d}${i === TODAY_COL ? ' · 今天' : ''}<div class="d num">${WEEK_DATES[i]}</div></th>`).join('')}</tr></thead>`;
+  const body = `<tbody>${PILOTS.map((p, r) => `
+    <tr data-od-id="sched-row-${p.no}">
+      <td class="p-name">${p.name}<span class="u">${p.unit}</span></td>
+      ${SHIFTS[r].map((s, c) => `<td class="${c === TODAY_COL ? 'today' : ''}"><span class="shift ${SHIFT_CLS[s]}" title="${s} · ${SHIFT_TIME[s]}">${s}</span></td>`).join('')}
+    </tr>`).join('')}</tbody>`;
+  $('#sched-table').innerHTML = head + body;
+}
+$('#btn-schedule-edit').addEventListener('click', () => toast('演示环境暂不支持修改排班', 'warn'));
+
+/* ================= Esc 关闭弹层 ================= */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('#maint-modal').classList.contains('open')) closeMaint();
+  else if ($('#dock-modal').classList.contains('open')) closeDock();
+  else if ($('#detail-drawer').classList.contains('open')) closeDrawer();
+});
+
+/* ================= 初始化 ================= */
+renderFleet();
+renderDocks();
+renderPilots();
+renderSchedule();
+</script>
+</body>
+</html>
