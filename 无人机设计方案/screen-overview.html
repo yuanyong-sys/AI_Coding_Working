@@ -186,7 +186,9 @@ a:hover{text-decoration:underline}
   background:color-mix(in srgb,var(--navy-700) 35%, transparent);cursor:pointer;transition:background .15s;width:100%;text-align:left}
 .alert-item:hover{background:color-mix(in srgb,var(--blue-400) 10%, transparent)}
 .alert-item:active{background:color-mix(in srgb,var(--blue-400) 18%, transparent)}
+.alert-item.selected{border-color:var(--info-cyan);background:color-mix(in srgb,var(--blue-600) 22%, var(--navy-700));box-shadow:inset 3px 0 0 var(--info-cyan),0 0 0 1px color-mix(in srgb,var(--info-cyan) 30%, transparent)}
 .alert-item.urgent{border-color:var(--alert-red);animation:borderBreathe 1s ease-in-out infinite}
+.alert-item.urgent.selected{border-color:var(--info-cyan)}
 .alert-item.flash{animation:flashNew 3s ease-out forwards}
 .alert-level{height:24px;border-radius:3px;font-size:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
 .lv-red{background:var(--alert-red)} .lv-orange{background:var(--warn-orange)} .lv-yellow{background:var(--caution-yellow);color:var(--navy-900)}
@@ -224,7 +226,11 @@ a:hover{text-decoration:underline}
 @keyframes borderBreathe{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--alert-red) 55%, transparent)}50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--alert-red) 12%, transparent)}}
 @keyframes flashNew{0%{background:color-mix(in srgb,var(--blue-600) 45%, transparent)}100%{background:color-mix(in srgb,var(--navy-700) 35%, transparent)}}
 .pulse-ring{transform-box:fill-box;transform-origin:center;animation:pulse 1s ease-out infinite}
+.map-selection-ring{opacity:0;transform-box:fill-box;transform-origin:center;pointer-events:none}
+#layer-alerts g.selected .map-selection-ring{opacity:1;animation:selectionPulse 1.15s ease-in-out infinite}
+#layer-alerts g.selected circle:last-child{stroke:#fff;stroke-width:3;filter:drop-shadow(0 0 5px var(--info-cyan))}
 @keyframes pulse{0%{transform:scale(.35);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+@keyframes selectionPulse{0%,100%{transform:scale(.85);opacity:.95}50%{transform:scale(1.35);opacity:.35}}
 .drone-hl{transform-box:fill-box;transform-origin:center;animation:pulse 1.4s ease-out infinite}
 
 /* Toast */
@@ -677,8 +683,10 @@ function renderMapPoints(){
     const g = document.createElementNS(NS,"g");
     g.setAttribute("cursor","pointer"); g.setAttribute("data-i", i);
     g.setAttribute("tabindex","0"); g.setAttribute("role","button");
+    g.setAttribute("aria-pressed","false");
     g.setAttribute("aria-label", DATA.levelText[a.level]+"告警："+a.type+"，"+a.loc);
     g.innerHTML =
+      '<circle class="map-selection-ring" cx="'+a.x+'" cy="'+a.y+'" r="13" fill="none" stroke="'+cssVar("--info-cyan")+'" stroke-width="2"/>'+
       (a.status==='RESOLVED'||a.status==='FALSE_POSITIVE'?'':'<circle class="pulse-ring" cx="'+a.x+'" cy="'+a.y+'" r="10" fill="'+col+'" opacity=".55"/>')+
       '<circle cx="'+a.x+'" cy="'+a.y+'" r="6.5" fill="'+col+'" stroke="#0B1B33" stroke-width="2"/>';
     g.addEventListener("click", () => selectAlert(i, true));
@@ -727,6 +735,7 @@ function closeMapInfo(){
   const video=$("info-thumb").querySelector("video"); if(video) video.pause();
   $("info-card").classList.remove("show");
   document.querySelectorAll(".fleet-row").forEach(row => row.classList.remove("active"));
+  clearAlertSelection();
 }
 $("info-close").addEventListener("click", closeMapInfo);
 document.querySelector(".map-wrap").addEventListener("click", event => {
@@ -736,8 +745,15 @@ document.querySelector(".map-wrap").addEventListener("click", event => {
   closeMapInfo();
 });
 
+function clearAlertSelection(){
+  const colors={red:"#E5484D",orange:"#F76B15",yellow:"#F5A623"};
+  document.querySelectorAll(".alert-item").forEach(item=>{item.classList.remove("selected");item.setAttribute("aria-pressed","false");});
+  document.querySelectorAll("#layer-alerts g").forEach(marker=>{marker.classList.remove("selected");marker.setAttribute("aria-pressed","false");});
+  amapOverlays["layer-alerts"].forEach((marker,index)=>marker.setOptions({radius:7,strokeColor:"#0B1B33",strokeWeight:2,fillColor:colors[DATA.alerts[index].level],zIndex:9}));
+}
 function selectDrone(i, pan){
   lastMapPointSelection = performance.now();
+  clearAlertSelection();
   const d = DATA.fleet[i];
   document.querySelectorAll(".fleet-row").forEach(r => r.classList.toggle("active", +r.dataset.i===i));
   const alertType=d.id==="U-08"?"行人闯入":d.status==="alarm"?"交通事故":"道路巡查异常";
@@ -750,6 +766,16 @@ function selectDrone(i, pan){
 function selectAlert(i, pan){
   lastMapPointSelection = performance.now();
   const a = DATA.alerts[i];
+  clearAlertSelection();
+  document.querySelectorAll(".alert-item").forEach(item => {
+    const selected=+item.dataset.i===i;item.classList.toggle("selected",selected);item.setAttribute("aria-pressed",String(selected));
+  });
+  document.querySelectorAll("#layer-alerts g").forEach(marker => {
+    const selected=+marker.dataset.i===i;marker.classList.toggle("selected",selected);marker.setAttribute("aria-pressed",String(selected));
+  });
+  amapOverlays["layer-alerts"].forEach((marker,index) => marker.setOptions({
+    radius:index===i?11:7,strokeColor:index===i?"#3DD9EB":"#0B1B33",strokeWeight:index===i?4:2,zIndex:index===i?20:9
+  }));
   showInfo(DATA.levelText[a.level] + "告警 · " + a.type,
     [["告警级别", DATA.levelText[a.level]], ["事件类型", a.type],
      ["发生位置", a.loc], ["捕获时间", a.time], ["处置状态", a.status==='RESOLVED'?'已办结':a.status==='PROCESSING'?'处置中':'待核实']],
@@ -765,7 +791,7 @@ function renderAlerts(){
     return;
   }
   $("alert-list").innerHTML = DATA.alerts.map((a,i) =>
-    '<button class="alert-item'+(a.level==="red"?" urgent":"")+(i===0?" flash":"")+'" data-i="'+i+'" data-od-id="alert-item-'+i+'">'+
+    '<button class="alert-item'+(a.level==="red"?" urgent":"")+(i===0?" flash":"")+'" data-i="'+i+'" data-od-id="alert-item-'+i+'" aria-pressed="false">'+
       '<span class="alert-level lv-'+a.level+'">'+DATA.levelText[a.level]+'</span>'+
       '<span class="alert-main"><span class="alert-type">'+escapeHtml(a.type)+'</span>'+
       '<span class="alert-loc">'+escapeHtml(a.loc)+'</span></span>'+

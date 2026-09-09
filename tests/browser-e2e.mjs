@@ -338,6 +338,12 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "document.querySelector('#detail-grid .st-tag').textContent === '已办结'");
     await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
     await waitFor(cdp, "document.querySelectorAll('#layer-alerts g').length > 0");
+    await evaluate(cdp, "document.querySelector('.alert-item[data-i=\"1\"]').click()");
+    assert.deepEqual(await evaluate(cdp, `(() => ({
+      list: Array.from(document.querySelectorAll('.alert-item.selected'), item => item.dataset.i),
+      map: Array.from(document.querySelectorAll('#layer-alerts g.selected'), marker => marker.dataset.i),
+      pressed: document.querySelector('.alert-item[data-i="1"]').getAttribute('aria-pressed')
+    }))()`), { list:["1"], map:["1"], pressed:"true" });
     const resolvedMarker = await evaluate(cdp, `(() => { const alerts=Array.from(document.querySelectorAll('#layer-alerts g')); const item=alerts.find(g=>g.getAttribute('aria-label').includes('交通事故')); return {pulse:Boolean(item.querySelector('.pulse-ring')), index:item.dataset.i}; })()`);
     assert.equal(resolvedMarker.pulse, false);
     await evaluate(cdp, `document.querySelector('#layer-alerts g[data-i="${resolvedMarker.index}"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
