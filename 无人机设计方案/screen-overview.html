@@ -168,7 +168,7 @@ a:hover{text-decoration:underline}
 .info-close{color:var(--muted);width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center}
 .info-close:hover{color:var(--fg);background:color-mix(in srgb,var(--blue-400) 14%, transparent)}
 .info-close:active{background:color-mix(in srgb,var(--blue-400) 22%, transparent)}
-.info-thumb{height:88px;border-radius:4px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;
+.info-thumb{aspect-ratio:16/9;border-radius:4px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;
   background:color-mix(in srgb,var(--navy-700) 55%, transparent);border:1px dashed var(--border);color:var(--muted);font-size:12px;gap:6px}
 .info-thumb.has-video{position:relative;overflow:hidden;border-style:solid;background:var(--navy-900)}
 .info-thumb video{width:100%;height:100%;display:block;object-fit:cover}
@@ -711,7 +711,7 @@ function showInfo(title, rows, drillHref, thumbText, videoLabel){
   const media=$("info-thumb");
   if(videoLabel){
     media.classList.add("has-video");
-    media.innerHTML='<video autoplay muted loop playsinline preload="metadata" aria-label="'+escapeHtml(videoLabel)+'"><source src="/prototype-assets/alerts/road-incident-demo.mp4" type="video/mp4"></video><span class="info-video-label"><i class="info-video-status"></i>'+escapeHtml(videoLabel)+' · 模拟</span>';
+    media.innerHTML='<video autoplay muted loop playsinline preload="metadata" aria-label="'+escapeHtml(videoLabel)+'"><source src="/prototype-assets/alerts/road-incident-demo.mp4?v=demo-aerial-1" type="video/mp4"></video><span class="info-video-label"><i class="info-video-status"></i>'+escapeHtml(videoLabel)+' · 模拟</span>';
     const video=media.querySelector("video");
     video.addEventListener("error",()=>{ media.classList.remove("has-video"); media.textContent="告警视频加载失败 · 请下钻查看证据"; },{once:true});
     video.play().catch(()=>{});

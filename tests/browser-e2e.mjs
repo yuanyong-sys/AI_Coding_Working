@@ -409,6 +409,11 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "document.querySelector('#info-thumb video')?.readyState >= 2");
     assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video').getAttribute('aria-label')"), /告警回传/);
     assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb video').muted && document.querySelector('#info-thumb video').loop"), true);
+    assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video source').getAttribute('src')"), /demo-aerial-1/);
+    assert.ok(await evaluate(cdp, `(() => {
+      const media = document.querySelector('#info-thumb').getBoundingClientRect();
+      return Math.abs(media.width / media.height - 16 / 9) < .03;
+    })()`), 'expected the return-video viewport to remain 16:9');
     const videoVisibility = await evaluate(cdp, `(() => {
       const video = document.querySelector('#info-thumb video');
       const canvas = document.createElement('canvas');
