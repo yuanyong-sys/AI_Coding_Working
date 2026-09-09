@@ -51,6 +51,9 @@ def create_app(
 
 def _mount_frontend(app: FastAPI, frontend_dist: Path, prototype_root: Path) -> None:
     prototype_pages = {"screen-overview.html", "dispatch-tasks.html", "alert-workbench.html", "stats-ledger.html"}
+    prototype_assets = prototype_root / "assets"
+    if prototype_assets.exists():
+        app.mount("/prototype-assets", StaticFiles(directory=prototype_assets), name="prototype-assets")
 
     @app.get("/prototype/{page}", include_in_schema=False)
     async def prototype_page(page: str) -> FileResponse:

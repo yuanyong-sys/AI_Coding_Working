@@ -170,6 +170,10 @@ a:hover{text-decoration:underline}
 .info-close:active{background:color-mix(in srgb,var(--blue-400) 22%, transparent)}
 .info-thumb{height:88px;border-radius:4px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;
   background:color-mix(in srgb,var(--navy-700) 55%, transparent);border:1px dashed var(--border);color:var(--muted);font-size:12px;gap:6px}
+.info-thumb.has-video{position:relative;overflow:hidden;border-style:solid;background:var(--navy-900)}
+.info-thumb video{width:100%;height:100%;display:block;object-fit:cover}
+.info-video-label{position:absolute;left:8px;bottom:6px;padding:3px 6px;border-radius:3px;background:rgba(7,20,39,.82);color:var(--fg);font-size:10px;letter-spacing:.02em}
+.info-video-status{display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:var(--alert-red);vertical-align:1px}
 .info-row{display:flex;font-size:13px;line-height:2}
 .info-row .k{width:72px;color:var(--muted);flex:none}
 .info-row .v{color:var(--fg)}
@@ -700,16 +704,27 @@ function renderMapPoints(){
 }
 
 /* ---- M4 信息卡 ---- */
-function showInfo(title, rows, drillHref, thumbText){
+function showInfo(title, rows, drillHref, thumbText, videoLabel){
   $("info-title").textContent = title;
   $("info-rows").innerHTML = rows.map(r =>
     '<div class="info-row"><span class="k">'+escapeHtml(r[0])+'</span><span class="v">'+escapeHtml(r[1])+'</span></div>').join("");
-  $("info-thumb").lastChild.textContent = " " + thumbText;
+  const media=$("info-thumb");
+  if(videoLabel){
+    media.classList.add("has-video");
+    media.innerHTML='<video autoplay muted loop playsinline preload="metadata" aria-label="'+escapeHtml(videoLabel)+'"><source src="/prototype-assets/alerts/road-incident-demo.mp4" type="video/mp4"></video><span class="info-video-label"><i class="info-video-status"></i>'+escapeHtml(videoLabel)+' · 模拟</span>';
+    const video=media.querySelector("video");
+    video.addEventListener("error",()=>{ media.classList.remove("has-video"); media.textContent="告警视频加载失败 · 请下钻查看证据"; },{once:true});
+    video.play().catch(()=>{});
+  }else{
+    media.classList.remove("has-video");
+    media.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M3 17l5-4 4 3 4-4 5 5"/></svg> '+escapeHtml(thumbText);
+  }
   $("info-drill").setAttribute("href", drillHref);
   $("info-card").classList.add("show");
 }
 let lastMapPointSelection = 0;
 function closeMapInfo(){
+  const video=$("info-thumb").querySelector("video"); if(video) video.pause();
   $("info-card").classList.remove("show");
   document.querySelectorAll(".fleet-row").forEach(row => row.classList.remove("active"));
 }
@@ -725,10 +740,11 @@ function selectDrone(i, pan){
   lastMapPointSelection = performance.now();
   const d = DATA.fleet[i];
   document.querySelectorAll(".fleet-row").forEach(r => r.classList.toggle("active", +r.dataset.i===i));
+  const alertType=d.id==="U-08"?"行人闯入":d.status==="alarm"?"交通事故":"道路巡查异常";
   showInfo("无人机 " + d.id,
     [["当前状态", DATA.statusText[d.status]], ["执行任务", d.task],
      ["剩余电量", d.batt + "%"], ["回传链路", d.status==="offline" ? "未连接" : "5G 专网 · 正常"]],
-    "dispatch-tasks.html", "实时回传画面（示例）");
+    "dispatch-tasks.html", "实时回传画面（示例）", alertType+"告警回传");
   if(pan && amap && amapDroneMarkers[i]) amap.setCenter(amapDroneMarkers[i].getCenter());
 }
 function selectAlert(i, pan){

@@ -406,6 +406,9 @@ export async function browserEndToEnd() {
     assert.notEqual(await evaluate(cdp, "document.querySelector('#trend-chart polyline').getAttribute('points')"), dayTrend);
     await evaluate(cdp, "document.querySelector('.fleet-row').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
+    await waitFor(cdp, "document.querySelector('#info-thumb video')?.readyState >= 2");
+    assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video').getAttribute('aria-label')"), /告警回传/);
+    assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb video').muted && document.querySelector('#info-thumb video').loop"), true);
     await evaluate(cdp, "document.querySelector('.layer-ctrl').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
     await new Promise((resolve) => setTimeout(resolve, 100));
