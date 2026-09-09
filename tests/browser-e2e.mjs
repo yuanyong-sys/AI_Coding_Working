@@ -409,6 +409,26 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "document.querySelector('#info-thumb video')?.readyState >= 2");
     assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video').getAttribute('aria-label')"), /告警回传/);
     assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb video').muted && document.querySelector('#info-thumb video').loop"), true);
+    const videoVisibility = await evaluate(cdp, `(() => {
+      const video = document.querySelector('#info-thumb video');
+      const canvas = document.createElement('canvas');
+      canvas.width = 160;
+      canvas.height = 90;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let luminance = 0;
+      let visiblePixels = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const value = pixels[index] * .2126 + pixels[index + 1] * .7152 + pixels[index + 2] * .0722;
+        luminance += value;
+        if (value >= 45) visiblePixels += 1;
+      }
+      const count = pixels.length / 4;
+      return { meanLuminance: luminance / count, visibleRatio: visiblePixels / count };
+    })()`);
+    assert.ok(videoVisibility.meanLuminance >= 45 && videoVisibility.visibleRatio >= .35,
+      `expected a clearly visible return-video frame, got ${JSON.stringify(videoVisibility)}`);
     await evaluate(cdp, "document.querySelector('.layer-ctrl').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
     await new Promise((resolve) => setTimeout(resolve, 100));
