@@ -444,6 +444,7 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "!document.querySelector('#ev-error').classList.contains('show')");
     await evaluate(cdp, "document.querySelector('#ev-compare').click()");
     assert.equal(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-compare-scene')).display"), "block");
+    assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-scene .ev-photo-img')).backgroundImage"), /event-scenes-v1\.png/);
     assert.notEqual(await evaluate(cdp, "document.querySelector('#ev-scene').innerHTML"), await evaluate(cdp, "document.querySelector('#ev-compare-scene').innerHTML"));
     await evaluate(cdp, "document.querySelector('[data-frame=\"3\"]').click()");
     assert.notEqual(await evaluate(cdp, "document.querySelector('#ev-scene').innerHTML"), await evaluate(cdp, "document.querySelector('#ev-compare-scene').innerHTML"));

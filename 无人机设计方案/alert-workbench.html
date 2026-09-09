@@ -143,7 +143,8 @@ svg{display:block}
 .ev-live{margin-left:auto; display:flex; align-items:center; gap:6px; font-size:12px; color:#8FA3C4}
 .ev-live i{width:8px; height:8px; border-radius:50%; background:var(--alert-red); animation:breathe 1s ease-in-out infinite}
 .ev-stage{flex:1; position:relative; min-height:0; background:var(--navy-900)}
-.ev-stage svg{position:absolute; inset:0; width:100%; height:100%}
+.ev-photo{position:absolute;inset:0;overflow:hidden;background:#0d1f3a}
+.ev-photo-img{position:absolute;inset:-3%;background-image:url('/prototype-assets/alerts/event-scenes-v1.png?v=photo-1');background-size:300% auto;background-repeat:no-repeat;filter:saturate(.9) contrast(1.04);transition:transform .2s ease}
 .ev-error{position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(7,20,39,.94);color:#EAF1FB;text-align:center}
 .ev-error.show{display:flex}.ev-error p{font-size:12px;color:#8FA3C4}.ev-error button{padding:7px 18px;border:1px solid #4C9AFF;border-radius:5px;color:#fff;background:#2675df}
 #ev-compare-scene{display:none}.ev-stage.compare #ev-scene{clip-path:inset(0 50% 0 0)}.ev-stage.compare #ev-compare-scene{display:block;clip-path:inset(0 0 0 50%)}.ev-stage.compare::after{content:'前帧  |  后帧';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:4px 8px;border-radius:4px;background:rgba(7,20,39,.8);color:#3DD9EB;font-size:11px;z-index:2}
@@ -399,11 +400,11 @@ svg{display:block}
           <span class="ev-live"><i></i>抓图回放</span>
         </div>
         <div class="ev-stage">
-          <svg id="ev-scene" viewBox="0 0 800 460" preserveAspectRatio="xMidYMid slice" role="img" aria-label="AI 抓图场景示意"></svg>
-          <svg id="ev-compare-scene" viewBox="0 0 800 460" preserveAspectRatio="xMidYMid slice" role="img" aria-label="AI 抓图后帧场景示意"></svg>
+          <div class="ev-photo" id="ev-scene" role="img" aria-label="AI 抓图模拟图像"><div class="ev-photo-img"></div></div>
+          <div class="ev-photo" id="ev-compare-scene" role="img" aria-label="AI 抓图后帧模拟图像"><div class="ev-photo-img"></div></div>
           <div class="ev-error" id="ev-error" role="alert"><b>证据加载失败</b><p id="ev-error-reason">证据服务暂不可用</p><button id="ev-retry">重试加载</button></div>
           <span class="ev-frame-tag" id="ev-frame-tag">帧 1 / 4 · 14:02:31</span>
-          <span class="ev-badge">AI 抓图 · 示例数据</span>
+          <span class="ev-badge">AI 抓图 · POC 模拟</span>
         </div>
         <div class="ev-ctrl">
           <button class="ev-btn" id="ev-prev" aria-label="上一帧">
@@ -683,43 +684,18 @@ function renderQueue(){
 /* ================= 证据区 ================= */
 const FRAME_OFFSET = [0, 16, 34, 52];
 const FRAME_TIME = ['14:02:31','14:02:34','14:02:37','14:02:40'];
-function sceneSvg(a, frame, small){
-  const c = LEVEL[a.level].color;
-  const ox = FRAME_OFFSET[frame] * (small ? 0.4 : 1);
-  const bx = 300 + ox, by = 205 + ox*0.3, bw = small ? 74 : 148, bh = small ? 32 : 64;
-  const labelH = small ? 0 : 22;
-  return ''
-  + '<rect width="800" height="460" fill="#0d1f3a"/>'
-  + '<g stroke="#1E3A61" stroke-width="1" opacity="0.5">'
-  +   '<path d="M0 80 L800 60"/><path d="M0 380 L800 400"/><path d="M120 0 L100 460"/><path d="M680 0 L700 460"/>'
-  + '</g>'
-  /* 主路 */
-  + '<path d="M0 250 L800 230" stroke="#2c4a75" stroke-width="'+(small?14:34)+'"/>'
-  + '<path d="M0 250 L800 230" stroke="#4C9AFF" stroke-width="1.2" stroke-dasharray="12 10" opacity="0.7"/>'
-  + '<path d="M420 0 L400 460" stroke="#2c4a75" stroke-width="'+(small?10:26)+'"/>'
-  + '<path d="M420 0 L400 460" stroke="#4C9AFF" stroke-width="1" stroke-dasharray="10 8" opacity="0.5"/>'
-  /* 车辆 */
-  + '<g fill="#3a5websites" opacity="0"></g>'
-  + '<rect x="'+(bx+8)+'" y="'+(by+8)+'" width="'+(bw-16)+'" height="'+(bh-16)+'" rx="4" fill="#4C9AFF" opacity="0.55"/>'
-  + '<rect x="'+(bx+bw*0.4)+'" y="'+(by+bh+14)+'" width="'+(bw*0.42)+'" height="'+(bh*0.55)+'" rx="3" fill="#3DD9EB" opacity="0.4"/>'
-  + '<rect x="'+(bx-bw*0.7)+'" y="'+(by-bh*0.5)+'" width="'+(bw*0.45)+'" height="'+(bh*0.6)+'" rx="3" fill="#8FA3C4" opacity="0.3"/>'
-  /* 识别框 */
-  + '<g>'
-  +   '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="'+c+'" fill-opacity="0.12" stroke="'+c+'" stroke-width="'+(small?1.2:2)+'"/>'
-  +   (small ? '' :
-      '<rect x="'+bx+'" y="'+(by-labelH)+'" width="'+(a.type.length*13+72)+'" height="'+labelH+'" fill="'+c+'"/>'
-      + '<text x="'+(bx+8)+'" y="'+(by-labelH+15)+'" font-size="12" fill="#fff" font-weight="600">'+a.type+' · '+a.conf+'%</text>'
-      + '<path d="M'+bx+' '+by+' l14 0 M'+bx+' '+by+' l0 14" stroke="#fff" stroke-width="2.5"/>'
-      + '<path d="M'+(bx+bw)+' '+(by+bh)+' l-14 0 M'+(bx+bw)+' '+(by+bh)+' l0 -14" stroke="#fff" stroke-width="2.5"/>')
-  + '</g>'
-  + (small ? '' : '<text x="16" y="440" font-size="11" fill="#8FA3C4">风格化场景示意 · 非真实影像</text>');
+const EVIDENCE_POSITIONS={'烟雾火情':'0% 0%','车辆违停':'50% 0%','行人闯入':'100% 0%','道路积水':'0% 100%','行人聚集':'50% 100%','交通事故':'100% 100%','道路拥堵':'100% 100%'};
+function evidencePhoto(a, frame, small){
+  const shift=FRAME_OFFSET[frame]*(small?.08:.12);
+  return '<div class="ev-photo-img" style="background-position:'+(EVIDENCE_POSITIONS[a.type]||'100% 100%')+';transform:scale(1.08) translate('+shift+'px,'+(-shift*.35)+'px)"></div>';
 }
 function renderEvidence(){
   const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
   $('#ev-sub').textContent = a.id + ' · ' + a.type + ' · ' + a.loc;
   const primaryFrame = state.compare ? 0 : state.frame;
-  $('#ev-scene').innerHTML = sceneSvg(a, primaryFrame, false);
-  $('#ev-compare-scene').innerHTML = sceneSvg(a, 3, false);
+  $('#ev-scene').innerHTML = evidencePhoto(a, primaryFrame, false);
+  $('#ev-compare-scene').innerHTML = evidencePhoto(a, 3, false);
+  $('#ev-scene').setAttribute('aria-label',a.type+' AI 抓图模拟图像');
   $('#ev-frame-tag').textContent = state.compare ? '前帧 1 / 后帧 4' : '帧 '+(state.frame+1)+' / 4 · '+FRAME_TIME[state.frame];
   $('#ev-task').textContent = a.task;
   $('#ev-drone').textContent = a.drone;
@@ -727,7 +703,7 @@ function renderEvidence(){
   const wrap = $('#ev-frames');
   wrap.innerHTML = [0,1,2,3].map(i=>
     '<button class="frame-th'+(i===state.frame?' on':'')+'" data-frame="'+i+'" aria-label="第'+(i+1)+'帧">'
-    + '<svg viewBox="0 0 800 460" style="width:100%;height:auto">'+sceneSvg(a, i, true)+'</svg>'
+    + '<div class="ev-photo" style="position:relative;aspect-ratio:800/460">'+evidencePhoto(a, i, true)+'</div>'
     + '<div class="cap num">'+FRAME_TIME[i]+'</div></button>').join('');
   $$('#ev-frames .frame-th').forEach(el=>{
     el.addEventListener('click', ()=>{ stopPlay(); state.frame = +el.dataset.frame; renderEvidence(); });
