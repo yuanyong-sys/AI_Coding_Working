@@ -109,7 +109,8 @@ a{color:var(--blue-600); text-decoration:none}
   position:relative; transition:box-shadow .15s, border-color .15s; cursor:default}
 .k-card:hover{border-color:#C3D2E8; box-shadow:0 2px 8px rgba(11,27,51,.08)}
 .k-card.urgent{border-left:3px solid var(--alert-red)}
-.k-card.clickable{cursor:pointer}
+.k-card.drillable{cursor:pointer}
+.k-card.drillable:focus-visible{outline:2px solid var(--blue-600);outline-offset:2px}
 .kc-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px}
 .kc-name{font-size:13px; font-weight:600; line-height:1.4}
 .kc-code{font-size:11px; color:var(--muted); margin-bottom:8px}
@@ -244,13 +245,19 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
 .mm-head h3{font-size:15px}
 .mm-head .sub{font-size:12px; color:var(--muted); margin-left:10px}
 .mm-body{display:grid; grid-template-columns:1.5fr 1fr; gap:14px; padding:16px 20px; overflow-y:auto}
+.mm-body.details-only{grid-template-columns:1fr}
 .video-box{background:var(--navy-900); border-radius:8px; position:relative; min-height:340px; overflow:hidden; display:flex; align-items:center; justify-content:center}
+.video-box .live-image{position:absolute;inset:-2%;background-image:url('/prototype-assets/alerts/road-regions-v1.png?v=roads-1');background-size:300% auto;background-repeat:no-repeat;filter:saturate(.9) contrast(1.04) brightness(.86);animation:cameraDrift 12s ease-in-out infinite alternate}
+.video-box::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(7,20,39,.34),transparent 24%,transparent 70%,rgba(7,20,39,.55))}
 .video-box .vb-label{color:#8FA3C4; font-size:13px; display:flex; flex-direction:column; align-items:center; gap:8px}
 .video-box .vb-corner{position:absolute; top:10px; left:12px; font-size:11px; color:#8FA3C4; display:flex; align-items:center; gap:6px}
 .video-box .vb-corner .rec{width:8px; height:8px; border-radius:50%; background:var(--alert-red); animation:recBlink 1.2s infinite}
 @keyframes recBlink{0%,100%{opacity:1}50%{opacity:.25}}
 .video-box .vb-cam{position:absolute; bottom:10px; left:12px; font-size:11px; color:#8FA3C4}
 .video-box .vb-time{position:absolute; top:10px; right:12px; font-size:11px; color:#EAF1FB}
+.video-box .vb-corner,.video-box .vb-time,.video-box .vb-cam{z-index:1}
+@keyframes cameraDrift{to{transform:scale(1.035) translate(-.7%,.45%)}}
+@media (prefers-reduced-motion:reduce){.video-box .live-image{animation:none}}
 .mm-side{display:flex; flex-direction:column; gap:14px}
 .param-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 .param{background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 12px}
@@ -486,8 +493,8 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
           <label>巡查航线<span class="req">*</span></label>
           <select class="select w-full" id="f-route">
             <option value="">请选择航线</option>
-            <option>滨江东线</option><option>老城环线</option><option>中山路往返线</option>
-            <option>解放路东段</option><option>物流园环线</option><option>人民路沿线</option>
+            <option>贵北高速惠水段</option><option>惠水服务区</option><option>都匀互通</option>
+            <option>福泉贵定高架</option><option>独山森林高速</option><option>荔波喀斯特公路</option>
             <option>演示禁飞区航线</option>
           </select>
           <div class="err-msg">请选择巡查航线</div>
@@ -495,7 +502,7 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
         <div class="field">
           <label>巡查区域</label>
           <select class="select w-full" id="f-area">
-            <option>滨江商务区</option><option>中心老城区</option><option>城北物流园</option>
+            <option>惠水服务区</option><option>都匀城区</option><option>福泉贵定片区</option>
           </select>
           <div class="hint">可在上方示意地图框选补充巡查区域（演示为示意交互）</div>
         </div>
@@ -515,7 +522,7 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
         <div class="field">
           <label>起飞机巢</label>
           <select class="select w-full" id="f-dock">
-            <option>机巢 J-01（滨江商务区）</option><option>机巢 J-02（中心老城区）</option><option>机巢 J-03（城北物流园）</option>
+            <option>机巢 J-01（惠水服务区）</option><option>机巢 J-02（都匀城区）</option><option>机巢 J-03（福泉贵定片区）</option>
           </select>
         </div>
         <div class="field">
@@ -579,29 +586,26 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
 <div class="modal-wrap" id="monitor-mask">
   <div class="monitor-modal" data-od-id="monitor-modal" role="dialog" aria-label="执行监控">
     <div class="mm-head">
-      <h3>执行监控<span class="sub num" id="mm-code">—</span></h3>
+      <h3><span id="mm-title">执行监控</span><span class="sub num" id="mm-code">—</span></h3>
       <button class="x-btn" id="monitor-close" aria-label="关闭监控">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <div class="mm-body">
-      <div class="video-box">
+    <div class="mm-body" id="mm-body">
+      <div class="video-box" id="mm-video">
+        <div class="live-image" id="mm-live-image" role="img" aria-label="无人机道路巡检实景图像"></div>
         <span class="vb-corner"><span class="rec"></span>LIVE · 实时图传画面 · 示例</span>
         <span class="vb-time num" id="mm-vtime">--:--:--</span>
-        <span class="vb-label">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="15" height="12" rx="2"/><path d="M17.5 10.5l4-2.5v8l-4-2.5"/></svg>
-          视频流占位（设计稿不接入真实图传）
-        </span>
         <span class="vb-cam" id="mm-cam">机位：警航-03 · 前视云台 4K</span>
       </div>
       <div class="mm-side">
-        <div class="param-grid">
+        <div class="param-grid" id="mm-telemetry">
           <div class="param"><div class="pk">飞行高度</div><div class="pv num" id="mm-alt">120<span class="u">m</span></div></div>
           <div class="param"><div class="pk">地速</div><div class="pv num" id="mm-spd">12.4<span class="u">m/s</span></div></div>
           <div class="param"><div class="pk">剩余电量</div><div class="pv num" id="mm-batt">68<span class="u">%</span></div></div>
           <div class="param"><div class="pk">图传信号</div><div class="pv num" id="mm-sig">-67<span class="u">dBm</span></div></div>
         </div>
-        <div class="traj-box">
+        <div class="traj-box" id="mm-trajectory">
           <div class="tb-t">实时轨迹（示意）</div>
           <svg viewBox="0 0 280 150" style="width:100%;height:auto;display:block" role="img" aria-label="轨迹示意">
             <rect width="280" height="150" fill="#0B1B33"/>
@@ -618,7 +622,7 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
         <div style="font-size:12px;color:var(--muted);line-height:1.7" id="mm-desc">—</div>
       </div>
     </div>
-    <div class="mm-foot">
+    <div class="mm-foot" id="mm-controls">
       <button class="btn btn-outline" id="mm-hover-btn">模拟悬停</button>
       <button class="btn btn-outline" id="mm-return-btn">模拟返航</button>
       <button class="btn btn-outline" id="mm-link-loss-btn">模拟断链</button>
@@ -655,35 +659,35 @@ const TYPE_CLS = {常态巡查:'tag-routine', 专项巡查:'tag-special', 应急
 const PRIO_CLS = {普通:'prio-normal', 重要:'prio-important', 紧急:'prio-urgent'};
 
 let TASKS = [
-  {code:'RW-20260905-012', name:'贵北高速惠水段航线巡检', type:'常态巡查', drone:'警航-03', route:'滨江东线',   date:'09-05', start:'09:00', end:'10:30', status:'执行中', prio:'重要', owner:'李强', progress:65},
-  {code:'RW-20260905-015', name:'都匀城区违停专项巡查', type:'专项巡查', drone:'警航-01', route:'老城环线',   date:'09-05', start:'10:00', end:'11:30', status:'执行中', prio:'紧急', owner:'王敏', progress:40},
-  {code:'RW-20260905-013', name:'解放路车流监测巡查', type:'常态巡查', drone:'警航-02', route:'解放路东段', date:'09-05', start:'08:30', end:'10:00', status:'执行中', prio:'普通', owner:'陈晨', progress:80},
-  {code:'RW-20260905-014', name:'都匀城区背街小巷巡查', type:'常态巡查', drone:'警航-05', route:'老城环线',   date:'09-05', start:'10:30', end:'12:00', status:'执行中', prio:'普通', owner:'赵磊', progress:20},
-  {code:'RW-20260905-022', name:'贵北高速惠水段事故应急复勘', type:'应急', drone:'警航-04', route:'滨江东线',   date:'09-05', start:'11:00', end:'12:00', status:'执行中', prio:'紧急', owner:'李强', progress:55},
-  {code:'RW-20260905-024', name:'人民路商圈午间巡查', type:'常态巡查', drone:'警航-06', route:'人民路沿线', date:'09-05', start:'11:30', end:'13:00', status:'执行中', prio:'普通', owner:'王敏', progress:35},
-  {code:'RW-20260905-025', name:'高铁站落客平台巡查', type:'常态巡查', drone:'警航-02', route:'人民路沿线', date:'09-05', start:'13:00', end:'14:00', status:'执行中', prio:'重要', owner:'陈晨', progress:10},
-  {code:'RW-20260905-026', name:'城北物流园消防通道巡查', type:'专项巡查', drone:'警航-06', route:'物流园环线', date:'09-05', start:'14:00', end:'15:00', status:'执行中', prio:'重要', owner:'赵磊', progress:5},
-  {code:'RW-20260905-018', name:'城北物流园夜间巡查', type:'常态巡查', drone:'警航-05', route:'物流园环线', date:'09-05', start:'19:00', end:'20:30', status:'待下发', prio:'普通', owner:'赵磊', progress:0},
-  {code:'RW-20260905-020', name:'中山路施工路段专项巡查', type:'专项巡查', drone:'警航-03', route:'中山路往返线', date:'09-05', start:'15:00', end:'16:00', status:'待下发', prio:'重要', owner:'王敏', progress:0},
-  {code:'RW-20260905-023', name:'夜市商圈秩序巡查', type:'常态巡查', drone:'警航-01', route:'老城环线',   date:'09-05', start:'18:30', end:'20:00', status:'待下发', prio:'普通', owner:'王警官', progress:0},
-  {code:'RW-20260905-019', name:'中山路晚高峰巡查', type:'常态巡查', drone:'警航-02', route:'中山路往返线', date:'09-05', start:'16:30', end:'18:00', status:'待执行', prio:'重要', owner:'陈晨', progress:0},
-  {code:'RW-20260905-016', name:'城北高速入口巡查', type:'常态巡查', drone:'警航-04', route:'物流园环线', date:'09-05', start:'15:30', end:'16:30', status:'待执行', prio:'普通', owner:'李强', progress:0},
-  {code:'RW-20260905-017', name:'校园周边护学巡查', type:'专项巡查', drone:'警航-01', route:'人民路沿线', date:'09-05', start:'16:00', end:'17:30', status:'待执行', prio:'重要', owner:'王敏', progress:0},
-  {code:'RW-20260905-027', name:'贵北高速惠水段晚巡', type:'常态巡查', drone:'警航-03', route:'滨江东线',   date:'09-05', start:'17:00', end:'18:30', status:'待执行', prio:'普通', owner:'李强', progress:0},
-  {code:'RW-20260905-028', name:'解放路护栏隐患复查', type:'专项巡查', drone:'警航-06', route:'解放路东段', date:'09-05', start:'15:00', end:'15:40', status:'待执行', prio:'普通', owner:'赵磊', progress:0},
-  {code:'RW-20260905-009', name:'人民路沿线常态巡查', type:'常态巡查', drone:'警航-01', route:'人民路沿线', date:'09-05', start:'08:00', end:'09:30', status:'已完成', prio:'普通', owner:'王敏', progress:100},
-  {code:'RW-20260905-005', name:'贵北高速惠水段早巡', type:'常态巡查', drone:'警航-03', route:'滨江东线',   date:'09-05', start:'07:30', end:'08:40', status:'已完成', prio:'普通', owner:'李强', progress:100},
-  {code:'RW-20260905-011', name:'高铁站周边秩序巡查', type:'专项巡查', drone:'警航-06', route:'人民路沿线', date:'09-05', start:'08:20', end:'09:20', status:'已完成', prio:'重要', owner:'赵磊', progress:100},
-  {code:'RW-20260905-021', name:'解放路事故应急巡查', type:'应急', drone:'警航-04', route:'解放路东段', date:'09-05', start:'13:00', end:'14:00', status:'异常', prio:'紧急', owner:'刘洋', progress:48, err:'图传断链，已触发低电返航'},
+  {code:'RW-20260905-012', name:'贵北高速惠水段航线巡检', type:'常态巡查', drone:'警航-03', route:'贵北高速惠水段', date:'09-05', start:'09:00', end:'10:30', status:'执行中', prio:'重要', owner:'李强', progress:65},
+  {code:'RW-20260905-015', name:'都匀互通违停专项巡查', type:'专项巡查', drone:'警航-01', route:'都匀互通', date:'09-05', start:'10:00', end:'11:30', status:'执行中', prio:'紧急', owner:'王敏', progress:40},
+  {code:'RW-20260905-013', name:'福泉贵定高架车流巡查', type:'常态巡查', drone:'警航-02', route:'福泉贵定高架', date:'09-05', start:'08:30', end:'10:00', status:'执行中', prio:'普通', owner:'陈晨', progress:80},
+  {code:'RW-20260905-014', name:'荔波喀斯特公路巡查', type:'常态巡查', drone:'警航-05', route:'荔波喀斯特公路', date:'09-05', start:'10:30', end:'12:00', status:'执行中', prio:'普通', owner:'赵磊', progress:20},
+  {code:'RW-20260905-022', name:'惠水服务区事故应急复勘', type:'应急', drone:'警航-04', route:'惠水服务区', date:'09-05', start:'11:00', end:'12:00', status:'执行中', prio:'紧急', owner:'李强', progress:55},
+  {code:'RW-20260905-024', name:'独山森林高速午间巡查', type:'常态巡查', drone:'警航-06', route:'独山森林高速', date:'09-05', start:'11:30', end:'13:00', status:'执行中', prio:'普通', owner:'王敏', progress:35},
+  {code:'RW-20260905-025', name:'荔波喀斯特公路落客点巡查', type:'常态巡查', drone:'警航-02', route:'荔波喀斯特公路', date:'09-05', start:'13:00', end:'14:00', status:'执行中', prio:'重要', owner:'陈晨', progress:10},
+  {code:'RW-20260905-026', name:'惠水服务区消防通道巡查', type:'专项巡查', drone:'警航-06', route:'惠水服务区', date:'09-05', start:'14:00', end:'15:00', status:'执行中', prio:'重要', owner:'赵磊', progress:5},
+  {code:'RW-20260905-018', name:'惠水服务区夜间巡查', type:'常态巡查', drone:'警航-05', route:'惠水服务区', date:'09-05', start:'19:00', end:'20:30', status:'待下发', prio:'普通', owner:'赵磊', progress:0},
+  {code:'RW-20260905-020', name:'福泉贵定高架专项巡查', type:'专项巡查', drone:'警航-03', route:'福泉贵定高架', date:'09-05', start:'15:00', end:'16:00', status:'待下发', prio:'重要', owner:'王敏', progress:0},
+  {code:'RW-20260905-023', name:'都匀互通夜间秩序巡查', type:'常态巡查', drone:'警航-01', route:'都匀互通', date:'09-05', start:'18:30', end:'20:00', status:'待下发', prio:'普通', owner:'王警官', progress:0},
+  {code:'RW-20260905-019', name:'福泉贵定高架晚高峰巡查', type:'常态巡查', drone:'警航-02', route:'福泉贵定高架', date:'09-05', start:'16:30', end:'18:00', status:'待执行', prio:'重要', owner:'陈晨', progress:0},
+  {code:'RW-20260905-016', name:'惠水服务区入口巡查', type:'常态巡查', drone:'警航-04', route:'惠水服务区', date:'09-05', start:'15:30', end:'16:30', status:'待执行', prio:'普通', owner:'李强', progress:0},
+  {code:'RW-20260905-017', name:'独山森林高速护学巡查', type:'专项巡查', drone:'警航-01', route:'独山森林高速', date:'09-05', start:'16:00', end:'17:30', status:'待执行', prio:'重要', owner:'王敏', progress:0},
+  {code:'RW-20260905-027', name:'贵北高速惠水段晚巡', type:'常态巡查', drone:'警航-03', route:'贵北高速惠水段', date:'09-05', start:'17:00', end:'18:30', status:'待执行', prio:'普通', owner:'李强', progress:0},
+  {code:'RW-20260905-028', name:'福泉贵定高架护栏复查', type:'专项巡查', drone:'警航-06', route:'福泉贵定高架', date:'09-05', start:'15:00', end:'15:40', status:'待执行', prio:'普通', owner:'赵磊', progress:0},
+  {code:'RW-20260905-009', name:'独山森林高速常态巡查', type:'常态巡查', drone:'警航-01', route:'独山森林高速', date:'09-05', start:'08:00', end:'09:30', status:'已完成', prio:'普通', owner:'王敏', progress:100},
+  {code:'RW-20260905-005', name:'贵北高速惠水段早巡', type:'常态巡查', drone:'警航-03', route:'贵北高速惠水段', date:'09-05', start:'07:30', end:'08:40', status:'已完成', prio:'普通', owner:'李强', progress:100},
+  {code:'RW-20260905-011', name:'荔波喀斯特公路秩序巡查', type:'专项巡查', drone:'警航-06', route:'荔波喀斯特公路', date:'09-05', start:'08:20', end:'09:20', status:'已完成', prio:'重要', owner:'赵磊', progress:100},
+  {code:'RW-20260905-021', name:'福泉贵定高架事故应急巡查', type:'应急', drone:'警航-04', route:'福泉贵定高架', date:'09-05', start:'13:00', end:'14:00', status:'异常', prio:'紧急', owner:'刘洋', progress:48, err:'图传断链，已触发低电返航'},
 ];
 /* 用于新建任务时间窗冲突校验（各无人机已排时段） */
 const BUSY = {
-  '警航-01':[['10:00','11:30','都匀城区违停专项巡查'],['16:00','17:30','校园周边护学巡查']],
-  '警航-02':[['08:30','10:00','解放路车流监测巡查'],['16:30','18:00','中山路晚高峰巡查']],
-  '警航-03':[['09:00','10:30','贵北高速惠水段航线巡检'],['15:00','16:00','中山路施工路段专项巡查']],
-  '警航-04':[['11:00','12:00','贵北高速惠水段事故应急复勘'],['15:30','16:30','城北高速入口巡查']],
-  '警航-05':[['10:30','12:00','都匀城区背街小巷巡查'],['19:00','20:30','城北物流园夜间巡查']],
-  '警航-06':[['11:30','13:00','人民路商圈午间巡查'],['14:00','15:00','城北物流园消防通道巡查']],
+  '警航-01':[['10:00','11:30','都匀互通违停专项巡查'],['16:00','17:30','独山森林高速护学巡查']],
+  '警航-02':[['08:30','10:00','福泉贵定高架车流巡查'],['16:30','18:00','福泉贵定高架晚高峰巡查']],
+  '警航-03':[['09:00','10:30','贵北高速惠水段航线巡检'],['15:00','16:00','福泉贵定高架专项巡查']],
+  '警航-04':[['11:00','12:00','惠水服务区事故应急复勘'],['15:30','16:30','惠水服务区入口巡查']],
+  '警航-05':[['10:30','12:00','荔波喀斯特公路巡查'],['19:00','20:30','惠水服务区夜间巡查']],
+  '警航-06':[['11:30','13:00','独山森林高速午间巡查'],['14:00','15:00','惠水服务区消防通道巡查']],
 };
 
 const $ = s => document.querySelector(s);
@@ -758,7 +762,7 @@ function cardHTML(t){
     ? `<div class="prog"><div class="prog-bar"><div class="prog-fill" style="width:${t.progress}%"></div></div><span class="num">${t.progress}%</span></div>` : '';
   const err = t.status === '异常'
     ? `<div class="prog"><div class="prog-bar"><div class="prog-fill err" style="width:${t.progress}%"></div></div><span class="num" style="color:var(--alert-red)">异常</span></div>` : '';
-  return `<div class="k-card${t.prio === '紧急' ? ' urgent' : ''}${clickable}" data-code="${t.code}" tabindex="${t.status === '执行中' ? 0 : -1}">
+  return `<div class="k-card drillable${t.prio === '紧急' ? ' urgent' : ''}${clickable}" data-code="${t.code}" tabindex="0" role="button" aria-label="查看任务 ${esc(t.name)} 详情">
     <div class="kc-top"><span class="kc-name">${esc(t.name)}</span><span class="tag ${TYPE_CLS[t.type]}">${t.type}</span></div>
     <div class="kc-code num">${t.code}</div>
     <div class="kc-meta">
@@ -783,10 +787,10 @@ function renderKanban(){
       <div class="k-cards">${shown.map(cardHTML).join('')}${empty}${more}</div>
     </div>`;
   }).join('');
-  $$('#kanban-board .k-card.clickable').forEach(c => {
+  $$('#kanban-board .k-card.drillable').forEach(c => {
     const open = () => openMonitor(c.dataset.code);
     c.addEventListener('click', open);
-    c.addEventListener('keydown', e => { if (e.key === 'Enter') open(); });
+    c.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){e.preventDefault();open();} });
   });
 }
 
@@ -822,8 +826,7 @@ function renderTable(){
     const t = TASKS.find(x => x.code === b.dataset.code);
     if (!t) return;
     if (b.dataset.act === 'detail'){
-      if (t.status === '执行中') openMonitor(t.code);
-      else toast(`${t.code} · ${t.name}：状态 ${t.status}，进度 ${t.progress}%`);
+      openMonitor(t.code);
     } else if (b.dataset.act === 'issue'){
       b.disabled = true; b.textContent = '发送中';
       api(`/api/tasks/${t.code}/dispatch`, {method:'POST', body:JSON.stringify({simulateFailure:false})})
@@ -889,7 +892,7 @@ function renderGantt(){
   $('#gantt-inner').innerHTML = `<div class="g-axis">${ticks}</div>${rows}` +
     (hasConflict ? `<div style="margin-top:12px;font-size:12px;color:var(--alert-red);display:flex;align-items:center;gap:6px">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l9.5 16.5H2.5L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
-      检测到 1 组时段冲突：警航-06「城北物流园消防通道巡查」与「解放路护栏隐患复查」时间窗重叠，请调整后下发。</div>` : '');
+      检测到 1 组时段冲突：警航-06「惠水服务区消防通道巡查」与「福泉贵定高架护栏复查」时间窗重叠，请调整后下发。</div>` : '');
 }
 
 /* ================= 渲染调度 ================= */
@@ -940,10 +943,25 @@ let monitorTimer = null;
 function openMonitor(code){
   const t = TASKS.find(x => x.code === code);
   if (!t) return;
+  const running=t.status === '执行中';
+  const awaiting=t.status === '待下发'||t.status === '待执行';
+  $('#mm-title').textContent=running?'执行监控':'任务详情';
+  $('#mm-controls').hidden=!running;
+  $('#mm-video').hidden=awaiting;
+  $('#mm-telemetry').hidden=awaiting;
+  $('#mm-trajectory').hidden=awaiting;
+  $('#mm-body').classList.toggle('details-only',awaiting);
   $('#mm-code').textContent = t.code + ' · ' + t.name;
+  const roadImagePositions=[
+    [/贵北高速惠水段/,'0% 0%'],[/惠水服务区/,'50% 0%'],[/都匀互通/,'100% 0%'],
+    [/福泉贵定高架/,'0% 100%'],[/独山森林高速/,'50% 100%'],[/荔波喀斯特公路/,'100% 100%']
+  ];
+  const roadPosition=(roadImagePositions.find(([pattern])=>pattern.test(t.route))||[null,'0% 0%'])[1];
+  $('#mm-live-image').style.backgroundPosition=roadPosition;
+  $('#mm-live-image').setAttribute('aria-label',t.route+'无人机巡检实景图像');
   $('#mm-cam').textContent = `机位：${t.drone} · 前视云台 4K`;
   $('#mm-traj-name').textContent = t.drone;
-  $('#mm-desc').textContent = `航线 ${t.route} · 计划 ${t.start}–${t.end} · 负责人 ${t.owner} · 已完成 ${t.progress}%`;
+  $('#mm-desc').textContent = `状态 ${t.status} · 航线 ${t.route} · 计划 ${t.date} ${t.start}–${t.end} · 负责人 ${t.owner} · 进度 ${t.progress}%`;
   const seed = t.progress;
   $('#mm-alt').innerHTML = (100 + seed % 40) + '<span class="u">m</span>';
   $('#mm-spd').innerHTML = (8 + (seed % 50) / 10).toFixed(1) + '<span class="u">m/s</span>';
@@ -952,18 +970,22 @@ function openMonitor(code){
   $('#monitor-mask').classList.add('open');
   $('#mm-stop-btn').dataset.code = code;
   $$('#mm-hover-btn,#mm-return-btn,#mm-link-loss-btn,#mm-low-battery-btn').forEach(button => button.dataset.code = code);
-  api(`/api/tasks/${code}/monitor`).then(data => {
-    $('#mm-alt').innerHTML = data.telemetry.altitudeM + '<span class="u">m</span>';
-    $('#mm-spd').innerHTML = data.telemetry.speedMps + '<span class="u">m/s</span>';
-    $('#mm-batt').innerHTML = data.telemetry.batteryPct + '<span class="u">%</span>';
-    $('#mm-sig').innerHTML = data.telemetry.signalDbm + '<span class="u">dBm</span>';
-  }).catch(() => toast('模拟监控数据加载失败，可关闭后重试', 'err'));
+  if(running){
+    api(`/api/tasks/${code}/monitor`).then(data => {
+      $('#mm-alt').innerHTML = data.telemetry.altitudeM + '<span class="u">m</span>';
+      $('#mm-spd').innerHTML = data.telemetry.speedMps + '<span class="u">m/s</span>';
+      $('#mm-batt').innerHTML = data.telemetry.batteryPct + '<span class="u">%</span>';
+      $('#mm-sig').innerHTML = data.telemetry.signalDbm + '<span class="u">dBm</span>';
+    }).catch(() => toast('模拟监控数据加载失败，可关闭后重试', 'err'));
+  }
   clearInterval(monitorTimer);
-  monitorTimer = setInterval(() => {
-    const alt = $('#mm-alt'); if (!alt) return;
-    const cur = parseInt(alt.textContent, 10);
-    alt.innerHTML = Math.max(60, cur + (Math.random() > .5 ? 1 : -1)) + '<span class="u">m</span>';
-  }, 3000);
+  if(running){
+    monitorTimer = setInterval(() => {
+      const alt = $('#mm-alt'); if (!alt) return;
+      const cur = parseInt(alt.textContent, 10);
+      alt.innerHTML = Math.max(60, cur + (Math.random() > .5 ? 1 : -1)) + '<span class="u">m</span>';
+    }, 3000);
+  }
 }
 function closeMonitor(){ $('#monitor-mask').classList.remove('open'); clearInterval(monitorTimer); }
 $('#monitor-close').addEventListener('click', closeMonitor);

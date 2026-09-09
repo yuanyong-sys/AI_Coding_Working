@@ -368,6 +368,12 @@ export async function browserEndToEnd() {
     assert.ok(browserValidation.blockers.some(item => item.code === "AI_REQUIRED"));
     const seededMissionStatus = await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.tasks.find(t=>t.id==='RW-20260905-012')?.status})()`);
     assert.equal(seededMissionStatus, "RUNNING");
+    assert.equal(await evaluate(cdp, "!/(人民路|中山路|解放路|城北物流园)/.test(document.querySelector('#kanban-board').textContent)"), true);
+    assert.equal(await evaluate(cdp, "/(惠水|都匀|贵定|福泉|独山|荔波)/.test(document.querySelector('#kanban-board').textContent)"), true);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('#f-route option')).slice(1,-1).map(option=>option.textContent)"), ["贵北高速惠水段","惠水服务区","都匀互通","福泉贵定高架","独山森林高速","荔波喀斯特公路"]);
+    await evaluate(cdp, "document.querySelector('[data-view=list]').click()");
+    assert.equal(await evaluate(cdp, `(()=>{const codes=['RW-20260905-012','RW-20260905-022','RW-20260905-015','RW-20260905-013','RW-20260905-024','RW-20260905-014'];const positions=codes.map(code=>{document.querySelector('[data-act=detail][data-code="'+code+'"]').click();const position=document.querySelector('#mm-live-image').style.backgroundPosition;document.querySelector('#monitor-close').click();return position});return new Set(positions).size})()`), 6);
+    await evaluate(cdp, "document.querySelector('[data-view=kanban]').click()");
     await evaluate(cdp, "document.querySelector('.k-card.drillable:not(.clickable)').click()");
     await waitFor(cdp, "document.querySelector('#monitor-mask').classList.contains('open')");
     assert.equal(await evaluate(cdp, "document.querySelector('#mm-title').textContent"), "任务详情");
@@ -417,6 +423,15 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "Array.from(document.querySelectorAll('.k-head')).some(h=>h.textContent.includes('已终止') && h.textContent.match(/1/))");
     const terminationAudit = await (await fetch(`${baseUrl}/api/audit`)).json();
     assert.ok(terminationAudit.audit.some(item=>item.subjectId===terminatedTaskCode&&item.action==='MISSION_DEMO_DATA_ARCHIVED'&&item.result==='SUCCESS'));
+
+    const regionalPages = [];
+    for (const page of ["screen-overview", "dispatch-tasks", "alert-workbench", "stats-ledger"]) {
+      await navigate(cdp, `${baseUrl}/prototype/${page}.html`);
+      regionalPages.push(await evaluate(cdp, "document.body.textContent"));
+    }
+    const regionalText = regionalPages.join(" ");
+    for (const place of ["惠水", "都匀", "贵定", "福泉", "独山", "荔波"]) assert.ok(regionalText.includes(place), place);
+    assert.doesNotMatch(regionalText, /人民路|中山路|解放路|城北物流园/);
 
     // AC06: alert verification, evidence failure/retry, false-positive validation and keyboard safety.
     await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
