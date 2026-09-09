@@ -347,16 +347,18 @@ export async function browserEndToEnd() {
     // AC08: one filter expression drives metrics, charts, drill-down and ledger detail.
     await navigate(cdp, `${baseUrl}/prototype/stats-ledger.html`);
     await waitFor(cdp, "document.querySelectorAll('#ledger-tbody tr.row').length > 0");
-    await evaluate(cdp, "document.querySelector('#f-district').value='中心老城区'; document.querySelector('#btn-query').click()");
-    await waitFor(cdp, "document.querySelector('#filter-capsules').textContent.includes('辖区：中心老城区')");
-    assert.equal(await evaluate(cdp, "document.querySelector('.stat-card .sc-value').textContent.trim()"), "5项");
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('#f-district option')).slice(1).map(option => option.value)"), ["都匀城区段", "福泉贵定段", "独山荔波段"]);
+    assert.deepEqual(await evaluate(cdp, "Array.from(new Set(Array.from(document.querySelectorAll('#ledger-tbody tr.row td:nth-child(4)'), cell => cell.textContent))).sort()"), ["独山荔波段", "福泉贵定段", "都匀城区段"]);
+    await evaluate(cdp, "document.querySelector('#f-district').value='都匀城区段'; document.querySelector('#btn-query').click()");
+    await waitFor(cdp, "document.querySelector('#filter-capsules').textContent.includes('辖区：都匀城区段')");
+    assert.equal(await evaluate(cdp, "document.querySelector('.stat-card .sc-value').textContent.trim()"), "7项");
     assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('.stat-card'), card => [card.tagName, card.dataset.drill])"), [
       ["BUTTON", "tasks"], ["BUTTON", "flights"], ["BUTTON", "km"], ["BUTTON", "clues"], ["BUTTON", "rate"]
     ]);
     await evaluate(cdp, "document.querySelector('.stat-card[data-drill=\"km\"]').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('[data-arr=\"km\"]').textContent"), "↓");
     assert.ok((await evaluate(cdp, "document.querySelector('.toast:last-child').textContent")).includes("巡查里程"));
-    assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 5 条台账 · 10 条/页");
+    assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 7 条台账 · 10 条/页");
     await evaluate(cdp, "document.querySelector('#filter-capsules button[data-k=\"district\"]').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#ledger-count').textContent"), "共 15 条台账 · 10 条/页");
     await evaluate(cdp, "document.querySelector('#trend-svg [data-date]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
