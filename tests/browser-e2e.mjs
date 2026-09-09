@@ -490,6 +490,9 @@ export async function browserEndToEnd() {
     await fetch(`${baseUrl}/api/tasks/RW-20260905-002`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: injectionText })
     });
+    await cdp.command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('.col'),column=>Math.round(column.getBoundingClientRect().width))"), [350,350]);
     await cdp.command("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
     await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
     await waitFor(cdp, "document.querySelectorAll('.fleet-row').length >= 7");
@@ -528,6 +531,11 @@ export async function browserEndToEnd() {
       const map = document.querySelector('.map-wrap').getBoundingClientRect();
       return card.right <= map.left;
     })()`), 'expected the drone/alert detail card to stay left of the map');
+    assert.ok(await evaluate(cdp, `(() => {
+      const card = document.querySelector('#info-card').getBoundingClientRect();
+      const fleet = document.querySelector('[data-od-id="panel-fleet"]').getBoundingClientRect();
+      return card.bottom <= fleet.top;
+    })()`), 'expected the map detail card not to cover fleet status');
     await waitFor(cdp, "document.querySelector('#info-thumb video')?.readyState >= 2");
     assert.match(await evaluate(cdp, "document.querySelector('#info-thumb video').getAttribute('aria-label')"), /告警回传/);
     assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb video').muted && document.querySelector('#info-thumb video').loop"), true);
