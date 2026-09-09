@@ -157,6 +157,13 @@ export async function browserEndToEnd() {
       if (page === "screen-overview") {
         await waitFor(cdp, "Boolean(document.querySelector('iframe[title=\"低空态势一张图\"]'))");
         assert.match(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), /^\/prototype\/screen-overview\.html/);
+        await waitFor(cdp, "Boolean(document.querySelector('iframe').contentDocument?.querySelector('[data-od-id=back-to-index]'))");
+        assert.deepEqual(await evaluate(cdp, `(() => {
+          const link = document.querySelector('iframe').contentDocument.querySelector('[data-od-id=back-to-index]');
+          return [link.getAttribute('href'), link.getAttribute('target')];
+        })()`), ["/", "_top"]);
+        await evaluate(cdp, "document.querySelector('iframe').contentDocument.querySelector('[data-od-id=back-to-index]').click()");
+        await waitFor(cdp, "location.pathname === '/' && Boolean(document.querySelector('main[aria-label=\"业务页面\"]'))");
       } else {
         await waitFor(cdp, "Boolean(document.querySelector('iframe.prototype-frame'))");
         assert.equal(await evaluate(cdp, "document.querySelector('iframe').getAttribute('src')"), `/prototype/${page}.html`);
