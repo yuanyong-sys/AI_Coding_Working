@@ -22,6 +22,7 @@ from app.domains.demo.schemas import (
     TransferRequest,
     MissionDraft,
     MissionPatch,
+    MissionStatus,
     ResetResult,
     TransitionRequest,
 )
@@ -331,6 +332,12 @@ async def transition_mission(
         result="SUCCESS", detail=f"{previous}->{request.target.value}",
         before_state=previous, after_state=request.target.value,
     )
+    if request.target == MissionStatus.TERMINATED:
+        await service.record_audit(
+            session, action="MISSION_DEMO_DATA_ARCHIVED", mission_id=mission.id,
+            result="SUCCESS", detail="POC telemetry, media references and disposal trace archived",
+            before_state=previous, after_state=request.target.value,
+        )
     return service.serialize_mission(mission)
 
 

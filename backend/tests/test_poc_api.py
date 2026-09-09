@@ -223,6 +223,13 @@ async def test_task_fields_conflicts_and_state_machine_are_server_owned(client: 
         changed = await client.post(f"/api/tasks/{stored['id']}/transition", json={"target": target})
         assert changed.status_code == 200
         assert changed.json()["status"] == target
+    audit = (await client.get("/api/audit")).json()["audit"]
+    assert any(
+        item.get("subjectId") == stored["id"]
+        and item["action"] == "MISSION_DEMO_DATA_ARCHIVED"
+        and item["result"] == "SUCCESS"
+        for item in audit
+    )
 
 
 @pytest.mark.asyncio
