@@ -26,7 +26,11 @@ async def test_state_uses_sqlite_and_exposes_dashboard_data(client: AsyncClient)
     assert payload["schemaVersion"] == 2
     assert len(payload["drones"]) == 8
     assert len(payload["tasks"]) == 5
-    assert len(payload["alerts"]) == 7
+    assert len(payload["alerts"]) == 8
+    congestion = next(alert for alert in payload["alerts"] if alert["type"] == "道路拥堵")
+    assert congestion["location"] == "兰海高速都匀北互通"
+    assert congestion["level"] == "IMPORTANT"
+    assert congestion["time"] == "14:05"
     assert payload["ledgers"]
 
 
@@ -231,6 +235,12 @@ async def test_task_fields_conflicts_and_state_machine_are_server_owned(client: 
         for item in audit
     )
 
+    abnormal = await client.post("/api/tasks/RW-20260905-015/transition", json={"target": "ABNORMAL"})
+    assert abnormal.status_code == 200
+    recovered = await client.post("/api/tasks/RW-20260905-015/transition", json={"target": "PENDING_EXECUTION"})
+    assert recovered.status_code == 200
+    assert recovered.json()["status"] == "PENDING_EXECUTION"
+
 
 @pytest.mark.asyncio
 async def test_running_mission_monitor_and_controls_are_audited(client: AsyncClient):
@@ -323,6 +333,17 @@ async def test_alert_queue_filters_and_exposes_complete_detail_and_evidence(clie
     assert set(secondary["relatedMission"]) >= {"id", "name", "status", "droneId", "route"}
     assert secondary["alert"]["coordinate"]
     assert secondary["alert"]["confidence"]
+
+    congestion = (await client.get("/api/alerts/GJ-20260905-006")).json()
+    assert congestion["alert"]["confidence"] == 88
+    assert congestion["alert"]["coordinate"] == "107.5186°E · 26.2748°N"
+    assert congestion["relatedMission"] == {
+        "id": "RW-20260905-015",
+        "name": "都匀北互通交通态势巡查",
+        "status": "DEMO_REFERENCE",
+        "droneId": "U-04",
+        "route": "兰海高速都匀北互通巡查线",
+    }
 
     failed = await client.get("/api/alerts/GJ-20260905-031/evidence", params={"simulateFailure": "true"})
     assert failed.status_code == 503

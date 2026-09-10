@@ -303,6 +303,11 @@ a{color:var(--blue-600); text-decoration:none}
             <label class="switch"><input type="checkbox" id="ai-parking" checked aria-label="车辆违停识别开关"><span class="tr"></span></label>
           </div>
           <div class="cfg-row">
+            <span class="k">车辆拥堵</span>
+            <span class="grow" style="color:var(--muted)">车流密度、低速排队与异常拥堵识别</span>
+            <label class="switch"><input type="checkbox" id="ai-congestion" checked aria-label="车辆拥堵识别开关"><span class="tr"></span></label>
+          </div>
+          <div class="cfg-row">
             <span class="k">行人闯入</span>
             <span class="grow" style="color:var(--muted)">高速、快速路行人闯入</span>
             <label class="switch"><input type="checkbox" id="ai-pedestrian" checked aria-label="行人闯入识别开关"><span class="tr"></span></label>
@@ -576,7 +581,7 @@ a{color:var(--blue-600); text-decoration:none}
   var DEFAULTS = {
     "cfg-amap-key":"POC_AMAP_KEY_PLACEHOLDER", "cfg-amap-secret":"POC_SECURITY_PLACEHOLDER",
     "cfg-center-lng":"107.52", "cfg-center-lat":"26.26", "cfg-zoom":"10", "cfg-dark-map":false,
-    "ai-accident":true, "ai-parking":true, "ai-pedestrian":true, "ai-smoke":true, "ai-water":false,
+    "ai-accident":true, "ai-parking":true, "ai-congestion":true, "ai-pedestrian":true, "ai-smoke":true, "ai-water":false,
     "ai-threshold":"80", "ai-max-alerts":"20",
     "esc-timeout":"5", "esc-l1":true, "esc-l2":true, "esc-l3":false, "esc-merge":true,
     "nt-inbox":true, "nt-sms":true, "nt-call":false, "nt-quiet-start":"22:00", "nt-quiet-end":"07:00",

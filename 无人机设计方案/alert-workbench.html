@@ -144,7 +144,8 @@ svg{display:block}
 .ev-live i{width:8px; height:8px; border-radius:50%; background:var(--alert-red); animation:breathe 1s ease-in-out infinite}
 .ev-stage{flex:1; position:relative; min-height:0; background:var(--navy-900)}
 .ev-photo{position:absolute;inset:0;overflow:hidden;background:#0d1f3a}
-.ev-photo-img{position:absolute;inset:-3%;background-image:url('/prototype-assets/alerts/event-scenes-v1.png?v=photo-1');background-size:300% auto;background-repeat:no-repeat;filter:saturate(.9) contrast(1.04);transition:transform .2s ease}
+.ev-photo-img{position:absolute;inset:-3%;background-image:url('/prototype-assets/alerts/event-scenes-v1.png?v=photo-1');background-size:300% 200%;background-repeat:no-repeat;filter:saturate(.9) contrast(1.04);transition:transform .2s ease}
+.ev-photo-img.congestion{background-image:url('/prototype-assets/alerts/road-congestion-v1.png?v=congestion-1');background-size:cover;background-position:center}
 .ev-error{position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(7,20,39,.94);color:#EAF1FB;text-align:center}
 .ev-error.show{display:flex}.ev-error p{font-size:12px;color:#8FA3C4}.ev-error button{padding:7px 18px;border:1px solid #4C9AFF;border-radius:5px;color:#fff;background:#2675df}
 #ev-compare-scene{display:none}.ev-stage.compare #ev-scene{clip-path:inset(0 50% 0 0)}.ev-stage.compare #ev-compare-scene{display:block;clip-path:inset(0 0 0 50%)}.ev-stage.compare::after{content:'前帧  |  后帧';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:4px 8px;border-radius:4px;background:rgba(7,20,39,.8);color:#3DD9EB;font-size:11px;z-index:2}
@@ -602,6 +603,9 @@ let ALERTS = [
                {n:'值班员核实', op:'王警官', t:'13:00:22', s:'done', note:'货运高峰常态缓行，无需派单'},
                {n:'办结归档', op:'王警官', t:'13:00:48', s:'done'} ] }
 ];
+const ALERT_FALLBACKS = {
+  'GJ-20260905-006': {conf:88, task:'RW-20260905-015', drone:'U-04', route:'兰海高速都匀北互通巡查线', coord:'107.5186°E · 26.2748°N'}
+};
 
 /* ================= 工具 ================= */
 const $ = s => document.querySelector(s);
@@ -687,7 +691,8 @@ const FRAME_TIME = ['14:02:31','14:02:34','14:02:37','14:02:40'];
 const EVIDENCE_POSITIONS={'烟雾火情':'0% 0%','车辆违停':'50% 0%','行人闯入':'100% 0%','道路积水':'0% 100%','行人聚集':'50% 100%','交通事故':'100% 100%','道路拥堵':'100% 100%'};
 function evidencePhoto(a, frame, small){
   const shift=FRAME_OFFSET[frame]*(small?.08:.12);
-  return '<div class="ev-photo-img" style="background-position:'+(EVIDENCE_POSITIONS[a.type]||'100% 100%')+';transform:scale(1.08) translate('+shift+'px,'+(-shift*.35)+'px)"></div>';
+  const congestion=a.type==='道路拥堵';
+  return '<div class="ev-photo-img'+(congestion?' congestion':'')+'" style="background-position:'+(congestion?'center':(EVIDENCE_POSITIONS[a.type]||'100% 100%'))+';transform:scale(1.08) translate('+shift+'px,'+(-shift*.35)+'px)"></div>';
 }
 function renderEvidence(){
   const a = ALERTS.find(x=>x.id===state.selId); if(!a) return;
@@ -750,17 +755,22 @@ async function syncAlerts(){
   const prototypes = ALERTS.slice();
   ALERTS = payload.alerts.map((item, index)=>{
     const basis = prototypes.find(a=>a.id===item.id) || prototypes.find(a=>a.type===item.type) || prototypes[index % prototypes.length];
-    return {...basis, id:item.id, type:item.type, loc:item.location, level:SERVER_LEVEL[item.level] || 'minor',
+    const fallback = {...basis, ...(ALERT_FALLBACKS[item.id] || {})};
+    return {...fallback, id:item.id, type:item.type, loc:item.location, level:SERVER_LEVEL[item.level] || 'minor',
       status:SERVER_STATUS[item.status] || 'pending', found:item.time, mins:Math.max(0, simulatedMinutes-Number(item.time.slice(0,2))*60-Number(item.time.slice(3,5))),
-      task:item.missionId, drone:item.droneId, route:item.route, coord:item.coordinate, conf:item.confidence,
+      task:item.missionId ?? fallback.task, drone:item.droneId ?? fallback.drone, route:item.route ?? fallback.route,
+      coord:item.coordinate ?? fallback.coord, conf:item.confidence ?? fallback.conf,
       unread:item.status==='PENDING_VERIFICATION',
       escalatedTimeout:item.level==='EMERGENCY' && item.status==='PENDING_VERIFICATION' && simulatedMinutes-Number(item.time.slice(0,2))*60-Number(item.time.slice(3,5))>5};
   });
   state.selId = ALERTS[0] && ALERTS[0].id;
   renderQueue(); renderEvidence(); renderDetail(); renderTimeline();
   if(state.selId){
-    const detail = await (await fetch('/api/alerts/'+encodeURIComponent(state.selId))).json();
-    applyServerDetail(currentAlert(), detail); renderDetail(); renderTimeline();
+    const selectedId = state.selId;
+    const detail = await (await fetch('/api/alerts/'+encodeURIComponent(selectedId))).json();
+    const selected = ALERTS.find(item=>item.id===selectedId);
+    if(selected) applyServerDetail(selected, detail);
+    if(state.selId===selectedId){ renderDetail(); renderTimeline(); }
   }
 }
 function stepFrame(d){ state.frame = (state.frame + d + 4) % 4; renderEvidence(); }

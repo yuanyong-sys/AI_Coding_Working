@@ -630,6 +630,7 @@ input[type=checkbox]{width:15px; height:15px; accent-color:var(--blue-600); curs
       <button class="btn btn-outline" id="mm-fail-next" aria-pressed="false">下次指令模拟失败</button>
       <button class="btn btn-danger" id="mm-stop-btn">终止任务</button>
     </div>
+    <div class="mm-foot" id="mm-state-actions" aria-label="任务状态操作"></div>
   </div>
 </div>
 
@@ -660,7 +661,7 @@ const PRIO_CLS = {普通:'prio-normal', 重要:'prio-important', 紧急:'prio-ur
 
 let TASKS = [
   {code:'RW-20260905-012', name:'贵北高速惠水段航线巡检', type:'常态巡查', drone:'警航-03', route:'贵北高速惠水段', date:'09-05', start:'09:00', end:'10:30', status:'执行中', prio:'重要', owner:'李强', progress:65},
-  {code:'RW-20260905-015', name:'都匀互通违停专项巡查', type:'专项巡查', drone:'警航-01', route:'都匀互通', date:'09-05', start:'10:00', end:'11:30', status:'执行中', prio:'紧急', owner:'王敏', progress:40},
+  {code:'RW-20260905-015', name:'都匀北互通交通态势巡查', type:'专项巡查', drone:'警航-04', route:'兰海高速都匀北互通巡查线', date:'09-05', start:'10:00', end:'11:30', status:'执行中', prio:'紧急', owner:'王敏', progress:40},
   {code:'RW-20260905-013', name:'福泉贵定高架车流巡查', type:'常态巡查', drone:'警航-02', route:'福泉贵定高架', date:'09-05', start:'08:30', end:'10:00', status:'执行中', prio:'普通', owner:'陈晨', progress:80},
   {code:'RW-20260905-014', name:'荔波喀斯特公路巡查', type:'常态巡查', drone:'警航-05', route:'荔波喀斯特公路', date:'09-05', start:'10:30', end:'12:00', status:'执行中', prio:'普通', owner:'赵磊', progress:20},
   {code:'RW-20260905-022', name:'惠水服务区事故应急复勘', type:'应急', drone:'警航-04', route:'惠水服务区', date:'09-05', start:'11:00', end:'12:00', status:'执行中', prio:'紧急', owner:'李强', progress:55},
@@ -682,10 +683,10 @@ let TASKS = [
 ];
 /* 用于新建任务时间窗冲突校验（各无人机已排时段） */
 const BUSY = {
-  '警航-01':[['10:00','11:30','都匀互通违停专项巡查'],['16:00','17:30','独山森林高速护学巡查']],
+  '警航-01':[['16:00','17:30','独山森林高速护学巡查']],
   '警航-02':[['08:30','10:00','福泉贵定高架车流巡查'],['16:30','18:00','福泉贵定高架晚高峰巡查']],
   '警航-03':[['09:00','10:30','贵北高速惠水段航线巡检'],['15:00','16:00','福泉贵定高架专项巡查']],
-  '警航-04':[['11:00','12:00','惠水服务区事故应急复勘'],['15:30','16:30','惠水服务区入口巡查']],
+  '警航-04':[['10:00','11:30','都匀北互通交通态势巡查'],['11:00','12:00','惠水服务区事故应急复勘'],['15:30','16:30','惠水服务区入口巡查']],
   '警航-05':[['10:30','12:00','荔波喀斯特公路巡查'],['19:00','20:30','惠水服务区夜间巡查']],
   '警航-06':[['11:30','13:00','独山森林高速午间巡查'],['14:00','15:00','惠水服务区消防通道巡查']],
 };
@@ -947,13 +948,14 @@ function openMonitor(code){
   const awaiting=t.status === '待下发'||t.status === '待执行';
   $('#mm-title').textContent=running?'执行监控':'任务详情';
   $('#mm-controls').hidden=!running;
+  renderStateActions(t);
   $('#mm-video').hidden=awaiting;
   $('#mm-telemetry').hidden=awaiting;
   $('#mm-trajectory').hidden=awaiting;
   $('#mm-body').classList.toggle('details-only',awaiting);
   $('#mm-code').textContent = t.code + ' · ' + t.name;
   const roadImagePositions=[
-    [/贵北高速惠水段/,'0% 0%'],[/惠水服务区/,'50% 0%'],[/都匀互通/,'100% 0%'],
+    [/贵北高速惠水段/,'0% 0%'],[/惠水服务区/,'50% 0%'],[/都匀(?:北)?互通/,'100% 0%'],
     [/福泉贵定高架/,'0% 100%'],[/独山森林高速/,'50% 100%'],[/荔波喀斯特公路/,'100% 100%']
   ];
   const roadPosition=(roadImagePositions.find(([pattern])=>pattern.test(t.route))||[null,'0% 0%'])[1];
@@ -985,6 +987,64 @@ function openMonitor(code){
       const cur = parseInt(alt.textContent, 10);
       alt.innerHTML = Math.max(60, cur + (Math.random() > .5 ? 1 : -1)) + '<span class="u">m</span>';
     }, 3000);
+  }
+}
+function renderStateActions(t){
+  const actions = $('#mm-state-actions');
+  const specs = {
+    '待下发': [
+      ['下发任务', 'PENDING_EXECUTION', 'primary'],
+      ['终止任务', 'TERMINATED', 'danger']
+    ],
+    '待执行': [
+      ['开始执行', 'RUNNING', 'primary'],
+      ['终止任务', 'TERMINATED', 'danger']
+    ],
+    '执行中': [
+      ['完成任务', 'COMPLETED', 'primary']
+    ],
+    '异常': [
+      ['恢复为待执行', 'PENDING_EXECUTION', 'primary'],
+      ['终止任务', 'TERMINATED', 'danger']
+    ]
+  };
+  const list = specs[t.status] || [];
+  actions.hidden = list.length === 0;
+  actions.innerHTML = list.map(([label,target,kind]) =>
+    `<button class="btn btn-${kind}" data-status-target="${target}" data-code="${t.code}">${label}</button>`
+  ).join('');
+  $$('[data-status-target]', actions).forEach(button => button.addEventListener('click', () => {
+    const target = button.dataset.statusTarget;
+    if (target === 'TERMINATED') return confirmStop(button.dataset.code);
+    if (target === 'COMPLETED') {
+      return openConfirm('确认完成任务？', `任务「${t.name}」（${t.code}）完成后将归入已完成队列。`, '确认完成', () => transitionTask(button, target));
+    }
+    transitionTask(button, target);
+  }));
+}
+async function transitionTask(button, target){
+  const t = TASKS.find(item => item.code === button.dataset.code);
+  if (!t) return;
+  const labels = {PENDING_EXECUTION:'待执行', RUNNING:'执行中', COMPLETED:'已完成'};
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = '处理中…';
+  try {
+    if (t.status === '待下发' && target === 'PENDING_EXECUTION') {
+      await api(`/api/tasks/${t.code}/dispatch`, {method:'POST',body:JSON.stringify({simulateFailure:false})});
+    } else {
+      await api(`/api/tasks/${t.code}/transition`, {method:'POST',body:JSON.stringify({target})});
+    }
+    t.status = labels[target];
+    if (target === 'RUNNING' && t.progress === 0) t.progress = 1;
+    if (target === 'COMPLETED') t.progress = 100;
+    renderAll();
+    openMonitor(t.code);
+    toast(`任务 ${t.code} 已进入${t.status}状态`, 'ok');
+  } catch (_) {
+    button.disabled = false;
+    button.textContent = original;
+    toast('状态流转失败，任务状态未改变，请重试', 'err');
   }
 }
 function closeMonitor(){ $('#monitor-mask').classList.remove('open'); clearInterval(monitorTimer); }

@@ -21,12 +21,22 @@ async def ensure_seeded(session: AsyncSession, *, legacy_json: Path | None = Non
     schema_version = await session.get(SystemMeta, "schema_version")
     if schema_version and schema_version.value == str(SCHEMA_VERSION):
         await normalize_mission_statuses(session)
+        await ensure_road_congestion_alert(session)
         return
     if legacy_json and legacy_json.exists():
         document = json.loads(legacy_json.read_text(encoding="utf-8"))
         await import_legacy_state(session, document)
         return
     await restore_business_state(session, record_audit=False)
+
+
+async def ensure_road_congestion_alert(session: AsyncSession) -> None:
+    alert_data = next(item for item in ALERTS if item[1] == "道路拥堵")
+    if await session.get(Alert, alert_data[0]) is not None:
+        return
+    alert_id, alert_type, level, status, location, time, x, y = alert_data
+    session.add(Alert(id=alert_id, type=alert_type, level=level, status=status, location=location, time=time, x=x, y=y))
+    await session.commit()
 
 
 async def normalize_mission_statuses(session: AsyncSession) -> None:
@@ -190,6 +200,7 @@ def serialize_alert(item: Alert) -> dict:
 
 
 ALERT_CONTEXT = {
+    "GJ-20260905-006": {"missionId": "RW-20260905-015", "missionName": "都匀北互通交通态势巡查", "droneId": "U-04", "route": "兰海高速都匀北互通巡查线", "coordinate": "107.5186°E · 26.2748°N", "confidence": 88},
     "GJ-20260905-031": {"missionId": "RW-20260905-012", "missionName": "福泉马场坪段夜间巡查", "droneId": "U-03", "route": "兰海高速都匀段", "coordinate": "107.5218°E · 26.2594°N", "confidence": 96},
     "GJ-20260905-026": {"missionId": "RW-20260905-009", "missionName": "荔波互通环线巡查", "droneId": "U-05", "route": "荔波互通环线", "coordinate": "107.8836°E · 25.4122°N", "confidence": 91},
     "GJ-20260905-024": {"missionId": "RW-20260905-007", "missionName": "贵定连接线隐患排查", "droneId": "U-07", "route": "贵定连接线", "coordinate": "107.2345°E · 26.5847°N", "confidence": 84},
@@ -416,6 +427,7 @@ def can_transition(current: str, target: str) -> bool:
         "PENDING_DISPATCH": {"PENDING_EXECUTION", "TERMINATED"},
         "PENDING_EXECUTION": {"RUNNING", "TERMINATED"},
         "RUNNING": {"COMPLETED", "ABNORMAL", "TERMINATED"},
+        "ABNORMAL": {"PENDING_EXECUTION", "TERMINATED"},
     }
     return target in allowed.get(current, set())
 

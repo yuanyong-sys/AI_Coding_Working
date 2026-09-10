@@ -225,6 +225,10 @@ export async function browserEndToEnd() {
     await evaluate(cdp, "document.querySelector('#btn-check-all').click(); document.querySelector('#drawer-save').click()");
     assert.match(await evaluate(cdp, "document.querySelector('#toast-box .toast:last-child').textContent"), /权限已保存/);
     await navigate(cdp, `${baseUrl}/prototype/system-config.html`);
+    assert.equal(await evaluate(cdp, "document.querySelector('#ai-congestion').checked"), true);
+    assert.equal(await evaluate(cdp, "document.querySelector('#ai-congestion').getAttribute('aria-label')"), "车辆拥堵识别开关");
+    await evaluate(cdp, "document.querySelector('#ai-congestion').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#dirty-hint').hidden"), false);
     assert.equal(await evaluate(cdp, "document.querySelector('#cfg-amap-key').type"), "password");
     assert.ok(await evaluate(cdp, "document.querySelector('#cfg-amap-key').value.includes('PLACEHOLDER')"));
     await evaluate(cdp, "document.querySelector('#cfg-amap-key').value='x'; document.querySelector('#btn-save').click()");
@@ -330,9 +334,12 @@ export async function browserEndToEnd() {
     // AC12: every page is reached by real Tab navigation, shows focus and renders at each target viewport.
     const viewportPages = [
       [1920,1080,"screen-overview","#mute-btn",[".topbar",".map-wrap",".col"]],
+      [1440,900,"screen-overview","#mute-btn",[".topbar",".map-wrap",".col"]],
       [1440,900,"dispatch-tasks","#btn-new",[".topbar","#stats-strip","#kanban-board"]],
       [1440,900,"alert-workbench","#queue-search",[".topbar",".queue",".evidence",".disp"]],
       [1440,900,"stats-ledger","#btn-query",[".topbar",".filter-bar",".content"]],
+      [1440,900,"resource-management","#f-search",[".sidenav",".topbar",".content"]],
+      [1440,900,"system-management","[data-od-id=mod-card-org]",[".sidenav",".topbar",".mod-grid"]],
       [1366,768,"dispatch-tasks","#btn-new",[".topbar","#stats-strip","#kanban-board"]],
       [1366,768,"alert-workbench","#queue-search",[".topbar",".queue",".evidence",".disp"]],
       [1366,768,"stats-ledger","#btn-query",[".topbar",".filter-bar",".content"]]
@@ -382,6 +389,22 @@ export async function browserEndToEnd() {
     assert.equal(await evaluate(cdp, "document.querySelector('#mm-telemetry').hidden"), true);
     assert.equal(await evaluate(cdp, "document.querySelector('#mm-trajectory').hidden"), true);
     assert.equal(await evaluate(cdp, "document.querySelector('#mm-body').classList.contains('details-only')"), true);
+    assert.deepEqual(await evaluate(cdp, "Array.from(document.querySelectorAll('#mm-state-actions button'),b=>b.textContent)"), ["下发任务","终止任务"]);
+    await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=PENDING_EXECUTION]').click()");
+    await waitFor(cdp, "document.querySelector('#mm-desc').textContent.includes('状态 待执行')");
+    assert.equal(await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=RUNNING]').textContent"), "开始执行");
+    await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=RUNNING]').click()");
+    await waitFor(cdp, "document.querySelector('#mm-desc').textContent.includes('状态 执行中')");
+    assert.equal(await evaluate(cdp, "document.querySelector('#mm-controls').hidden"), false);
+    assert.equal(await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=COMPLETED]').textContent"), "完成任务");
+    const completedTaskCode = await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=COMPLETED]').dataset.code");
+    await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=COMPLETED]').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('#confirm-mask').classList.contains('open')"), true);
+    await evaluate(cdp, "document.querySelector('#cf-cancel').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#mm-desc').textContent"), /状态 执行中/);
+    await evaluate(cdp, "document.querySelector('#mm-state-actions [data-status-target=COMPLETED]').click(); document.querySelector('#cf-ok').click()");
+    await waitFor(cdp, "document.querySelector('#mm-desc').textContent.includes('状态 已完成')");
+    assert.equal(await evaluate(cdp, `(async()=>{const state=await (await fetch('/api/state')).json();return state.tasks.find(task=>task.id===${JSON.stringify(completedTaskCode)})?.status})()`), "COMPLETED");
     await evaluate(cdp, "document.querySelector('#monitor-close').click()");
     assert.equal(await evaluate(cdp, "Array.from(document.querySelectorAll('.k-card.drillable')).every(card=>card.tabIndex===0&&card.getAttribute('role')==='button')"), true);
     await evaluate(cdp, "(()=>{const card=document.querySelector('.k-card.drillable');card.focus();card.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}))})()");
@@ -433,6 +456,22 @@ export async function browserEndToEnd() {
     for (const place of ["惠水", "都匀", "贵定", "福泉", "独山", "荔波"]) assert.ok(regionalText.includes(place), place);
     assert.doesNotMatch(regionalText, /人民路|中山路|解放路|城北物流园/);
 
+    // One visible congestion chain must keep its region, mission, aircraft and route aligned across modules.
+    await navigate(cdp, `${baseUrl}/prototype/screen-overview.html`);
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.alert-item .alert-type')).some(node=>node.textContent==='道路拥堵')");
+    assert.match(await evaluate(cdp, "Array.from(document.querySelectorAll('.alert-item')).find(item=>item.querySelector('.alert-type').textContent==='道路拥堵').textContent"), /兰海高速都匀北互通/);
+    await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html`);
+    await waitFor(cdp, "Array.from(document.querySelectorAll('.alert-card .ac-type')).some(node=>node.textContent.includes('道路拥堵'))");
+    await evaluate(cdp, "Array.from(document.querySelectorAll('.alert-card')).find(item=>item.querySelector('.ac-type').textContent.includes('道路拥堵')).click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#ev-sub').textContent"), /GJ-20260905-006.*道路拥堵.*兰海高速都匀北互通/);
+    assert.deepEqual(await evaluate(cdp, "['ev-task','ev-drone','ev-route'].map(id=>document.getElementById(id).textContent)"), ["RW-20260905-015","U-04","兰海高速都匀北互通巡查线"]);
+    await navigate(cdp, `${baseUrl}/prototype/dispatch-tasks.html`);
+    await evaluate(cdp, "document.querySelector('[data-view=list]').click(); document.querySelector('#f-search').value='RW-20260905-015'; document.querySelector('#f-search').dispatchEvent(new Event('input',{bubbles:true}))");
+    assert.match(await evaluate(cdp, "document.querySelector('#task-tbody tr').textContent"), /RW-20260905-015.*都匀北互通交通态势巡查.*警航-04.*兰海高速都匀北互通巡查线/s);
+    await navigate(cdp, `${baseUrl}/prototype/stats-ledger.html`);
+    await waitFor(cdp, "document.querySelectorAll('#ledger-tbody tr.row').length > 0");
+    assert.match(await evaluate(cdp, "Array.from(document.querySelectorAll('#ledger-tbody tr.row')).find(row=>row.textContent.includes('都匀北互通')).textContent"), /兰海高速都匀北互通交通态势巡查.*都匀城区段.*警航-04/s);
+
     // AC06: alert verification, evidence failure/retry, false-positive validation and keyboard safety.
     await fetch(`${baseUrl}/api/demo/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmed: true }) });
     await navigate(cdp, `${baseUrl}/prototype/alert-workbench.html`);
@@ -444,11 +483,24 @@ export async function browserEndToEnd() {
     await waitFor(cdp, "!document.querySelector('#ev-error').classList.contains('show')");
     await evaluate(cdp, "document.querySelector('#ev-compare').click()");
     assert.equal(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-compare-scene')).display"), "block");
-    assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-scene .ev-photo-img')).backgroundImage"), /event-scenes-v1\.png/);
     assert.notEqual(await evaluate(cdp, "document.querySelector('#ev-scene').innerHTML"), await evaluate(cdp, "document.querySelector('#ev-compare-scene').innerHTML"));
+    assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-scene .ev-photo-img')).backgroundImage"), /event-scenes-v1\.png/);
+    assert.equal(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-scene .ev-photo-img')).backgroundSize"), "300% 200%");
     await evaluate(cdp, "document.querySelector('[data-frame=\"3\"]').click()");
     assert.notEqual(await evaluate(cdp, "document.querySelector('#ev-scene').innerHTML"), await evaluate(cdp, "document.querySelector('#ev-compare-scene').innerHTML"));
-    await evaluate(cdp, "document.querySelector('#queue-search').focus(); document.querySelector('#queue-search').value='K1582'; document.querySelector('#queue-search').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#queue-search').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
+    await evaluate(cdp, "document.querySelector('#queue-search').focus(); document.querySelector('#queue-search').value='道路拥堵'; document.querySelector('#queue-search').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.alert-card').click()");
+    assert.equal(await evaluate(cdp, "document.querySelector('.alert-card .ac-type').textContent"), "道路拥堵");
+    assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-scene .ev-photo-img')).backgroundImage"), /road-congestion-v1\.png/);
+    assert.equal(await evaluate(cdp, "getComputedStyle(document.querySelector('#ev-scene .ev-photo-img')).backgroundSize"), "cover");
+    assert.equal(await evaluate(cdp, `new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth>0&&image.naturalHeight>0);image.onerror=()=>resolve(false);image.src='/prototype-assets/alerts/road-congestion-v1.png?v=congestion-1'})`), true);
+    assert.match(await evaluate(cdp, "document.querySelector('.alert-card .ac-conf').textContent"), /88%/);
+    assert.equal(await evaluate(cdp, "document.querySelector('#ev-task').textContent"), "RW-20260905-015");
+    assert.equal(await evaluate(cdp, "document.querySelector('#ev-drone').textContent"), "U-04");
+    assert.equal(await evaluate(cdp, "document.querySelector('#ev-route').textContent"), "兰海高速都匀北互通巡查线");
+    assert.equal(await evaluate(cdp, "document.querySelector('#detail-coord').textContent"), "坐标 107.5186°E · 26.2748°N");
+    assert.equal(await evaluate(cdp, "document.querySelector('#detail-grid').textContent.includes('null')"), false);
+    assert.equal(await evaluate(cdp, "document.querySelector('#queue-list').textContent.includes('null')"), false);
+    await evaluate(cdp, "document.querySelector('#queue-search').focus(); document.querySelector('#queue-search').value='K1582'; document.querySelector('#queue-search').dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.alert-card').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('.alert-card .ac-loc').textContent"), "兰海高速 K1582 都匀段");
     assert.equal(await evaluate(cdp, "document.querySelector('.st-tag').textContent"), "待核实");
     await evaluate(cdp, "document.querySelector('#queue-search').blur(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
@@ -613,14 +665,22 @@ export async function browserEndToEnd() {
     })()`);
     assert.ok(videoVisibility.meanLuminance >= 45 && videoVisibility.visibleRatio >= .35,
       `expected a clearly visible return-video frame, got ${JSON.stringify(videoVisibility)}`);
-    for (const index of [1,2,3,4,5,6]) {
+    for (const index of [1,2,3,4,5,6,7]) {
       const eventType = await evaluate(cdp, `document.querySelector('.alert-item[data-i="${index}"] .alert-type').textContent`);
       await evaluate(cdp, `document.querySelector('.alert-item[data-i="${index}"]').click()`);
       assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb .event-photo')?.getAttribute('aria-label')"), `${eventType}实景演示图像`);
-      assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#info-thumb .event-photo')).backgroundImage"), /event-scenes-v1\.png/);
+      assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#info-thumb .event-photo')).backgroundImage"), eventType === "道路拥堵" ? /road-congestion-v1\.png/ : /event-scenes-v1\.png/);
+      if (eventType !== "道路拥堵") assert.equal(await evaluate(cdp, "getComputedStyle(document.querySelector('#info-thumb .event-photo')).backgroundSize"), "300% 200%");
       assert.equal(await evaluate(cdp, `new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth>0&&image.naturalHeight>0);image.onerror=()=>resolve(false);image.src='/prototype-assets/alerts/event-scenes-v1.png?v=photo-1'})`), true);
       assert.match(await evaluate(cdp, "document.querySelector('#info-thumb').textContent"), new RegExp(eventType));
     }
+    assert.equal(await evaluate(cdp, "Array.from(document.querySelectorAll('.alert-item .alert-type')).some(node=>node.textContent==='道路拥堵')"), true);
+    assert.equal(await evaluate(cdp, "(()=>{const item=Array.from(document.querySelectorAll('.alert-item')).find(node=>node.querySelector('.alert-type').textContent==='道路拥堵');const panel=document.querySelector('[data-od-id=panel-alert-stream]');const a=item.getBoundingClientRect(),b=panel.getBoundingClientRect();return a.top>=b.top&&a.bottom<=b.bottom})()"), true);
+    await evaluate(cdp, "Array.from(document.querySelectorAll('.alert-item')).find(item=>item.querySelector('.alert-type').textContent==='道路拥堵').click()");
+    assert.match(await evaluate(cdp, "document.querySelector('#info-title').textContent"), /道路拥堵/);
+    assert.equal(await evaluate(cdp, "document.querySelector('#info-thumb .event-photo')?.getAttribute('aria-label')"), "道路拥堵实景演示图像");
+    assert.match(await evaluate(cdp, "getComputedStyle(document.querySelector('#info-thumb .event-photo')).backgroundImage"), /road-congestion-v1\.png/);
+    assert.equal(await evaluate(cdp, `new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth>0&&image.naturalHeight>0);image.onerror=()=>resolve(false);image.src='/prototype-assets/alerts/road-congestion-v1.png?v=congestion-1'})`), true);
     await evaluate(cdp, "document.querySelector('.layer-ctrl').click()");
     assert.equal(await evaluate(cdp, "document.querySelector('#info-card').classList.contains('show')"), true);
     await new Promise((resolve) => setTimeout(resolve, 100));

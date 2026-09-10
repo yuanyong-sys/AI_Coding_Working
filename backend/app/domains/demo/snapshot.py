@@ -23,6 +23,7 @@ MISSIONS = [
 ALERTS = [
     ("GJ-20260905-031", "交通事故", "EMERGENCY", "PENDING_VERIFICATION", "兰海高速 K1582 都匀段", "14:32", 470, 420),
     ("GJ-20260905-026", "烟雾火情", "IMPORTANT", "PROCESSING", "荔波互通匝道", "14:18", 720, 690),
+    ("GJ-20260905-006", "道路拥堵", "IMPORTANT", "PENDING_VERIFICATION", "兰海高速都匀北互通", "14:05", 585, 365),
     ("GJ-20260905-024", "车辆违停", "IMPORTANT", "PROCESSING", "贵定连接线应急车道", "13:56", 210, 540),
     ("GJ-20260905-019", "行人闯入", "INFO", "PENDING_VERIFICATION", "厦蓉高速 K1380 桩号", "13:40", 830, 320),
     ("GJ-20260905-017", "道路积水", "INFO", "PENDING_VERIFICATION", "沪昆高速交汇桥下", "12:52", 660, 530),
